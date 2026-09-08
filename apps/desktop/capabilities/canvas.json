@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "canvas",
+  "description": "The canvas, served by the child server on the loopback address. THIS IS THE UNUSUAL CAPABILITY AND THE REASON IS ARCHITECTURAL: the canvas is not embedded in the application, it is the same page `npx @xfurqan0/nazar` serves, because browser mode is first-class and one canvas is better than two builds of one page. That makes it a REMOTE origin as far as Tauri is concerned, and without an entry here it could not call a single command — no jump to a terminal, no autostart switch. The pattern is narrowed to 127.0.0.1 and localhost on any port, which is where this application's own child server is and where, by the server's own Host check (`isLocalHost` in packages/server/src/http.ts), nothing else can answer. FOUR COMMANDS, AND THEY ARE THE FOUR THE CANVAS ACTUALLY CALLS: shell_info to decide whether to offer the jump at all, jump_to_session for the double-click and the card menu, and get_autostart / set_autostart for the one switch in the sidebar. They are named one at a time rather than granted as a group, so a command added later is not reachable from a web page by accident — that is what declaring them in build.rs buys. Deliberately absent: boot_state and open_download_page, which belong to the boot page; every plugin; and every dialog, filesystem and shell permission. The canvas can ask this application to do four things and cannot ask the operating system for anything.",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*", "http://localhost:*"]
+  },
+  "permissions": [
+    "core:default",
+    "allow-shell-info",
+    "allow-jump-to-session",
+    "allow-get-autostart",
+    "allow-set-autostart"
+  ]
+}

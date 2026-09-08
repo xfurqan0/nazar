@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 05 - monochrome template. Ring and field collapse into one
+       white disc; the N and its pupil are carved out of it. -->
+  <defs>
+    <mask id="d05m-punch">
+      <rect x="0" y="0" width="64" height="64" fill="#FFFFFF"/>
+      <g fill="#000000">
+        <rect x="17" y="19" width="6" height="26"/>
+        <rect x="41" y="19" width="6" height="26"/>
+        <path d="M 23 19 L 29 19 L 47 45 L 41 45 Z"/>
+        <circle cx="29.2" cy="38.8" r="5.6"/>
+      </g>
+    </mask>
+  </defs>
+
+  <circle cx="32" cy="32" r="31" fill="#FFFFFF" mask="url(#d05m-punch)"/>
+</svg>

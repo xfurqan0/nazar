@@ -1,0 +1,76 @@
+{
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "transcript_path": "C:/claude-home/projects/C--proj-example/00000000-0000-4000-8000-000000000001.jsonl",
+  "cwd": "C:/proj/example",
+  "scratchpad_dir": "C:/claude-home/tmp/C--proj-example/00000000-0000-4000-8000-000000000001/scratchpad",
+  "prompt_id": "00000000-0000-4000-8000-000000000091",
+  "effort": {
+    "level": "high"
+  },
+  "session_name": "session-a",
+  "model": {
+    "id": "claude-fable-5-1",
+    "display_name": "Fable 5.1"
+  },
+  "workspace": {
+    "current_dir": "C:/proj/example",
+    "project_dir": "C:/proj/example",
+    "added_dirs": [],
+    "repo": {
+      "host": "github.com",
+      "owner": "example-owner",
+      "name": "example-repo"
+    }
+  },
+  "version": "2.1.263",
+  "output_style": {
+    "name": "default"
+  },
+  "cost": {
+    "total_cost_usd": 9.60050075,
+    "total_duration_ms": 7051994,
+    "total_api_duration_ms": 1074741,
+    "total_lines_added": 146,
+    "total_lines_removed": 6
+  },
+  "context_window": {
+    "total_input_tokens": 159283,
+    "total_output_tokens": 929,
+    "context_window_size": 1000000,
+    "current_usage": {
+      "input_tokens": 32,
+      "output_tokens": 929,
+      "cache_creation_input_tokens": 1279,
+      "cache_read_input_tokens": 157972
+    },
+    "used_percentage": 16,
+    "remaining_percentage": 84
+  },
+  "exceeds_200k_tokens": false,
+  "prompt_cache": {
+    "warm": true,
+    "caching_observed": true,
+    "ttl": "1h",
+    "expires_at": 1788752123,
+    "requests": 42,
+    "misses": 0,
+    "expected_rebuilds": 0,
+    "hit_ratio": 0.976585669146876,
+    "cache_write_tokens": 113965,
+    "miss_recache_tokens": 0,
+    "last_miss_at": null,
+    "last_miss_cause": null,
+    "miss_causes": {},
+    "recache_tokens_if_cold": 159283
+  },
+  "fast_mode": false,
+  "thinking": {
+    "enabled": true
+  },
+  "rate_limits": {
+    "seven_day": {
+      "used_percentage": 31,
+      "resets_at": 1789178400
+    }
+  }
+}

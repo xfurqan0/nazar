@@ -1,0 +1,212 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.os }} / node ${{ matrix.node }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        node: ['22']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Build first: the type-check and the tests both resolve @nazar/core
+      # through the workspace link, which points at its build output.
+      - name: Build
+        run: npm run build
+
+      - name: Lint (type-check)
+        run: npm run typecheck
+
+      - name: Test
+        run: npm test
+
+  # The "fresh machine" acceptance from docs/PROJECT.md WP6, on all three
+  # platforms: pack the tarball, install it into an empty directory with a cold
+  # npm cache, drive the installed binary through --version, --help, npx and
+  # doctor, then start it on a free port and read /api/state. It publishes
+  # nothing and touches nothing under ~/.claude.
+  pack:
+    name: pack smoke / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # A cold cache is the point: the smoke has to prove the tarball carries
+      # everything it needs, not that this runner kept a copy of something.
+      - name: Clean the npm cache
+        run: npm cache clean --force
+
+      # `npm run smoke` packs (prepack builds first), installs and runs.
+      - name: Pack, install and run
+        run: npm run smoke
+
+  # WP8. The pure half of the desktop shell — the Node version check, the parent-chain
+  # walk and the window ranking — has no Tauri in it and no platform API, so it compiles
+  # and tests on all three systems from the first commit. That is what makes the macOS and
+  # Linux ports of the jump ladder a step rather than a rewrite, and it is checked now
+  # rather than on the day somebody attempts one.
+  shell-core:
+    name: shell logic / ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: shell-core-${{ matrix.os }}
+
+      # `-p nazar-shell` and not `--workspace`: the desktop crate needs WebView2 on
+      # Windows and a GTK/WebKit stack elsewhere, and none of that is required to check
+      # whether the ranking picks the right window.
+      - name: Test the pure crate
+        run: cargo test -p nazar-shell
+
+  # The gate for the shell itself. Everything that decides whether a change is correct
+  # lives here, and none of it needs the bundler: risk R1 in nazar-tray's plan, which
+  # applies unchanged — the Tauri bundler is the fragile part of a Windows pipeline
+  # (WebView2, NSIS, signing), and a bundler problem must never be able to make a correct
+  # change look broken.
+  desktop:
+    name: desktop shell — lint, test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # `bundle.resources` names `resources/server`, and `tauri-build` checks that the
+      # path exists while the crate *compiles* — so the package has to be built and staged
+      # before clippy or cargo test can expand `generate_context!`, not merely before the
+      # bundler runs.
+      - name: Build and stage the package
+        run: node scripts/build-desktop.mjs --stage
+
+      - name: Check dependency licences
+        run: node scripts/check-licenses.mjs
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # The two live jump tests read the runner's own desktop. A windows-latest image
+      # does run a Windows Terminal window, but UI Automation on it answers with no
+      # tabs — an environment the shipped code never sees. The gate turns those two
+      # into skips; every rule they sit next to still runs on made-up data.
+      - name: Test the Rust workspace
+        run: cargo test --workspace
+        env:
+          NAZAR_TEST_NO_LIVE: "1"
+
+  # A separate job, and it may fail without hiding a real regression. It uploads the
+  # installer; it does not decide whether the change was right.
+  installer:
+    name: desktop shell — installer
+    runs-on: windows-latest
+    needs: desktop
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: installer
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: tauri-cli
+
+      # `--debug` keeps a pull request's feedback in minutes rather than tens of minutes;
+      # the release build runs the same script without it. The NSIS toolchain is
+      # downloaded by the Tauri bundler on first use.
+      - name: Build the installer
+        run: node scripts/build-desktop.mjs --debug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nazar-desktop-debug-windows
+          path: |
+            target/debug/nazar-desktop.exe
+            target/debug/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 02 - monochrome template. The plate stays solid white, the
+       whole eye is subtracted, and only the pupil survives as a white island
+       floating in the cut. -->
+  <defs>
+    <mask id="d02m-punch">
+      <rect x="0" y="0" width="64" height="64" fill="#FFFFFF"/>
+      <path d="M 8 32 A 30 30 0 0 1 56 32 A 30 30 0 0 1 8 32 Z" fill="#000000"/>
+      <ellipse cx="32" cy="32" rx="5.2" ry="6.8" fill="#FFFFFF"/>
+    </mask>
+  </defs>
+
+  <rect x="0" y="0" width="64" height="64" rx="14" ry="14" fill="#FFFFFF" mask="url(#d02m-punch)"/>
+</svg>

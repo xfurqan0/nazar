@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 05 - glyph in a ring.
+       A bold N drawn as geometry, not type: two 6-wide stems and a diagonal
+       band, set in a white field inside the bead ring. The pupil is the circle
+       inscribed in the N's lower-left counter - the largest circle the
+       letterform will hold - so the letter's negative space and the eye are
+       literally the same shape. The upper counter is left open so the N still
+       reads as an N. -->
+
+  <circle cx="32" cy="32" r="31" fill="#3FA9F5"/>
+  <circle cx="32" cy="32" r="25" fill="#FFFFFF"/>
+
+  <g fill="#0E2A5A">
+    <rect x="17" y="19" width="6" height="26"/>
+    <rect x="41" y="19" width="6" height="26"/>
+    <path d="M 23 19 L 29 19 L 47 45 L 41 45 Z"/>
+  </g>
+
+  <!-- incircle of the counter (23,19) (23,45) (41,45) -->
+  <circle cx="29.2" cy="38.8" r="5.6" fill="#0A0A0F"/>
+</svg>

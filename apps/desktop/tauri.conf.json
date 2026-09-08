@@ -1,0 +1,61 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "nazar-desktop",
+  "version": "0.1.0",
+  "identifier": "io.github.xfurqan0.nazar",
+  "build": {
+    "frontendDist": "shell",
+    "beforeDevCommand": "",
+    "beforeBuildCommand": ""
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "Nazar",
+        "width": 1240,
+        "height": 820,
+        "minWidth": 640,
+        "minHeight": 420,
+        "resizable": true,
+        "center": true,
+        "visible": false,
+        "shadow": true
+      }
+    ],
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost; font-src 'self'",
+      "capabilities": ["default", "canvas"]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "publisher": "Furkan Yıldız",
+    "copyright": "Copyright (c) 2026 Furkan Yıldız",
+    "licenseFile": "../../LICENSE",
+    "category": "DeveloperTool",
+    "shortDescription": "A watchful eye on your Claude Code agents, in a window and in the tray.",
+    "longDescription": "The desktop face of Nazar. It starts the same local server npx runs, draws the canvas in its own window, sits in the tray, and jumps from a session card to the terminal running that session. Needs Node 22+, which Claude Code needs too.",
+    "resources": ["resources/server"],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "compression": "lzma",
+        "displayLanguageSelector": false,
+        "languages": ["English"]
+      }
+    }
+  }
+}

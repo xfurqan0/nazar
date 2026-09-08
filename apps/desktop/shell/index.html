@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Nazar</title>
+    <link rel="stylesheet" href="boot.css" />
+  </head>
+  <!--
+    The only page this application ships. Everything after it is the canvas, served by
+    the child server on 127.0.0.1 and reached by navigating this webview there — the same
+    bundle browser mode serves, so there is one canvas and not two.
+
+    This page is therefore two things and nothing else: the half second before the server
+    answers, and the screen a user sees when it never will. It is hand-written, has no
+    build step and no framework, and its only script talks to four Rust commands.
+  -->
+  <body>
+    <main class="boot">
+      <!--
+        The mark, on the same 16x16 grid as the tray icon and the canvas — the
+        four hexes written out rather than themed, because this page has no
+        theme to read them from. 64 px is 16 quadrupled, so every cell is
+        exactly four device pixels. `packages/ui/test/bead.test.ts` compares
+        this path data with the master in `docs/design/`.
+      -->
+      <svg
+        class="boot__bead"
+        viewBox="0 0 16 16"
+        shape-rendering="crispEdges"
+        aria-hidden="true"
+        focusable="false"
+      >
+        <path
+          fill="#0e2a5a"
+          d="M6 0h4v1h-4zM4 1h8v1h-8zM2 2h4v1h-4zM10 2h4v1h-4zM2 3h2v1h-2zM12 3h2v1h-2zM1 4h2v1h-2zM13 4h2v1h-2zM1 5h2v1h-2zM13 5h2v1h-2zM0 6h2v1h-2zM14 6h2v1h-2zM0 7h2v1h-2zM14 7h2v1h-2zM0 8h2v1h-2zM14 8h2v1h-2zM0 9h2v1h-2zM14 9h2v1h-2zM1 10h2v1h-2zM13 10h2v1h-2zM1 11h2v1h-2zM13 11h2v1h-2zM2 12h2v1h-2zM12 12h2v1h-2zM2 13h4v1h-4zM10 13h4v1h-4zM4 14h8v1h-8zM6 15h4v1h-4z"
+        />
+        <path
+          fill="#ffffff"
+          d="M6 2h4v1h-4zM4 3h8v1h-8zM3 4h4v1h-4zM9 4h4v1h-4zM3 5h2v1h-2zM11 5h2v1h-2zM2 6h3v1h-3zM11 6h3v1h-3zM2 7h2v1h-2zM12 7h2v1h-2zM2 8h2v1h-2zM12 8h2v1h-2zM2 9h3v1h-3zM11 9h3v1h-3zM3 10h2v1h-2zM11 10h2v1h-2zM3 11h4v1h-4zM9 11h4v1h-4zM4 12h8v1h-8zM6 13h4v1h-4z"
+        />
+        <path
+          fill="#3fa9f5"
+          d="M7 4h2v1h-2zM5 5h6v1h-6zM5 6h6v1h-6zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM5 9h6v1h-6zM5 10h6v1h-6zM7 11h2v1h-2z"
+        />
+        <path fill="#0a0a0f" d="M7 7h2v1h-2zM7 8h2v1h-2z" />
+      </svg>
+
+      <h1 class="boot__name">Nazar</h1>
+      <p id="headline" class="boot__headline" role="status">starting the local server…</p>
+      <p id="detail" class="boot__detail" hidden></p>
+
+      <div id="requirement" class="boot__requirement" hidden>
+        <p class="boot__paragraph">
+          Nazar's canvas is served by a small Node process — the same one
+          <code>npx @xfurqan0/nazar</code> starts. It needs <strong>Node 22 or newer</strong>,
+          and it is not bundled here on purpose: Claude Code is itself a Node program, so a
+          machine with sessions worth watching already has a runtime.
+        </p>
+        <p class="boot__paragraph">
+          Install it, then reopen Nazar:
+          <a id="download" class="boot__link" href="#">nodejs.org/en/download</a>
+        </p>
+      </div>
+
+      <section id="doctor-section" class="boot__doctor" hidden>
+        <h2 class="boot__heading">nazar doctor</h2>
+        <pre id="doctor" class="boot__pre"></pre>
+      </section>
+
+      <p class="boot__foot">
+        <span id="shell-version"></span>
+      </p>
+    </main>
+
+    <script src="boot.js" defer></script>
+  </body>
+</html>

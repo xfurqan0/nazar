@@ -1,0 +1,17 @@
+[package]
+name = "nazar-shell"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "The decisions behind Nazar's desktop shell: Node version check, process-tree walk, terminal-window ranking. No Tauri, no platform API."
+
+[lints.rust]
+missing_docs = "warn"
+
+# Deliberately empty. Everything here is arithmetic over data somebody else collected,
+# which is what makes it testable on three operating systems with no toolkit installed.
+[dependencies]

@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The boot page — the local page in `shell/`, shown while the canvas server is starting and left on screen when it never will. With no `remote` block this capability applies to the application's own origin and to nothing else, so the canvas served over http does not inherit it. Two commands, which are the two things this page does: read the boot state it paints, and hand the Node download address to the machine's browser. It opens no dialog, runs no shell command of its own, reads no file and reaches no network. THE TWO PLUGINS ARE NOT LISTED, AND THAT IS THE POINT: tauri-plugin-autostart is driven from Rust through this application's own get_autostart / set_autostart commands, and tauri-plugin-single-instance has no front end at all. Granting the webview autostart:default would hand it a registry write it never makes.",
+  "windows": ["main"],
+  "permissions": ["core:default", "allow-boot-state", "allow-open-download-page"]
+}

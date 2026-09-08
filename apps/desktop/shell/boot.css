@@ -1,0 +1,170 @@
+/*
+ * The boot page's own styles. Deliberately not a copy of the canvas theme: this page is
+ * shown for half a second in the good case, and the good case must not be gated on a
+ * stylesheet that lives in another package's build output.
+ *
+ * The colours are the four bead hexes plus a neutral ground, written here and nowhere
+ * else, and the dark half is `prefers-color-scheme` rather than a toggle — a page with no
+ * settings has nothing to remember a choice with.
+ */
+
+:root {
+  --boot-ground: #f6f7f9;
+  --boot-panel: #ffffff;
+  --boot-ink: #14181f;
+  --boot-muted: #5b6472;
+  --boot-line: #dfe3e9;
+  --boot-accent: #0e2a5a;
+  --boot-warn: #b87400;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --boot-ground: #0d1017;
+    --boot-panel: #151a23;
+    --boot-ink: #e6eaf0;
+    --boot-muted: #94a0b1;
+    --boot-line: #262e3b;
+    --boot-accent: #3fa9f5;
+    --boot-warn: #e0a63a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--boot-ground);
+  color: var(--boot-ink);
+  font: 14px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif;
+}
+
+.boot {
+  width: min(560px, calc(100vw - 48px));
+  padding: 28px 30px 24px;
+  border: 1px solid var(--boot-line);
+  border-radius: 14px;
+  background: var(--boot-panel);
+  text-align: center;
+}
+
+/* 64 px, not 56: the mark is a 16-cell grid, so a size that is a whole multiple
+   of 16 puts every cell on a whole number of device pixels. */
+.boot__bead {
+  width: 64px;
+  height: 64px;
+  shape-rendering: crispEdges;
+}
+
+/* The one piece of motion on the page, and only while something is happening. */
+.boot--waiting .boot__bead {
+  animation: boot-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes boot-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .boot--waiting .boot__bead {
+    animation: none;
+  }
+}
+
+.boot__name {
+  margin: 10px 0 2px;
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.boot__headline {
+  margin: 0;
+  color: var(--boot-muted);
+}
+
+.boot--failed .boot__headline {
+  color: var(--boot-warn);
+  font-weight: 600;
+}
+
+.boot__detail {
+  margin: 10px 0 0;
+  color: var(--boot-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.boot__requirement {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--boot-line);
+  text-align: left;
+}
+
+.boot__paragraph {
+  margin: 0 0 10px;
+}
+
+.boot__paragraph:last-child {
+  margin-bottom: 0;
+}
+
+.boot__link {
+  color: var(--boot-accent);
+  font-weight: 600;
+}
+
+.boot__doctor {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--boot-line);
+  text-align: left;
+}
+
+.boot__heading {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--boot-muted);
+}
+
+.boot__pre {
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--boot-ground);
+  color: var(--boot-ink);
+  font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+code {
+  font: 12px/1.5 ui-monospace, "Cascadia Mono", Consolas, monospace;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--boot-ground);
+}
+
+.boot__foot {
+  margin: 18px 0 0;
+  font-size: 12px;
+  color: var(--boot-muted);
+}

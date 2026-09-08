@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 01 - monochrome template. Same geometry resolved to white plus
+       holes: disc, lens cut out, iris left as a white island, slit cut out of
+       the island. -->
+  <defs>
+    <clipPath id="d01m-lens">
+      <path d="M 9.639 32 A 30 30 0 0 1 54.361 32 A 30 30 0 0 1 9.639 32 Z"/>
+    </clipPath>
+    <mask id="d01m-punch">
+      <rect x="0" y="0" width="64" height="64" fill="#FFFFFF"/>
+      <path d="M 9.639 32 A 30 30 0 0 1 54.361 32 A 30 30 0 0 1 9.639 32 Z" fill="#000000"/>
+      <g clip-path="url(#d01m-lens)">
+        <circle cx="41" cy="32" r="12.5" fill="#FFFFFF"/>
+      </g>
+      <ellipse cx="41" cy="32" rx="3.4" ry="7.4" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <circle cx="32" cy="32" r="31" fill="#FFFFFF" mask="url(#d01m-punch)"/>
+</svg>

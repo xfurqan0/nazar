@@ -1,0 +1,67 @@
+[package]
+name = "nazar-desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "The Nazar desktop shell: a window and a tray icon around the local canvas, and a jump from a session card to the terminal running it."
+
+[lints.rust]
+missing_docs = "warn"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+nazar-shell = { path = "../../crates/nazar-shell" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+
+# `tray-icon` is what turns the tray on in Tauri v2. There is no `image-png` here, unlike
+# nazar-tray: the bead is rasterised in `icon.rs` straight to RGBA, so no PNG is decoded
+# at run time and none is shipped for the tray.
+tauri = { version = "2", features = ["tray-icon"] }
+
+# The "start with Windows" switch in the sidebar. Driven from Rust through this crate's
+# own `get_autostart` / `set_autostart` commands, so the webview never invokes the plugin
+# and `capabilities/default.json` grants it nothing.
+tauri-plugin-autostart = "2"
+
+# A second launch focuses the first one's window instead of starting a second server.
+# nazar-tray solved this with the advisory lock it needed anyway; this application writes
+# no such file, so the plugin is the smaller answer here.
+tauri-plugin-single-instance = "2"
+
+# Everything the jump ladder does: the process snapshot, the window enumeration, the tab
+# lookup and the foreground dance. Only on Windows — `jump.rs` compiles to a stub everywhere
+# else.
+#
+# The last four features are rung (b), and they are one feature's worth of code between
+# them: `Win32_UI_Accessibility` is the UI Automation client that reads a Windows Terminal
+# window's tabs and selects one, and `VARIANT` — which a property condition is built from —
+# is declared under `Win32_System_Variant` but gated on `Win32_System_Com` and
+# `Win32_System_Ole` as well, so all three are named or the type is not there. They add no
+# crate to the dependency graph: the `windows` crate is one crate with feature-gated
+# modules, which is why `cargo deny` has nothing new to say about them.
+[target.'cfg(windows)'.dependencies.windows]
+version = "0.62"
+features = [
+    "Win32_Foundation",
+    # N-WP13: `GetUserDefaultLocaleName`, which is how the tray menu learns which of the
+    # six languages this machine is set to. No new crate — the `windows` crate is one
+    # crate with feature-gated modules.
+    "Win32_Globalization",
+    "Win32_Security",
+    "Win32_System_Com",
+    "Win32_System_Diagnostics_ToolHelp",
+    "Win32_System_JobObjects",
+    "Win32_System_Ole",
+    "Win32_System_Threading",
+    "Win32_System_Variant",
+    "Win32_UI_Accessibility",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+]

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 06 - monochrome template. The eye is a solid white almond and
+       the whole tree is carved out of it, so root, edges and leaf nodes read as
+       holes. -->
+  <defs>
+    <mask id="d06m-punch">
+      <rect x="0" y="0" width="64" height="64" fill="#FFFFFF"/>
+      <g stroke="#000000" stroke-width="2.2" stroke-linecap="round">
+        <path d="M 32 30 L 18.5 36.5"/>
+        <path d="M 32 30 L 45.5 36.5"/>
+      </g>
+      <g fill="#000000">
+        <circle cx="18.5" cy="36.5" r="2.9"/>
+        <circle cx="45.5" cy="36.5" r="2.9"/>
+        <circle cx="32" cy="30" r="5.6"/>
+      </g>
+    </mask>
+  </defs>
+
+  <path d="M 8 32 A 26.7 26.7 0 0 1 56 32 A 26.7 26.7 0 0 1 8 32 Z"
+        fill="#FFFFFF" mask="url(#d06m-punch)"/>
+</svg>

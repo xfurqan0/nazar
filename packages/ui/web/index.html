@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="referrer" content="no-referrer" />
+    <title>Nazar</title>
+    <link rel="icon" href="assets/nazar.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="nz-bar">
+      <button
+        id="menu-toggle"
+        type="button"
+        class="nz-hamburger"
+        aria-expanded="false"
+        aria-controls="sidebar"
+        data-nz-label="bar.menu"
+        data-nz-title="bar.menu"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <path
+            d="M4 7h16M4 12h16M4 17h16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            stroke-linecap="round"
+          />
+        </svg>
+      </button>
+
+      <!--
+        Usage limits, collapsed to one bead (WP4e). It sits at the leading edge
+        of the bar, directly above the tab bar, and it is hidden outright on a
+        machine with no source — there is no empty bead, and no window is ever
+        drawn at 0 % for want of a reading. The mark and the fill are built by
+        `web/quota.ts`; the percentage next to it is always drawn, because a
+        fill level is a colour and a shape and neither survives a greyscale
+        screenshot.
+      -->
+      <button
+        id="usage-bead"
+        type="button"
+        class="nz-usage-bead"
+        aria-expanded="false"
+        aria-controls="usage"
+        aria-haspopup="dialog"
+        hidden
+      >
+        <span id="usage-bead-percent" class="nz-usage-bead__percent"></span>
+      </button>
+
+      <!--
+        The mark, inline and on the 16x16 grid of `src/bead.ts` — direction 04
+        from `docs/design/README.md`. Four paths, one per layer, each a run of
+        whole cells; `shape-rendering` is written on the element rather than
+        only in the stylesheet because this bead is on screen before the
+        stylesheet has necessarily arrived. The path data is exactly what
+        `beadLayerPath()` builds, and `test/bead.test.ts` fails the build if the
+        two ever disagree.
+      -->
+      <span class="nz-brand">
+        <svg
+          class="nz-bead"
+          viewBox="0 0 16 16"
+          shape-rendering="crispEdges"
+          aria-hidden="true"
+          focusable="false"
+        >
+          <path
+            fill="var(--nz-bead-deep-blue)"
+            d="M6 0h4v1h-4zM4 1h8v1h-8zM2 2h4v1h-4zM10 2h4v1h-4zM2 3h2v1h-2zM12 3h2v1h-2zM1 4h2v1h-2zM13 4h2v1h-2zM1 5h2v1h-2zM13 5h2v1h-2zM0 6h2v1h-2zM14 6h2v1h-2zM0 7h2v1h-2zM14 7h2v1h-2zM0 8h2v1h-2zM14 8h2v1h-2zM0 9h2v1h-2zM14 9h2v1h-2zM1 10h2v1h-2zM13 10h2v1h-2zM1 11h2v1h-2zM13 11h2v1h-2zM2 12h2v1h-2zM12 12h2v1h-2zM2 13h4v1h-4zM10 13h4v1h-4zM4 14h8v1h-8zM6 15h4v1h-4z"
+          />
+          <path
+            fill="var(--nz-bead-white)"
+            d="M6 2h4v1h-4zM4 3h8v1h-8zM3 4h4v1h-4zM9 4h4v1h-4zM3 5h2v1h-2zM11 5h2v1h-2zM2 6h3v1h-3zM11 6h3v1h-3zM2 7h2v1h-2zM12 7h2v1h-2zM2 8h2v1h-2zM12 8h2v1h-2zM2 9h3v1h-3zM11 9h3v1h-3zM3 10h2v1h-2zM11 10h2v1h-2zM3 11h4v1h-4zM9 11h4v1h-4zM4 12h8v1h-8zM6 13h4v1h-4z"
+          />
+          <path
+            fill="var(--nz-bead-light-blue)"
+            d="M7 4h2v1h-2zM5 5h6v1h-6zM5 6h6v1h-6zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM5 9h6v1h-6zM5 10h6v1h-6zM7 11h2v1h-2z"
+          />
+          <path fill="var(--nz-bead-black-dot)" d="M7 7h2v1h-2zM7 8h2v1h-2z" />
+        </svg>
+        <span class="nz-brand__name">Nazar</span>
+        <span class="nz-brand__tag" data-nz-t="bar.tagline"></span>
+      </span>
+
+      <span class="nz-bar__spacer"></span>
+
+      <div id="counts" class="nz-counts"></div>
+      <div
+        id="conn"
+        class="nz-conn"
+        role="status"
+        data-status="connecting"
+        data-nz-t="bar.connecting"
+      ></div>
+    </header>
+
+    <!--
+      Canvases as tabs. "All" always exists and shows everything; the others are
+      the user's own and hold whichever sessions have been moved onto them.
+    -->
+    <nav id="tabs" class="nz-tabs" data-nz-label="tab.canvases"></nav>
+
+    <div id="frozen-bar" class="nz-frozen-bar" role="status" hidden>
+      <span id="frozen-text"></span>
+      <button id="frozen-back" type="button" class="nz-button" data-nz-t="frozen.back"></button>
+    </div>
+
+    <div id="banner" class="nz-banner" role="alert" hidden>
+      <svg class="nz-banner__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path
+          d="M12 2.8 22 20.4H2L12 2.8Z"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+          stroke-linejoin="round"
+        />
+        <path d="M12 9.6v4.6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+        <circle cx="12" cy="17.4" r="1.25" fill="currentColor" />
+      </svg>
+      <span id="banner-text"></span>
+    </div>
+
+    <!--
+      Usage limits, in full (WP4e). One bead-fill per provider window, in a
+      popover under the bead in the top bar rather than in a permanent strip:
+      the numbers move a few times an hour, so they do not deserve a row of the
+      page all day. The waiting banner above is unchanged and still outranks
+      everything.
+    -->
+    <div
+      id="usage"
+      class="nz-usage"
+      role="dialog"
+      aria-labelledby="usage-title"
+      aria-describedby="usage-explainer"
+      hidden
+    >
+      <div class="nz-usage__head">
+        <h2 id="usage-title" class="nz-usage__title" data-nz-t="usage.title"></h2>
+        <button id="usage-close" type="button" class="nz-button" data-nz-t="usage.close"></button>
+      </div>
+      <!-- What a usage limit is, for somebody who has never met the word. -->
+      <p id="usage-explainer" class="nz-usage__explainer"></p>
+      <div id="usage-list" class="nz-usage__list"></div>
+      <p class="nz-usage__foot" data-nz-rich="usage.source">
+        <span data-nz-slot="source" id="usage-source"></span>
+      </p>
+    </div>
+
+    <main class="nz-main">
+      <!--
+        N-WP12. The drawer holds three things now — the sessions, the folder
+        tabs they open, and the three view actions — and everything that is a
+        *setting* moved behind the gear at the foot. The maintainer's sentence
+        was "the left menu looks very cluttered, tidy it up", and the cause was
+        visible on the screenshot: eight sections, of which five were things you
+        touch once and then never again, and one of those five (Colours) took a
+        third of the height.
+
+        The gear bar is outside the scrolling area on purpose, so it is on
+        screen whether the session list is two rows or forty.
+      -->
+      <aside id="sidebar" class="nz-sidebar" data-nz-label="sidebar.menu" hidden>
+        <div id="sidebar-main" class="nz-sidebar__scroll">
+          <section class="nz-sidebar__group">
+            <h2 class="nz-sidebar__heading" data-nz-t="sidebar.sessions"></h2>
+            <!--
+              N-WP11: the sessions on the canvas, each with the folder it runs in
+              and one button — open a tab for that folder, or go to the tab it
+              already has. Right-clicking a row opens the card's own menu, which
+              offers the folders further up the tree as well.
+            -->
+            <div id="sessions" class="nz-sessions"></div>
+            <button
+              id="history-toggle"
+              type="button"
+              class="nz-item"
+              aria-expanded="false"
+              aria-controls="history"
+            >
+              <span data-nz-t="sidebar.history"></span> <kbd class="nz-kbd">h</kbd>
+            </button>
+          </section>
+
+          <!--
+            Folder tabs (WP4g, N-WP11). A folder tab is a folder that owns a tab:
+            every session whose working directory is inside it lands there, live
+            and in history, without anybody filing anything. `web/projects.ts`
+            fills this section; the paths it compares are the redacted ones the
+            cards already show, so nothing here can leak a directory a screenshot
+            did not already carry. Tabs are opened from the session list above —
+            there is no path to type, and the rule that makes them automatically
+            is a setting rather than a row of this list.
+          -->
+          <section class="nz-sidebar__group">
+            <h2 class="nz-sidebar__heading" data-nz-t="sidebar.folderTabs"></h2>
+            <div id="projects" class="nz-projects"></div>
+          </section>
+
+          <section class="nz-sidebar__group">
+            <h2 class="nz-sidebar__heading" data-nz-t="sidebar.view"></h2>
+            <button id="arrange" type="button" class="nz-item">
+              <span data-nz-t="sidebar.arrange"></span> <kbd class="nz-kbd">a</kbd>
+            </button>
+            <button id="fit" type="button" class="nz-item">
+              <span data-nz-t="sidebar.fit"></span> <kbd class="nz-kbd">0</kbd>
+            </button>
+            <button id="add-note" type="button" class="nz-item" data-nz-t="sidebar.addNote"></button>
+          </section>
+        </div>
+
+        <!--
+          Settings (N-WP12). Not a modal and not an overlay: it takes the
+          drawer's own place at the drawer's own width, so the canvas behind it
+          is still visible and still live while a colour is being chosen. Open
+          or closed is deliberately *not* remembered — the drawer is for
+          sessions, and a menu that opens on the page you left last is a menu
+          you have to read before you can use it.
+        -->
+        <div id="settings" class="nz-settings" hidden>
+          <div class="nz-settings__head">
+            <button
+              id="settings-back"
+              type="button"
+              class="nz-settings__back"
+              data-nz-label="settings.back"
+              data-nz-title="settings.back"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                <path
+                  d="M15 5l-7 7 7 7"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                />
+              </svg>
+            </button>
+            <h2 id="settings-title" class="nz-settings__title" data-nz-t="settings.title"></h2>
+          </div>
+
+          <div class="nz-settings__scroll">
+            <section class="nz-sidebar__group">
+              <h2 class="nz-sidebar__heading" data-nz-t="settings.appearance"></h2>
+              <!--
+                Light, dark, or whatever the machine says. Three buttons rather
+                than one that cycles: a cycling button makes you read it before
+                you can use it, and it cannot show you the two states you are
+                not in. `app.ts` fills the group from the same list `readTheme`
+                accepts.
+              -->
+              <div
+                id="theme-toggle"
+                class="nz-segment"
+                role="group"
+                data-nz-label="settings.mode"
+              ></div>
+
+              <!--
+                The palette picker (WP4e). One button per theme the build
+                compiled into the stylesheet; `app.ts` fills it from the same
+                list `build.mjs` generated the tokens from, so a palette can
+                never be offered here without rules behind it.
+              -->
+              <div id="palette" class="nz-palettes" role="group" data-nz-label="settings.palette"></div>
+
+              <!--
+                Frame colours, overridden per browser (WP4e). The contrast hint
+                next to each picker is advice and never a veto: it is the user's
+                screen and their eyes, and the gate stays on the palettes Nazar
+                itself ships.
+              -->
+              <h3 class="nz-settings__subheading" data-nz-t="settings.colours"></h3>
+              <p class="nz-about__line nz-colour__note" data-nz-t="settings.coloursNote"></p>
+              <div id="colours" class="nz-colours"></div>
+            </section>
+
+            <section class="nz-sidebar__group">
+              <h2 class="nz-sidebar__heading" data-nz-t="settings.behaviour"></h2>
+              <!--
+                Only the desktop shell can answer this one, so it stays hidden in
+                a browser rather than offering a control that would do nothing.
+                `app.ts` unhides it when `window.__TAURI__` is there.
+              -->
+              <div id="shell-group" class="nz-settings__slot" hidden>
+                <button
+                  id="autostart-toggle"
+                  type="button"
+                  class="nz-switch"
+                  role="switch"
+                  aria-checked="false"
+                >
+                  <span class="nz-switch__label" data-nz-t="settings.autostart.windows"></span>
+                  <span class="nz-switch__track" aria-hidden="true"></span>
+                </button>
+              </div>
+              <!-- `web/projects.ts` puts the auto-create switch here: the list it
+                   belongs to is in the drawer, but the rule is a setting. -->
+              <div id="auto-tabs" class="nz-settings__slot"></div>
+              <button
+                id="demo-toggle"
+                type="button"
+                class="nz-switch"
+                role="switch"
+                aria-checked="false"
+              >
+                <span class="nz-switch__label" data-nz-t="settings.demo"></span>
+                <span class="nz-switch__track" aria-hidden="true"></span>
+              </button>
+            </section>
+
+            <!--
+              N-WP13 fills this and unhides it. It is written out now rather than
+              later so the panel it belongs to was designed with it in place;
+              a section with nothing in it would be a control that lies.
+            -->
+            <section id="language-group" class="nz-sidebar__group">
+              <h2 class="nz-sidebar__heading" data-nz-t="settings.language"></h2>
+              <div id="language" class="nz-language" role="group" data-nz-label="settings.language"></div>
+              <p class="nz-about__line" data-nz-t="settings.languageNote"></p>
+            </section>
+
+            <!--
+              Where the numbers behind the bead come from, in words. An absent
+              reading and a broken one look identical on the canvas; this is the
+              only place that says which of the two it is.
+            -->
+            <section class="nz-sidebar__group">
+              <h2 class="nz-sidebar__heading" data-nz-t="usage.title"></h2>
+              <p class="nz-about__line" data-nz-rich="usage.source">
+                <span data-nz-slot="source" id="quota-source"></span>
+              </p>
+              <p class="nz-about__line">
+                <a
+                  class="nz-link"
+                  href="https://github.com/xfurqan0/nazar#usage-limits-cost-and-context"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  data-nz-t="usage.howTo"
+                ></a>
+              </p>
+            </section>
+
+            <section class="nz-sidebar__group nz-sidebar__about">
+              <h2 class="nz-sidebar__heading" data-nz-t="settings.about"></h2>
+              <p class="nz-about__line" data-nz-rich="about.doctor">
+                <span data-nz-slot="version" id="about-version"></span>
+                <code data-nz-slot="command">nazar doctor</code>
+              </p>
+              <p id="shell-about" class="nz-about__line" data-nz-rich="about.jump" hidden>
+                <kbd data-nz-slot="enter" class="nz-kbd">Enter</kbd>
+              </p>
+              <p class="nz-about__line">
+                <a
+                  class="nz-link"
+                  href="https://github.com/xfurqan0/nazar"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  >github.com/xfurqan0/nazar</a
+                >
+              </p>
+            </section>
+          </div>
+        </div>
+
+        <!--
+          The foot. Outside both scrolling areas, so the way into the settings
+          and the version of the thing you are running are on screen whether the
+          session list is two rows or forty.
+        -->
+        <div class="nz-sidebar__foot">
+          <button
+            id="settings-toggle"
+            type="button"
+            class="nz-gear"
+            aria-expanded="false"
+            aria-controls="settings"
+            data-nz-label="settings.title"
+            data-nz-title="settings.title"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <circle
+                cx="12"
+                cy="12"
+                r="3.1"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+              />
+              <path
+                d="M12 2.4l1.7 2.4 2.9-.6.6 2.9 2.6 1.2-1.1 2.7 1.1 2.7-2.6 1.2-.6 2.9-2.9-.6L12 21.6l-1.7-2.4-2.9.6-.6-2.9-2.6-1.2L5.3 13l-1.1-2.7 2.6-1.2.6-2.9 2.9.6z"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </button>
+          <span class="nz-sidebar__version">Nazar <span id="version"></span></span>
+        </div>
+      </aside>
+
+      <div id="canvas-host" class="nz-host">
+        <svg
+          id="canvas"
+          class="nz-canvas"
+          role="img"
+          data-nz-label="canvas.label"
+        >
+          <defs>
+            <!-- WP4f: the tile side (26) is also `GRID_TILE` in `web/app.ts`, which
+                 reduces the pan offset modulo it. `patternTransform` is rewritten
+                 once per frame with the canvas's own transform, so the dots pan and
+                 zoom with the cards instead of staying nailed to the window; the
+                 rect itself never moves and never has to be resized. -->
+            <pattern
+              id="nz-grid"
+              width="26"
+              height="26"
+              patternUnits="userSpaceOnUse"
+              patternTransform="translate(0 0) scale(1)"
+            >
+              <circle class="nz-grid__dot" cx="1" cy="1" r="1" />
+            </pattern>
+          </defs>
+          <rect class="nz-grid" width="100%" height="100%" fill="url(#nz-grid)" />
+          <g id="viewport"></g>
+        </svg>
+
+        <div id="empty" class="nz-empty" hidden>
+          <!-- The same grid as the bar's bead, three times the size: 48 px is 16
+               tripled, so every cell is exactly three device pixels. -->
+          <svg
+            class="nz-empty__bead"
+            viewBox="0 0 16 16"
+            shape-rendering="crispEdges"
+            aria-hidden="true"
+            focusable="false"
+          >
+            <path
+              fill="var(--nz-bead-deep-blue)"
+              d="M6 0h4v1h-4zM4 1h8v1h-8zM2 2h4v1h-4zM10 2h4v1h-4zM2 3h2v1h-2zM12 3h2v1h-2zM1 4h2v1h-2zM13 4h2v1h-2zM1 5h2v1h-2zM13 5h2v1h-2zM0 6h2v1h-2zM14 6h2v1h-2zM0 7h2v1h-2zM14 7h2v1h-2zM0 8h2v1h-2zM14 8h2v1h-2zM0 9h2v1h-2zM14 9h2v1h-2zM1 10h2v1h-2zM13 10h2v1h-2zM1 11h2v1h-2zM13 11h2v1h-2zM2 12h2v1h-2zM12 12h2v1h-2zM2 13h4v1h-4zM10 13h4v1h-4zM4 14h8v1h-8zM6 15h4v1h-4z"
+            />
+            <path
+              fill="var(--nz-bead-white)"
+              d="M6 2h4v1h-4zM4 3h8v1h-8zM3 4h4v1h-4zM9 4h4v1h-4zM3 5h2v1h-2zM11 5h2v1h-2zM2 6h3v1h-3zM11 6h3v1h-3zM2 7h2v1h-2zM12 7h2v1h-2zM2 8h2v1h-2zM12 8h2v1h-2zM2 9h3v1h-3zM11 9h3v1h-3zM3 10h2v1h-2zM11 10h2v1h-2zM3 11h4v1h-4zM9 11h4v1h-4zM4 12h8v1h-8zM6 13h4v1h-4z"
+            />
+            <path
+              fill="var(--nz-bead-light-blue)"
+              d="M7 4h2v1h-2zM5 5h6v1h-6zM5 6h6v1h-6zM4 7h3v1h-3zM9 7h3v1h-3zM4 8h3v1h-3zM9 8h3v1h-3zM5 9h6v1h-6zM5 10h6v1h-6zM7 11h2v1h-2z"
+            />
+            <path fill="var(--nz-bead-black-dot)" d="M7 7h2v1h-2zM7 8h2v1h-2z" />
+          </svg>
+          <p id="empty-title" class="nz-empty__title"></p>
+          <p id="empty-hint" class="nz-empty__hint" data-nz-rich="empty.hint">
+            <code data-nz-slot="command">claude</code>
+          </p>
+          <!-- An empty tab is not an empty machine, so it says something else. -->
+          <p id="empty-tab-hint" class="nz-empty__hint" data-nz-rich="empty.tabHint" hidden>
+            <code data-nz-slot="menu">⋯</code>
+          </p>
+        </div>
+
+        <!--
+          Sticky notes (WP4e). An HTML layer carrying the same transform as the
+          SVG viewport group, so a note sits in canvas coordinates exactly like
+          a card and pans and zooms with it. It takes no pointer events itself —
+          only the notes on it do — so the canvas keeps every gesture it had.
+        -->
+        <div id="notes" class="nz-notes"></div>
+
+        <div id="card" class="nz-card" role="tooltip" hidden></div>
+
+        <!--
+          What a jump did, or why it could not happen here. `role="status"` rather than
+          `alert`: it answers something the user has just asked for, and must not
+          interrupt a screen reader mid-sentence to say so.
+        -->
+        <div id="hint" class="nz-hint" role="status" hidden></div>
+      </div>
+
+      <aside id="history" class="nz-history" hidden></aside>
+    </main>
+
+    <!--
+      The inline card-name editor (WP4g). One input for the whole canvas, laid
+      over whichever card title is being edited: an SVG `<text>` cannot be typed
+      into, and a `<foreignObject>` inside the pan-and-zoom group would scale
+      with the canvas. What is typed here is kept by this browser and by nothing
+      else — it is never sent anywhere and never written into a session.
+    -->
+    <input id="rename" class="nz-rename" type="text" maxlength="48" data-nz-label="card.nameField" hidden />
+
+    <div id="cardmenu" class="nz-menu" role="menu" hidden></div>
+    <!-- What a right-click on empty canvas offers instead of the browser's menu. -->
+    <div id="canvasmenu" class="nz-menu" role="menu" hidden></div>
+
+    <script src="bundle.js" defer></script>
+  </body>
+</html>

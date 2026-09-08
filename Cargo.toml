@@ -1,0 +1,44 @@
+# The Rust half of Nazar: the desktop shell and the pure logic behind it.
+#
+# The repository is a Node/TypeScript workspace first — `nazar` is an npm package and
+# browser mode stays first-class — and a Cargo workspace second. The two never touch
+# except at one seam: the shell spawns `dist/nazar.mjs`, the same bundle npm publishes.
+#
+# Two members, and the split is the same one nazar-tray made for the same reason
+# (`docs/TAURI-SKELETON.md`, "Layout"):
+#
+# * `crates/nazar-shell` has **no Tauri dependency**. It holds the decisions — which
+#   ancestor process owns the terminal, which of its windows to raise, whether the Node
+#   on this machine is new enough — so they can be unit tested with fake data on Windows,
+#   Ubuntu and macOS from the first commit. `cargo test -p nazar-shell` needs nothing
+#   installed beyond the toolchain.
+# * `apps/desktop` is the Tauri crate. It plays the role of `src-tauri`: `tauri.conf.json`,
+#   `build.rs`, `capabilities/` and `icons/` live inside it. It is Windows-first, and the
+#   platform-specific halves of the jump ladder are behind `#[cfg(windows)]`.
+[workspace]
+members = ["apps/desktop", "crates/nazar-shell"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+authors = ["nazar contributors"]
+repository = "https://github.com/xfurqan0/nazar"
+homepage = "https://github.com/xfurqan0/nazar"
+
+# The same release profile as nazar-tray. A monitoring tool that ships a binary should be
+# a small binary: `opt-level = "s"` and `lto` together cost a slower link and buy roughly
+# a third of the size back.
+#
+# Build paths are *not* handled here, though the obvious place for it is one line below:
+# `[profile.release] trim-paths = "all"` is still nightly-only on the pinned toolchain
+# (Cargo 1.98), so `scripts/build-desktop.mjs` passes `--remap-path-prefix` for the
+# release bundle instead. The reason it has to be done at all is written there.
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

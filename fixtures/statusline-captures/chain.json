@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "installedAt": "2026-09-07T07:40:11Z",
+  "wrapper": "nazar-statusline/0.1.0",
+  "configDir": "C:/claude-home",
+  "backup": "C:/claude-home/settings.json.nazar-bak-20260907T074011Z",
+  "previous": {
+    "type": "command",
+    "command": "node \"C:/proj/example/statusline.js\"",
+    "padding": 0,
+    "refreshInterval": 30
+  }
+}

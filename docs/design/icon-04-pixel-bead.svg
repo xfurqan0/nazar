@@ -1,0 +1,67 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="512" height="512" shape-rendering="crispEdges" role="img" aria-label="Nazar">
+  <!-- Direction 04 - pixel bead.
+       Authored directly on the 16x16 grid the tray actually uses: every cell is
+       a whole unit, so at 16 px each rect lands on exactly one device pixel and
+       nothing is resampled. Blown up to 512 the same file becomes deliberate
+       8-bit art rather than a soft vector. -->
+  <rect x="6" y="0" width="4" height="1" fill="#0E2A5A"/>
+  <rect x="4" y="1" width="8" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="2" width="4" height="1" fill="#0E2A5A"/>
+  <rect x="6" y="2" width="4" height="1" fill="#FFFFFF"/>
+  <rect x="10" y="2" width="4" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="3" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="4" y="3" width="8" height="1" fill="#FFFFFF"/>
+  <rect x="12" y="3" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="1" y="4" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="3" y="4" width="4" height="1" fill="#FFFFFF"/>
+  <rect x="7" y="4" width="2" height="1" fill="#3FA9F5"/>
+  <rect x="9" y="4" width="4" height="1" fill="#FFFFFF"/>
+  <rect x="13" y="4" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="1" y="5" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="3" y="5" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="5" width="6" height="1" fill="#3FA9F5"/>
+  <rect x="11" y="5" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="13" y="5" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="0" y="6" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="6" width="3" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="6" width="6" height="1" fill="#3FA9F5"/>
+  <rect x="11" y="6" width="3" height="1" fill="#FFFFFF"/>
+  <rect x="14" y="6" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="0" y="7" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="7" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="7" width="3" height="1" fill="#3FA9F5"/>
+  <rect x="7" y="7" width="2" height="1" fill="#0A0A0F"/>
+  <rect x="9" y="7" width="3" height="1" fill="#3FA9F5"/>
+  <rect x="12" y="7" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="14" y="7" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="0" y="8" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="8" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="4" y="8" width="3" height="1" fill="#3FA9F5"/>
+  <rect x="7" y="8" width="2" height="1" fill="#0A0A0F"/>
+  <rect x="9" y="8" width="3" height="1" fill="#3FA9F5"/>
+  <rect x="12" y="8" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="14" y="8" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="0" y="9" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="9" width="3" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="9" width="6" height="1" fill="#3FA9F5"/>
+  <rect x="11" y="9" width="3" height="1" fill="#FFFFFF"/>
+  <rect x="14" y="9" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="1" y="10" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="3" y="10" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="5" y="10" width="6" height="1" fill="#3FA9F5"/>
+  <rect x="11" y="10" width="2" height="1" fill="#FFFFFF"/>
+  <rect x="13" y="10" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="1" y="11" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="3" y="11" width="4" height="1" fill="#FFFFFF"/>
+  <rect x="7" y="11" width="2" height="1" fill="#3FA9F5"/>
+  <rect x="9" y="11" width="4" height="1" fill="#FFFFFF"/>
+  <rect x="13" y="11" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="12" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="4" y="12" width="8" height="1" fill="#FFFFFF"/>
+  <rect x="12" y="12" width="2" height="1" fill="#0E2A5A"/>
+  <rect x="2" y="13" width="4" height="1" fill="#0E2A5A"/>
+  <rect x="6" y="13" width="4" height="1" fill="#FFFFFF"/>
+  <rect x="10" y="13" width="4" height="1" fill="#0E2A5A"/>
+  <rect x="4" y="14" width="8" height="1" fill="#0E2A5A"/>
+  <rect x="6" y="15" width="4" height="1" fill="#0E2A5A"/>
+</svg>

@@ -1,0 +1,70 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-07T07:57:44Z",
+  "wrapper": "nazar-statusline/0.1.0",
+  "sessionId": "00000000-0000-4000-8000-000000000002",
+  "payload": {
+    "session_id": "00000000-0000-4000-8000-000000000002",
+    "transcript_path": "C:/claude-home/projects/C--proj-example/00000000-0000-4000-8000-000000000002.jsonl",
+    "cwd": "C:/proj/example",
+    "scratchpad_dir": "C:/claude-home/tmp/C--proj-example/00000000-0000-4000-8000-000000000002/scratchpad",
+    "prompt_id": "00000000-0000-4000-8000-000000000092",
+    "effort": {
+      "level": "medium"
+    },
+    "session_name": "session-b",
+    "model": {
+      "id": "claude-sonnet-5",
+      "display_name": "Sonnet 5"
+    },
+    "workspace": {
+      "current_dir": "C:/proj/example",
+      "project_dir": "C:/proj/example",
+      "added_dirs": [],
+      "repo": {
+        "host": "github.com",
+        "owner": "example-owner",
+        "name": "example-repo"
+      }
+    },
+    "version": "2.1.263",
+    "output_style": {
+      "name": "default"
+    },
+    "cost": {
+      "total_cost_usd": 2.4471,
+      "total_duration_ms": 1804221,
+      "total_api_duration_ms": 402118,
+      "total_lines_added": 41,
+      "total_lines_removed": 3
+    },
+    "context_window": {
+      "total_input_tokens": 412904,
+      "total_output_tokens": 2216,
+      "context_window_size": 1000000,
+      "current_usage": {
+        "input_tokens": 18,
+        "output_tokens": 2216,
+        "cache_creation_input_tokens": 2044,
+        "cache_read_input_tokens": 410842
+      },
+      "used_percentage": 41,
+      "remaining_percentage": 59
+    },
+    "exceeds_200k_tokens": true,
+    "fast_mode": false,
+    "thinking": {
+      "enabled": true
+    },
+    "rate_limits": {
+      "five_hour": {
+        "used_percentage": 12,
+        "resets_at": 1788768000
+      },
+      "seven_day": {
+        "used_percentage": 31,
+        "resets_at": 1789178400
+      }
+    }
+  }
+}

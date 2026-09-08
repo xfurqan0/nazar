@@ -1,0 +1,64 @@
+{
+  "name": "@xfurqan0/nazar",
+  "version": "0.1.0",
+  "description": "Nazar keeps a watchful eye on your agents: a local monitoring canvas for AI coding agents.",
+  "keywords": [
+    "claude",
+    "claude-code",
+    "agents",
+    "subagents",
+    "monitoring",
+    "observability",
+    "canvas",
+    "tokens",
+    "cli",
+    "local-first"
+  ],
+  "license": "MIT",
+  "author": "Furkan Yıldız",
+  "homepage": "https://github.com/xfurqan0/nazar#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xfurqan0/nazar.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xfurqan0/nazar/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "bin": {
+    "nazar": "bin/nazar.mjs"
+  },
+  "files": [
+    "bin",
+    "dist",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "workspaces": [
+    "packages/core",
+    "packages/server",
+    "packages/ui"
+  ],
+  "scripts": {
+    "build": "tsc --build && node packages/ui/build.mjs && node scripts/build-package.mjs",
+    "build:package": "node scripts/build-package.mjs",
+    "clean": "tsc --build --clean",
+    "typecheck": "tsc --project tsconfig.typecheck.json && tsc --project packages/ui/web/tsconfig.json",
+    "test": "npm run test --workspaces && node --import tsx --test test/fixtures.test.ts test/licenses.test.ts test/no-writes.test.ts test/packaging.test.ts",
+    "smoke": "node scripts/pack-smoke.mjs",
+    "prepack": "npm run build && npm run build:package",
+    "start": "node bin/nazar.mjs"
+  },
+  "devDependencies": {
+    "@lobehub/icons-static-png": "1.97.0",
+    "@types/node": "^22.20.1",
+    "esbuild": "0.28.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}

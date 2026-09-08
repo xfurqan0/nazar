@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 02 - negative space.
+       A solid plate carries the eye, and the pupil is absent: a hole punched
+       clean through plate, sclera and iris. On a dark ground the missing dot
+       reads as the bead's black pupil; on a light ground the mark inverts. -->
+  <defs>
+    <clipPath id="d02-lens">
+      <path d="M 8 32 A 30 30 0 0 1 56 32 A 30 30 0 0 1 8 32 Z"/>
+    </clipPath>
+    <mask id="d02-punch">
+      <rect x="0" y="0" width="64" height="64" fill="#FFFFFF"/>
+      <ellipse cx="32" cy="32" rx="5.2" ry="6.8" fill="#000000"/>
+    </mask>
+  </defs>
+
+  <g mask="url(#d02-punch)">
+    <rect x="0" y="0" width="64" height="64" rx="14" ry="14" fill="#0E2A5A"/>
+    <path d="M 8 32 A 30 30 0 0 1 56 32 A 30 30 0 0 1 8 32 Z" fill="#FFFFFF"/>
+    <g clip-path="url(#d02-lens)">
+      <circle cx="32" cy="32" r="10" fill="#3FA9F5"/>
+    </g>
+  </g>
+</svg>

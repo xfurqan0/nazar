@@ -1,0 +1,2744 @@
+/*
+ * Canvas styling. Every colour, size and weight comes from a custom property
+ * generated out of theme.nazar.json, so this file holds structure and nothing
+ * that a theme is allowed to decide.
+ *
+ * The one rule worth stating: a state is a colour *and* a word. Colour alone
+ * fails on a menu-bar template icon, on a greyscale screenshot, and on a
+ * reader who cannot tell amber from red, so every ring, dot and badge here has
+ * a text label somewhere on the same card.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--nz-canvas);
+  color: var(--nz-text);
+  font-family: var(--nz-font-family);
+  font-size: var(--nz-size-md);
+  font-weight: var(--nz-weight-regular);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--nz-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------------------------------------------------------------- bar */
+
+.nz-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--nz-panel);
+  border-bottom: 1px solid var(--nz-panel-border);
+  flex: 0 0 auto;
+}
+
+.nz-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+}
+
+/*
+ * The mark is a 16x16 grid of whole cells (direction 04, `src/bead.ts`), so
+ * every bead on the page is sized in whole device-independent pixels and drawn
+ * with `crispEdges` — no bead is ever 22 or 26 px again. 24 is one and a half
+ * cells per unit, which at the 1.5x and 2x device pixel ratios a Windows
+ * desktop runs at is 36 and 48 device pixels; 48 is three whole pixels a cell.
+ */
+.nz-bead {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  shape-rendering: crispEdges;
+}
+
+.nz-brand__name {
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+  letter-spacing: 0.01em;
+}
+
+.nz-brand__tag {
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-sm);
+}
+
+.nz-bar__spacer {
+  flex: 1 1 auto;
+}
+
+.nz-counts {
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-conn {
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--nz-panel-border);
+  color: var(--nz-text-muted);
+  white-space: nowrap;
+}
+
+.nz-conn[data-status='live'] {
+  color: var(--nz-accent-text);
+  border-color: var(--nz-accent);
+}
+
+.nz-conn[data-status='demo'] {
+  color: var(--nz-warn-text);
+  border-color: var(--nz-warn);
+}
+
+.nz-conn[data-status='lost'] {
+  color: var(--nz-danger-text);
+  border-color: var(--nz-danger);
+}
+
+.nz-button {
+  font-family: inherit;
+  font-size: var(--nz-size-sm);
+  font-weight: var(--nz-weight-medium);
+  color: var(--nz-text-muted);
+  background: transparent;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 8px;
+  padding: 5px 11px;
+  cursor: pointer;
+}
+
+.nz-button:hover {
+  color: var(--nz-text);
+  border-color: var(--nz-accent);
+}
+
+/* --------------------------------------------------------- hamburger */
+
+.nz-hamburger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  flex: 0 0 auto;
+  color: var(--nz-text-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nz-hamburger svg {
+  width: 20px;
+  height: 20px;
+}
+
+.nz-hamburger:hover,
+.nz-hamburger[aria-expanded='true'] {
+  color: var(--nz-text);
+  border-color: var(--nz-panel-border);
+  background: var(--nz-node-header);
+}
+
+/* --------------------------------------------------------------- tabs */
+
+/*
+ * One canvas, several views of it. "All" is not a bucket: it shows everything,
+ * including the sessions filed onto the other tabs, and it is where anything
+ * unfiled lives. A tab is a place you put things, not a place things go to be
+ * hidden from the count.
+ */
+.nz-tabs {
+  display: flex;
+  align-items: stretch;
+  gap: 4px;
+  flex: 0 0 auto;
+  padding: 5px 12px 0;
+  background: var(--nz-panel);
+  border-bottom: 1px solid var(--nz-panel-border);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.nz-tabs[hidden] {
+  display: none;
+}
+
+.nz-tab-slot {
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  flex: 0 0 auto;
+}
+
+.nz-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 11px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  font-weight: var(--nz-weight-medium);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nz-tab:hover {
+  color: var(--nz-text);
+  background: var(--nz-node-header);
+}
+
+.nz-tab.is-active {
+  color: var(--nz-text);
+  background: var(--nz-canvas);
+  border-color: var(--nz-panel-border);
+  box-shadow: inset 0 2px 0 var(--nz-accent);
+}
+
+/* The tab a dragged card would land on. */
+.nz-tab.is-drop {
+  color: var(--nz-accent-text);
+  background: var(--nz-node-header);
+  border-color: var(--nz-accent);
+  box-shadow: 0 0 0 2px var(--nz-accent);
+}
+
+.nz-tab__count {
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Room for the close control, which sits over the tab rather than inside it. */
+.nz-tab.has-close {
+  padding-right: 24px;
+}
+
+.nz-tab__close {
+  position: absolute;
+  top: 50%;
+  right: 5px;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--nz-text-faint);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.nz-tab-slot:hover .nz-tab__close,
+.nz-tab__close:focus-visible {
+  opacity: 1;
+}
+
+.nz-tab__close:hover {
+  color: var(--nz-danger-text);
+}
+
+.nz-tab--add {
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-lg);
+  line-height: 1;
+  padding: 4px 10px;
+}
+
+.nz-tab__input {
+  align-self: center;
+  width: 130px;
+  padding: 5px 9px;
+  border: 1px solid var(--nz-accent);
+  border-radius: 8px;
+  background: var(--nz-canvas);
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+}
+
+/* ------------------------------------------------------------ sidebar */
+
+/*
+ * N-WP12. The drawer is a column of three parts: whichever view is showing
+ * (the menu or the settings), and a foot that is outside both of them. The
+ * scrolling happens *inside* a view rather than on the drawer, so the gear and
+ * the version are on screen with forty sessions listed above them.
+ */
+.nz-sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 15;
+  width: min(268px, 80%);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--nz-panel);
+  border-right: 1px solid var(--nz-panel-border);
+  box-shadow: 12px 0 32px var(--nz-shadow);
+}
+
+.nz-sidebar[hidden] {
+  display: none;
+}
+
+/* The scrolling half of a view. One measurement for both views, so the menu
+   and the settings sit on the same left edge and the same top. */
+.nz-sidebar__scroll,
+.nz-settings__scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 16px 14px;
+  overflow-y: auto;
+}
+
+.nz-sidebar__scroll[hidden] {
+  display: none;
+}
+
+/*
+ * The foot: the way into the settings, and what version this is. Outside both
+ * scrolling areas and never hidden, because a menu whose only way out scrolls
+ * off the bottom is a menu with a trapdoor.
+ */
+.nz-sidebar__foot {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--nz-panel-border);
+  background: var(--nz-panel);
+}
+
+.nz-sidebar__version {
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  letter-spacing: var(--nz-tracking-wide);
+}
+
+.nz-gear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  cursor: pointer;
+}
+
+.nz-gear svg {
+  width: 18px;
+  height: 18px;
+}
+
+.nz-gear:hover {
+  color: var(--nz-text);
+  background: var(--nz-node-header);
+  border-color: var(--nz-panel-border);
+}
+
+.nz-gear[aria-expanded='true'] {
+  color: var(--nz-accent-text);
+  background: var(--nz-node-header);
+  border-color: var(--nz-accent);
+}
+
+/* ---------------------------------------------- settings panel (N-WP12) */
+
+/*
+ * Not a modal and not an overlay: the settings take the drawer's own place at
+ * the drawer's own width, so the canvas behind stays visible and stays live
+ * while a colour is being picked. Open or closed is deliberately not
+ * remembered — see `index.html`.
+ */
+.nz-settings {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.nz-settings[hidden] {
+  display: none;
+}
+
+.nz-settings__head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid var(--nz-panel-border);
+}
+
+.nz-settings__back {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  cursor: pointer;
+}
+
+.nz-settings__back svg {
+  width: 18px;
+  height: 18px;
+}
+
+.nz-settings__back:hover {
+  color: var(--nz-text);
+  background: var(--nz-node-header);
+  border-color: var(--nz-panel-border);
+}
+
+.nz-settings__title {
+  margin: 0;
+  color: var(--nz-text);
+  font-size: var(--nz-size-md);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-settings__subheading {
+  margin: 10px 0 2px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+}
+
+/* A wrapper whose only job is to be hidden as a unit. It must not add a row of
+   its own to the section's gap when it holds one control. */
+.nz-settings__slot {
+  display: contents;
+}
+
+.nz-settings__slot[hidden] {
+  display: none;
+}
+
+.nz-sidebar__group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.nz-sidebar__group[hidden] {
+  display: none;
+}
+
+.nz-sidebar__heading {
+  margin: 0 0 4px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+}
+
+/* ------------------------------------------- segment and switch (N-WP12) */
+
+/*
+ * Three states, all three visible. The button that cycled through them read
+ * `light or dark: system` and had to be read before it could be used; it also
+ * could not show the two states you were not in.
+ */
+.nz-segment {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 9px;
+  background: var(--nz-canvas);
+}
+
+.nz-segment__option {
+  padding: 5px 6px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  cursor: pointer;
+}
+
+.nz-segment__option:hover {
+  color: var(--nz-text);
+  background: var(--nz-node-header);
+}
+
+.nz-segment__option.is-current {
+  color: var(--nz-accent-text);
+  border-color: var(--nz-accent);
+  background: var(--nz-node-header);
+  font-weight: var(--nz-weight-strong);
+}
+
+/*
+ * A switch, not a button whose label says `demo data: off`. Every colour comes
+ * from a palette token, so Sepia and Midnight get their own switch rather than
+ * a blue one somebody hard-coded against the light theme.
+ */
+.nz-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz-switch:hover {
+  background: var(--nz-node-header);
+  border-color: var(--nz-panel-border);
+}
+
+.nz-switch__label {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nz-switch__track {
+  position: relative;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 18px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 999px;
+  background: var(--nz-canvas);
+  transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.nz-switch__track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--nz-text-faint);
+  transition: transform 120ms ease, background-color 120ms ease;
+}
+
+.nz-switch[aria-checked='true'] .nz-switch__track {
+  background: var(--nz-accent);
+  border-color: var(--nz-accent);
+}
+
+.nz-switch[aria-checked='true'] .nz-switch__track::after {
+  transform: translateX(14px);
+  background: var(--nz-panel);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nz-switch__track,
+  .nz-switch__track::after {
+    transition: none;
+  }
+}
+
+.nz-switch[hidden] {
+  display: none;
+}
+
+/* --------------------------------------------- language picker (N-WP13) */
+
+.nz-language {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.nz-language__option {
+  padding: 6px 8px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nz-language__option:hover {
+  color: var(--nz-text);
+  background: var(--nz-node-header);
+}
+
+.nz-language__option.is-current {
+  color: var(--nz-accent-text);
+  border-color: var(--nz-accent);
+  background: var(--nz-node-header);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-md);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz-item:hover {
+  background: var(--nz-node-header);
+  border-color: var(--nz-panel-border);
+}
+
+.nz-kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 5px;
+  background: var(--nz-node-header);
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+}
+
+.nz-about__line {
+  margin: 0 0 6px;
+  padding: 0 10px;
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
+  line-height: 1.45;
+}
+
+.nz-about__line code {
+  font-family: var(--nz-mono-family);
+  background: var(--nz-node-header);
+  border: 1px solid var(--nz-node-border);
+  border-radius: 5px;
+  padding: 0 5px;
+}
+
+.nz-link {
+  color: var(--nz-accent-text);
+}
+
+/* ------------------------------------------------- palette picker (WP4e) */
+
+/*
+ * One button per theme the build compiled in. Buttons rather than a `<select>`
+ * because there are four of them, the chosen one has to be visible without
+ * opening anything, and each carries a sentence worth having as a tooltip.
+ */
+.nz-palettes {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.nz-palette {
+  padding: 6px 10px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  cursor: pointer;
+}
+
+.nz-palette:hover {
+  color: var(--nz-text);
+  background: var(--nz-node-header);
+}
+
+.nz-palette.is-current {
+  color: var(--nz-accent-text);
+  border-color: var(--nz-accent);
+  background: var(--nz-node-header);
+  font-weight: var(--nz-weight-strong);
+}
+
+/* ------------------------------------------------ frame colours (WP4e) */
+
+.nz-colours {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nz-colour__note {
+  margin-bottom: 8px;
+}
+
+.nz-colour {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  border-radius: 8px;
+}
+
+.nz-colour.is-overridden {
+  background: var(--nz-node-header);
+}
+
+.nz-colour__label {
+  flex: 1 1 auto;
+  font-size: var(--nz-size-sm);
+  text-transform: uppercase;
+  letter-spacing: var(--nz-tracking-wide);
+  color: var(--nz-text-muted);
+}
+
+/*
+ * The swatch. A native colour input, because every platform already has a
+ * colour picker its users know and a hand-written one would be worse on all of
+ * them. `appearance: none` is deliberately *not* set: the browser's own chrome
+ * around the swatch is what makes it recognisable as a picker.
+ */
+.nz-colour__input {
+  flex: 0 0 auto;
+  width: 34px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 6px;
+  background: transparent;
+  cursor: pointer;
+}
+
+/*
+ * The hint. Advice, never a veto — the contrast gate applies to the palettes
+ * Nazar ships and not to a colour its user chose on purpose — so a low ratio is
+ * marked and left alone.
+ */
+.nz-colour__hint {
+  flex: 0 0 auto;
+  min-width: 42px;
+  text-align: right;
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-colour__hint.is-low {
+  color: var(--nz-warn-text);
+}
+
+.nz-colour__reset {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-text-faint);
+  font: inherit;
+  font-size: var(--nz-size-xs);
+  cursor: pointer;
+}
+
+.nz-colour__reset:hover:not(:disabled) {
+  color: var(--nz-text);
+  border-color: var(--nz-panel-border);
+}
+
+.nz-colour__reset:disabled,
+.nz-colour__reset-all:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.nz-colour__reset-all {
+  margin-top: 6px;
+}
+
+/* ---------------------------------------------------------- card menu */
+
+.nz-menu {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 25;
+  min-width: 178px;
+  padding: 6px;
+  background: var(--nz-panel);
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px var(--nz-shadow);
+}
+
+.nz-menu[hidden] {
+  display: none;
+}
+
+.nz-menu__heading {
+  margin: 4px 8px 4px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+}
+
+.nz-menu__item {
+  display: block;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz-menu__item:hover {
+  background: var(--nz-node-header);
+}
+
+.nz-menu__item.is-current {
+  color: var(--nz-accent-text);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-menu__item--new {
+  border-top: 1px solid var(--nz-panel-border);
+  border-radius: 0 0 6px 6px;
+  margin-top: 4px;
+  padding-top: 8px;
+}
+
+/*
+ * The only entry in this menu that acts on the machine rather than on the
+ * picture, so it is set apart from the tab list by a rule rather than by
+ * colour: it is not a warning, it is a different kind of thing.
+ */
+.nz-menu__item--jump {
+  border-bottom: 1px solid var(--nz-panel-border);
+  border-radius: 6px 6px 0 0;
+  margin-bottom: 4px;
+  padding-bottom: 8px;
+  font-weight: var(--nz-weight-medium);
+}
+
+/* --------------------------------------------------------------- hint */
+
+/*
+ * One line at the foot of the canvas, answering something the user has just
+ * done: which terminal came forward, or why none could. It disappears on its
+ * own — a monitor should not accumulate notices — and it never takes a click,
+ * so a hint that lands over a card cannot swallow the next drag.
+ */
+.nz-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  z-index: 22;
+  max-width: min(520px, calc(100% - 32px));
+  padding: 8px 14px;
+  transform: translateX(-50%);
+  background: var(--nz-panel);
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px var(--nz-shadow);
+  color: var(--nz-text);
+  font-size: var(--nz-size-sm);
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: nz-hint-in 140ms ease-out;
+}
+
+.nz-hint[hidden] {
+  display: none;
+}
+
+@keyframes nz-hint-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nz-hint {
+    animation: none;
+  }
+}
+
+/* ------------------------------------------------------------- banner */
+
+/*
+ * The loudest element on the page, on purpose: a session waiting for a
+ * permission prompt is the one thing Nazar exists to put in front of you.
+ */
+.nz-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+  padding: 13px 20px;
+  background: var(--nz-banner-bg);
+  color: var(--nz-banner-text);
+  border-bottom: 2px solid var(--nz-banner-border);
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+  line-height: 1.35;
+}
+
+.nz-banner[hidden] {
+  display: none;
+}
+
+.nz-banner__icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  color: var(--nz-banner-border);
+}
+
+/* ------------------------------------------------- usage limits (WP4e) */
+
+/*
+ * WP5 drew one bead-fill per provider window in a permanent strip across the
+ * top of the page. WP4e collapsed it: **one bead in the bar**, filled by the
+ * window closest to being spent, and the rows behind a click — the same shape
+ * nazar-tray has in the Windows tray.
+ *
+ * Three rules the markup depends on, unchanged from the strip:
+ *
+ * - the bead and the panel are `display: none` when hidden, because `flex`
+ *   would otherwise beat the `hidden` attribute;
+ * - a severity is a colour **and** a number. The percentage is written next to
+ *   every bead, the one in the bar included, so a greyscale screenshot and a
+ *   reader who cannot separate amber from red both keep the information;
+ * - an unknown window is grey and says `unknown`. It is never an empty bar,
+ *   which would read as `0 %`.
+ */
+.nz-usage-bead {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 8px 0 4px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nz-weight-medium);
+  cursor: pointer;
+}
+
+.nz-usage-bead[hidden] {
+  display: none;
+}
+
+.nz-usage-bead:hover,
+.nz-usage-bead[aria-expanded='true'] {
+  color: var(--nz-text);
+  border-color: var(--nz-panel-border);
+  background: var(--nz-node-header);
+}
+
+.nz-usage-bead__mark {
+  flex: 0 0 auto;
+  shape-rendering: crispEdges;
+}
+
+/*
+ * The bar bead takes the same severities the rows do — the **fill** as well as
+ * the number. The fill is the whole point of collapsing six windows into one
+ * glyph: a bead that stayed blue at 88 % would be a green light on a machine
+ * that is nearly out.
+ */
+.nz-usage-bead.is-warn .nz-quota__bead-fill {
+  fill: var(--nz-warn);
+}
+
+.nz-usage-bead.is-warn .nz-usage-bead__percent {
+  color: var(--nz-warn-text);
+}
+
+.nz-usage-bead.is-critical .nz-quota__bead-fill {
+  fill: var(--nz-danger);
+}
+
+.nz-usage-bead.is-critical .nz-usage-bead__percent {
+  color: var(--nz-danger-text);
+}
+
+.nz-usage-bead.is-unknown .nz-quota__bead-fill {
+  fill: var(--nz-unknown-grey);
+}
+
+.nz-usage-bead.is-unknown .nz-usage-bead__percent {
+  color: var(--nz-unknown-grey-text);
+  font-weight: var(--nz-weight-regular);
+}
+
+.nz-usage {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 24;
+  width: min(360px, calc(100vw - 16px));
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  padding: 12px 14px 10px;
+  background: var(--nz-panel);
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px var(--nz-shadow);
+}
+
+.nz-usage[hidden] {
+  display: none;
+}
+
+.nz-usage__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nz-usage__title {
+  margin: 0;
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-usage__head .nz-button {
+  margin-left: auto;
+}
+
+/*
+ * The sentence the whole rename exists for. Somebody who has never met the word
+ * "quota" needs one line saying what these bars are measuring, and it belongs
+ * where the bars are rather than in a README they will not open.
+ */
+.nz-usage__explainer {
+  margin: 6px 0 10px;
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
+  line-height: 1.45;
+}
+
+.nz-usage__list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.nz-usage__foot {
+  margin: 12px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--nz-panel-border);
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+}
+
+.nz-quota__item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.nz-quota__bead {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  shape-rendering: crispEdges;
+}
+
+.nz-quota__bead-ground {
+  fill: var(--nz-node-header);
+}
+
+/*
+ * The fill, the bar and the percentage all take the same colour, so the three
+ * of them can never disagree about how alarming a window is.
+ */
+.nz-quota__bead-fill {
+  fill: var(--nz-state-alive);
+}
+
+.nz-quota__bead-iris {
+  fill: var(--nz-bead-white);
+}
+
+.nz-quota__bead-pupil {
+  fill: var(--nz-bead-black-dot);
+}
+
+/*
+ * The outline, as a ring of whole cells rather than a stroke.
+ *
+ * The round bead's gauge drew this with `stroke-width: 1` on the outer circle.
+ * A stroke is a half-pixel line down each side of the shape it follows, which
+ * is precisely the soft edge the pixel mark exists not to have — so the ring is
+ * the drawn cells that touch an undrawn one, and it separates the bead from
+ * whatever is behind it without a fraction of a pixel anywhere.
+ */
+.nz-quota__bead-rim {
+  fill: var(--nz-node-border);
+}
+
+.nz-quota__text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.nz-quota__head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.nz-quota__label {
+  color: var(--nz-text);
+  font-size: var(--nz-size-sm);
+  font-weight: var(--nz-weight-medium);
+  white-space: nowrap;
+}
+
+.nz-quota__percent {
+  margin-left: auto;
+  color: var(--nz-text);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nz-weight-strong);
+}
+
+/*
+ * The bar's *unfilled* half has to be as legible as its filled one, or the
+ * ratio cannot be read: a track that fades into the panel turns every window
+ * into a line of colour whose length means nothing. Hence the inset border,
+ * which marks where the track ends whatever the fill is doing.
+ */
+.nz-quota__bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--nz-canvas);
+  box-shadow: inset 0 0 0 1px var(--nz-panel-border);
+  overflow: hidden;
+}
+
+.nz-quota__fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--nz-state-alive);
+}
+
+.nz-quota__reset {
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The three thresholds, from theme.nazar.json: amber at 60, red at 85. */
+.nz-quota__item.is-warn .nz-quota__bead-fill,
+.nz-quota__item.is-warn .nz-quota__fill {
+  fill: var(--nz-warn);
+  background: var(--nz-warn);
+}
+
+.nz-quota__item.is-warn .nz-quota__percent {
+  color: var(--nz-warn-text);
+}
+
+.nz-quota__item.is-critical .nz-quota__bead-fill,
+.nz-quota__item.is-critical .nz-quota__fill {
+  fill: var(--nz-danger);
+  background: var(--nz-danger);
+}
+
+.nz-quota__item.is-critical .nz-quota__percent {
+  color: var(--nz-danger-text);
+}
+
+/*
+ * Unknown: grey, empty, and the word. `percent` is optional in the contract
+ * precisely so that "I could not read it" can be told apart from "you have
+ * used nothing", and those are opposite messages to someone about to start a
+ * long run.
+ */
+.nz-quota__item.is-unknown .nz-quota__bead-fill,
+.nz-quota__item.is-unknown .nz-quota__fill {
+  fill: var(--nz-unknown-grey);
+  background: var(--nz-unknown-grey);
+}
+
+.nz-quota__item.is-unknown .nz-quota__percent {
+  color: var(--nz-unknown-grey-text);
+  font-weight: var(--nz-weight-regular);
+}
+
+.nz-quota__item.is-unknown .nz-quota__bar {
+  border: 1px dashed var(--nz-unknown-grey);
+  background: transparent;
+}
+
+/*
+ * Age. A reading is not wrong for being old — quota does not burn while you
+ * are not using it — so an aging one is dimmed rather than hidden, and a stale
+ * one is dimmed further and says how old it is next to its countdown.
+ */
+.nz-quota__item.is-aging {
+  opacity: 0.82;
+}
+
+.nz-quota__item.is-stale,
+.nz-quota__item.is-unknown-age {
+  opacity: 0.62;
+}
+
+/* The window a provider will hit first. One per provider, at most. */
+.nz-quota__item.is-binding .nz-quota__label {
+  font-weight: var(--nz-weight-strong);
+}
+
+/* --------------------------------------------------- frozen (history) */
+
+/*
+ * A frozen tree is a session that ended. Nothing about it can change, so
+ * nothing about it moves: the pulse is off, the ring is grey, and every time
+ * on screen is absolute. The bar says so in words as well as in colour.
+ */
+.nz-frozen-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 0 auto;
+  padding: 9px 20px;
+  background: var(--nz-node-header);
+  color: var(--nz-text-muted);
+  border-bottom: 1px solid var(--nz-panel-border);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-frozen-bar[hidden] {
+  display: none;
+}
+
+.nz-frozen-bar .nz-button {
+  margin-left: auto;
+}
+
+:root[data-frozen] .nz-grid__dot {
+  opacity: 0.45;
+}
+
+.nz-session.is-frozen .nz-session__bg {
+  stroke-dasharray: none;
+}
+
+.nz-session.is-frozen .nz-ring__pulse {
+  animation: none;
+  opacity: 0;
+}
+
+/*
+ * Nothing on a frozen tree moves. `activityOf` already answers `done` for
+ * every node in history, so this is belt and braces rather than the rule — but
+ * a past session that started breathing again would be a lie, and it costs two
+ * lines to make that impossible.
+ */
+.nz-session.is-frozen .nz-session__bg,
+.nz-session.is-frozen .nz-agent__bg {
+  animation: none;
+  stroke-opacity: 1;
+}
+
+.nz-ring[data-state='frozen'] {
+  stroke: var(--nz-state-done);
+  stroke-dasharray: none;
+}
+
+/* --------------------------------------------------------------- host */
+
+.nz-main {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.nz-host {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+  touch-action: none;
+  /* Panning is a drag; the labels are not for selecting. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.nz-host.is-dragging {
+  cursor: grabbing;
+}
+
+.nz-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.nz-grid__dot {
+  fill: var(--nz-grid);
+}
+
+/* ------------------------------------------------------------ session */
+
+.nz-session__bg {
+  fill: var(--nz-node);
+  stroke: var(--nz-node-border);
+  stroke-width: 1;
+}
+
+/*
+ * The frame is the state (WP4d).
+ *
+ * The small ring in the corner was too small to answer "which of these
+ * fourteen cards is working" from across the desk, which was the whole
+ * complaint. The card's own border carries it now: one colour per activity,
+ * one class per activity, and exactly one class on at a time.
+ *
+ * Only `working` moves, and it breathes rather than blinks — 1.6 s, ease in
+ * and out, stroke opacity never below 0.35. A hard flash is what an alarm
+ * looks like, and a session doing its job is not an alarm; the state that *is*
+ * an alarm is `waiting`, which keeps the banner and the expanding ring it has
+ * always had.
+ */
+.nz-session.is-working .nz-session__bg {
+  stroke: var(--nz-state-working);
+  stroke-width: 2;
+  animation: nz-frame-pulse 1.6s ease-in-out infinite;
+}
+
+.nz-session.is-idle .nz-session__bg {
+  stroke: var(--nz-state-alive);
+  stroke-width: 2;
+}
+
+.nz-session.is-done .nz-session__bg {
+  stroke: var(--nz-state-done);
+  stroke-width: 2;
+}
+
+.nz-session.is-unknown .nz-session__bg {
+  stroke: var(--nz-state-unknown);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+}
+
+.nz-session.is-waiting .nz-session__bg {
+  stroke: var(--nz-state-waiting);
+  stroke-width: 2;
+}
+
+.nz-session.is-unknown {
+  opacity: 0.72;
+}
+
+/*
+ * The word next to the colour. Drawn in the muted text token rather than in
+ * the state colour: a ring only has to clear 3:1, text has to clear 4.5:1, and
+ * `stateAlive` on a white card does not — which is exactly why the label is
+ * carrying the meaning and the frame is carrying the glance.
+ */
+.nz-session__activity,
+.nz-agent__activity {
+  fill: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+}
+
+.nz-session__activity {
+  text-anchor: end;
+}
+
+.nz-session.is-working .nz-session__activity,
+.nz-agent.is-working .nz-agent__activity,
+.nz-session.is-waiting .nz-session__activity {
+  fill: var(--nz-text-muted);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-session:focus-visible .nz-session__bg {
+  stroke: var(--nz-focus-ring);
+  stroke-width: 2;
+  animation: none;
+  stroke-opacity: 1;
+}
+
+.nz-badge__fallback {
+  fill: var(--nz-node-header);
+}
+
+/*
+ * The drag handle: the top strip of a card. Invisible, because the card's own
+ * header is the affordance and a second visible bar would be noise; the cursor
+ * says what it is. Below it the old gesture is unchanged and the canvas pans,
+ * which matters — panning is what people already have in their hands.
+ */
+.nz-session__handle {
+  fill: transparent;
+  cursor: grab;
+}
+
+.nz-host.is-moving .nz-session__handle {
+  cursor: grabbing;
+}
+
+.nz-session.is-moving {
+  cursor: grabbing;
+}
+
+.nz-session.is-moving .nz-session__bg {
+  stroke: var(--nz-accent);
+  stroke-width: 2;
+  filter: drop-shadow(0 8px 18px var(--nz-shadow));
+  /* A card under the pointer is being moved, not being watched. */
+  animation: none;
+  stroke-opacity: 1;
+}
+
+/* --------------------------------- WP4f + N-WP10: the resize handles */
+
+/*
+ * Eight targets around the card's border: four corner squares and four edge
+ * strips between them, all invisible until the pointer is near them.
+ *
+ * They are always *there* — a hit target that appears on hover is a hit target
+ * you have to already know about — but the corners are drawn only when the card
+ * is hovered or focused, because eight permanent handles on every card would be
+ * eight more things to look at on a canvas whose whole job is to be scanned.
+ * The edges are never drawn at all: the border they follow is already the
+ * card's outline, and the cursor is what says they can be dragged.
+ */
+.nz-resize__grip {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1.5;
+}
+
+.nz-resize__grip--nw,
+.nz-resize__grip--se {
+  cursor: nwse-resize;
+}
+
+.nz-resize__grip--ne,
+.nz-resize__grip--sw {
+  cursor: nesw-resize;
+}
+
+.nz-resize__grip--n,
+.nz-resize__grip--s {
+  cursor: ns-resize;
+}
+
+.nz-resize__grip--w,
+.nz-resize__grip--e {
+  cursor: ew-resize;
+}
+
+.nz-session:hover .nz-resize__grip:not(.nz-resize__grip--edge),
+.nz-session:focus-within .nz-resize__grip:not(.nz-resize__grip--edge),
+.nz-session.is-resizing .nz-resize__grip:not(.nz-resize__grip--edge) {
+  fill: var(--nz-node-header);
+  stroke: var(--nz-node-border);
+}
+
+.nz-resize__grip:not(.nz-resize__grip--edge):hover {
+  fill: var(--nz-accent);
+  stroke: var(--nz-accent);
+}
+
+.nz-session.is-resizing .nz-session__bg {
+  stroke: var(--nz-accent);
+  stroke-width: 2;
+  animation: none;
+  stroke-opacity: 1;
+}
+
+/*
+ * A card the user has sized keeps its grips faintly drawn at rest, so "this one
+ * is not sizing itself any more" is visible without opening a menu.
+ *
+ * On the grips and **not** on the card's border, which is deliberate: the
+ * border is the activity frame, and the `unknown` state already spends
+ * `stroke-dasharray` on saying so. One property, one meaning.
+ */
+.nz-session.is-sized .nz-resize__grip:not(.nz-resize__grip--edge) {
+  stroke: var(--nz-node-border);
+}
+
+/* ------------------------------------------------- chevron and ⋯ menu */
+
+.nz-chevron,
+.nz-cardmenu {
+  cursor: pointer;
+}
+
+.nz-chevron__hit,
+.nz-cardmenu__hit {
+  fill: transparent;
+  stroke: transparent;
+  stroke-width: 1;
+}
+
+.nz-chevron:hover .nz-chevron__hit,
+.nz-cardmenu:hover .nz-cardmenu__hit {
+  fill: var(--nz-node-header);
+  stroke: var(--nz-node-border);
+}
+
+.nz-chevron:focus-visible .nz-chevron__hit,
+.nz-cardmenu:focus-visible .nz-cardmenu__hit {
+  stroke: var(--nz-focus-ring);
+  stroke-width: 2;
+}
+
+.nz-chevron__mark {
+  fill: none;
+  stroke: var(--nz-text-muted);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.nz-cardmenu__dot {
+  fill: var(--nz-text-muted);
+}
+
+/* The chips that stand in for a folded tree. */
+.nz-chip--count .nz-chip__text {
+  fill: var(--nz-text);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-chip--running .nz-chip__bg {
+  fill: none;
+  stroke: var(--nz-state-alive);
+}
+
+.nz-chip--running .nz-chip__text {
+  fill: var(--nz-state-alive);
+}
+
+.nz-chip--unknown .nz-chip__bg {
+  stroke-dasharray: 3 3;
+}
+
+.nz-session__title {
+  fill: var(--nz-text);
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-session__path {
+  fill: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
+}
+
+.nz-session__identity {
+  fill: var(--nz-text-faint);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-session__meta {
+  fill: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-session__tokens {
+  fill: var(--nz-text);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * Cost and context window (WP3'). Muted, because they answer a different
+ * question from the token counters above them and must not outshout them, and
+ * drawn at all only when a status-line capture supplied them: the renderer sets
+ * `display: none` otherwise, so the line costs nothing on a machine with no
+ * wrapper and the card never changes size either way.
+ */
+.nz-session__cost,
+.nz-session__context {
+  fill: var(--nz-text);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-sm);
+  font-weight: var(--nz-weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+/*
+ * The context figure is right-aligned against the card's own margin and takes
+ * the same three severities the usage bead does: it is the same question about
+ * a window filling up, and two displays of "how full" that disagreed about when
+ * to worry would be worse than one.
+ */
+.nz-session__context {
+  text-anchor: end;
+}
+
+.nz-session__context.is-warn {
+  fill: var(--nz-warn-text);
+}
+
+.nz-session__context.is-critical {
+  fill: var(--nz-danger-text);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-session__context.is-unknown {
+  fill: var(--nz-text-faint);
+  font-weight: var(--nz-weight-regular);
+}
+
+/*
+ * WP4f: the line that says why the two above are missing.
+ *
+ * Faint and in the body face rather than the mono one, because it is a sentence
+ * and not a measurement — the card must not read as though it had found a value
+ * called "this project overrides the status line".
+ */
+.nz-session__blocked {
+  fill: var(--nz-text-faint);
+  font-size: var(--nz-size-sm);
+  font-weight: var(--nz-weight-regular);
+  cursor: help;
+}
+
+.nz-ring {
+  fill: none;
+  stroke-width: 2.5;
+  stroke: var(--nz-state-unknown);
+}
+
+.nz-ring[data-state='alive'] {
+  stroke: var(--nz-state-alive);
+}
+
+.nz-ring[data-state='unknown'] {
+  stroke: var(--nz-state-unknown);
+  stroke-dasharray: 3 3;
+}
+
+.nz-ring[data-state='waiting'] {
+  stroke: var(--nz-state-waiting);
+  stroke-width: 3.5;
+}
+
+.nz-ring__pulse {
+  fill: none;
+  stroke: var(--nz-state-waiting);
+  stroke-width: 3;
+  opacity: 0;
+}
+
+.nz-session.is-waiting .nz-ring__pulse {
+  animation: nz-pulse 1.6s ease-out infinite;
+}
+
+@keyframes nz-pulse {
+  0% {
+    opacity: 0.75;
+    r: 11;
+  }
+  100% {
+    opacity: 0;
+    r: 22;
+  }
+}
+
+/*
+ * The working frame's breath. Only `stroke-opacity` moves, so one keyframe set
+ * fits both the 2 px session border and the 1.6 px agent one, and neither
+ * changes size — an animated `stroke-width` would nudge the card's own edge and
+ * make a static screenshot disagree with itself by half a pixel.
+ */
+@keyframes nz-frame-pulse {
+  0%,
+  100% {
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-opacity: 0.35;
+  }
+}
+
+/*
+ * Reduced motion: the frame keeps its colour and stops moving, and the word on
+ * the card is what is left to say "working" — which is why the word is drawn
+ * whether anything animates or not.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .nz-session.is-waiting .nz-ring__pulse {
+    animation: none;
+    opacity: 0.5;
+  }
+
+  .nz-session.is-working .nz-session__bg,
+  .nz-agent.is-working .nz-agent__bg {
+    animation: none;
+    stroke-opacity: 1;
+  }
+
+  .nz-session.is-working .nz-session__activity,
+  .nz-agent.is-working .nz-agent__activity {
+    fill: var(--nz-text);
+  }
+
+  /* WP4e: the note counter appears rather than fading in. */
+  .nz-note__count {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------- chip */
+
+.nz-chip__bg {
+  fill: var(--nz-node-header);
+  stroke: var(--nz-node-border);
+  stroke-width: 1;
+}
+
+.nz-chip__text {
+  fill: var(--nz-text-muted);
+  font-size: 11px;
+  font-weight: var(--nz-weight-medium);
+}
+
+.nz-chip--model .nz-chip__text {
+  fill: var(--nz-accent-text);
+}
+
+.nz-chip--waiting .nz-chip__bg {
+  fill: var(--nz-banner-bg);
+  stroke: var(--nz-banner-border);
+}
+
+.nz-chip--waiting .nz-chip__text {
+  fill: var(--nz-banner-text);
+  font-weight: var(--nz-weight-strong);
+}
+
+/* --------------------------------------------------------------- tree */
+
+.nz-rule {
+  stroke: var(--nz-node-border);
+  stroke-width: 1;
+}
+
+.nz-tree__label {
+  fill: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+}
+
+.nz-edge {
+  fill: none;
+  stroke: var(--nz-edge);
+  stroke-width: 1.4;
+}
+
+.nz-agent__bg {
+  fill: var(--nz-agent);
+  stroke: var(--nz-agent-border);
+  stroke-width: 1;
+}
+
+/*
+ * A subagent's frame follows the same three rules as its session's, at the
+ * smaller card's weight. An agent is never `idle` and never `waiting` —
+ * `Agent.state` has three values and neither of those is one of them — so
+ * those two rules would be dead CSS and are not written.
+ */
+.nz-agent.is-working .nz-agent__bg {
+  stroke: var(--nz-state-working);
+  stroke-width: 1.6;
+  animation: nz-frame-pulse 1.6s ease-in-out infinite;
+}
+
+/*
+ * A finished subagent stays on the canvas until its session goes, faded and
+ * ringed in grey. Removing it would erase the answer to "what did that run
+ * cost"; leaving it bright would claim it is still working.
+ */
+.nz-agent.is-done {
+  opacity: 0.62;
+}
+
+.nz-agent.is-done .nz-agent__bg {
+  stroke: var(--nz-state-done);
+  stroke-width: 1.5;
+}
+
+/*
+ * WP4f: `3 finished hidden · show`.
+ *
+ * A chip and not a button, because it is a footnote to the subagent count it
+ * sits beside — but it is pressable, so it takes a focus ring and a hover
+ * state like every other control on the card.
+ */
+.nz-chip--hidden {
+  cursor: pointer;
+}
+
+.nz-chip--hidden .nz-chip__bg {
+  fill: none;
+  stroke: var(--nz-text-faint);
+  stroke-dasharray: 3 3;
+}
+
+.nz-chip--hidden .nz-chip__text {
+  fill: var(--nz-text-muted);
+}
+
+.nz-chip--hidden:hover .nz-chip__bg {
+  stroke: var(--nz-accent);
+  stroke-dasharray: none;
+}
+
+.nz-chip--hidden:hover .nz-chip__text {
+  fill: var(--nz-accent);
+}
+
+.nz-chip--hidden:focus-visible .nz-chip__bg {
+  stroke: var(--nz-focus-ring);
+  stroke-width: 2;
+  stroke-dasharray: none;
+}
+
+.nz-chip--done .nz-chip__bg {
+  fill: none;
+  stroke: var(--nz-state-done);
+}
+
+.nz-chip--done .nz-chip__text {
+  fill: var(--nz-state-done);
+  font-weight: var(--nz-weight-medium);
+}
+
+.nz-agent.is-unknown .nz-agent__bg {
+  stroke: var(--nz-state-unknown);
+  stroke-dasharray: 4 3;
+}
+
+.nz-agent.is-orphan .nz-agent__bg {
+  stroke: var(--nz-warn);
+}
+
+.nz-agent:focus-visible .nz-agent__bg {
+  stroke: var(--nz-focus-ring);
+  stroke-width: 2;
+  animation: none;
+  stroke-opacity: 1;
+}
+
+.nz-agent__dot {
+  fill: var(--nz-state-unknown);
+}
+
+.nz-agent__dot[data-state='running'] {
+  fill: var(--nz-state-alive);
+}
+
+.nz-agent__dot[data-state='done'] {
+  fill: var(--nz-state-done);
+}
+
+.nz-agent__dot[data-state='unknown'] {
+  fill: var(--nz-unknown-grey);
+}
+
+.nz-agent__type {
+  fill: var(--nz-text);
+  font-size: var(--nz-size-sm);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-agent__line {
+  fill: var(--nz-text-muted);
+  font-size: var(--nz-size-xs);
+}
+
+.nz-agent__tokens {
+  fill: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-agent__orphan {
+  fill: var(--nz-warn-text);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-strong);
+  text-anchor: end;
+}
+
+/* ------------------------------------------------- sticky notes (WP4e) */
+
+/*
+ * The layer, and why it exists at all: a note is a text box, and SVG has none.
+ * See the header of `web/notes.ts`. It carries the same transform as the SVG
+ * viewport group, so a note is in canvas coordinates like a card and pans and
+ * zooms with one.
+ *
+ * `pointer-events: none` on the layer and `auto` on the notes is the whole of
+ * "the canvas keeps its gestures": everywhere there is no note, a press reaches
+ * the SVG underneath and pans exactly as it did before this feature existed.
+ */
+.nz-notes {
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  transform-origin: 0 0;
+  pointer-events: none;
+}
+
+.nz-notes[hidden] {
+  display: none;
+}
+
+.nz-note {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--nz-note-edge);
+  border-radius: 10px;
+  background: var(--nz-note1);
+  color: var(--nz-note-ink);
+  box-shadow: 0 6px 16px var(--nz-shadow);
+  pointer-events: auto;
+  overflow: visible;
+}
+
+.nz-note.is-colour-1 {
+  background: var(--nz-note1);
+}
+
+.nz-note.is-colour-2 {
+  background: var(--nz-note2);
+}
+
+.nz-note.is-colour-3 {
+  background: var(--nz-note3);
+}
+
+.nz-note.is-colour-4 {
+  background: var(--nz-note4);
+}
+
+.nz-note.is-moving {
+  box-shadow: 0 12px 26px var(--nz-shadow);
+}
+
+/*
+ * The grip is the top strip, exactly like a card's: press it to move the note,
+ * press the text to type in it. The cursor is the whole affordance; a visible
+ * title bar on a 220 px note would be a quarter of it.
+ */
+.nz-note__grip {
+  height: 18px;
+  flex: 0 0 auto;
+  border-radius: 9px 9px 0 0;
+  cursor: grab;
+}
+
+.nz-note.is-moving .nz-note__grip {
+  cursor: grabbing;
+}
+
+.nz-note__menu {
+  position: absolute;
+  top: 1px;
+  right: 2px;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-note-ink);
+  font: inherit;
+  font-size: var(--nz-size-md);
+  line-height: 1;
+  opacity: 0.55;
+  cursor: pointer;
+}
+
+.nz-note__menu:hover,
+.nz-note__menu[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.nz-note__panel {
+  position: absolute;
+  top: 20px;
+  right: 2px;
+  z-index: 2;
+  padding: 6px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 10px;
+  background: var(--nz-panel);
+  color: var(--nz-text);
+  box-shadow: 0 10px 24px var(--nz-shadow);
+}
+
+.nz-note__panel[hidden] {
+  display: none;
+}
+
+.nz-note__chips {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 6px;
+}
+
+/*
+ * The four chips paint themselves with the theme's own note grounds, written
+ * through the CSSOM in `web/notes.ts`, so they follow a palette change without
+ * a second list of hexes anywhere.
+ */
+.nz-note__chip {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--nz-note-edge);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.nz-note__chip.is-current {
+  outline: 2px solid var(--nz-accent);
+  outline-offset: 1px;
+}
+
+.nz-note__delete {
+  display: block;
+  width: 100%;
+  padding: 5px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-danger-text);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz-note__delete:hover {
+  background: var(--nz-node-header);
+}
+
+.nz-note__text {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  padding: 0 10px 4px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-family: var(--nz-font-family);
+  font-size: var(--nz-size-md);
+  line-height: 1.4;
+  resize: none;
+  outline: none;
+  overflow-y: auto;
+}
+
+.nz-note__text::placeholder {
+  color: var(--nz-note-ink);
+  opacity: 0.45;
+}
+
+/*
+ * How much room is left, so the 2,000-character cut is visible before it bites.
+ * Shown while the note is being typed into, and once the cap is close enough to
+ * matter — a permanent counter on twelve notes is twelve numbers nobody asked
+ * for, and no counter at all makes the cut arrive without warning.
+ */
+.nz-note__count {
+  padding: 0 10px 4px;
+  color: var(--nz-note-ink);
+  opacity: 0;
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: opacity 120ms ease-out;
+}
+
+.nz-note:focus-within .nz-note__count {
+  opacity: 0.5;
+}
+
+.nz-note__count.is-near {
+  opacity: 0.85;
+  font-weight: var(--nz-weight-strong);
+}
+
+
+.nz-note__resize {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  height: 16px;
+  border-right: 2px solid var(--nz-note-edge);
+  border-bottom: 2px solid var(--nz-note-edge);
+  border-bottom-right-radius: 10px;
+  opacity: 0.6;
+  cursor: nwse-resize;
+}
+
+/* -------------------------------------------------------------- empty */
+
+.nz-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.nz-empty[hidden] {
+  display: none;
+}
+
+/* 48 px is 16 tripled: three whole device pixels a cell at 1x. */
+.nz-empty__bead {
+  width: 48px;
+  height: 48px;
+  opacity: 0.85;
+  margin-bottom: 6px;
+  shape-rendering: crispEdges;
+}
+
+.nz-empty__title {
+  margin: 0;
+  font-size: var(--nz-size-xl);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-empty__hint {
+  margin: 0;
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-md);
+}
+
+.nz-empty code {
+  font-family: var(--nz-mono-family);
+  background: var(--nz-node-header);
+  border: 1px solid var(--nz-node-border);
+  border-radius: 5px;
+  padding: 1px 6px;
+}
+
+/* --------------------------------------------------------- hover card */
+
+.nz-card {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  width: 272px;
+  padding: 12px 14px;
+  background: var(--nz-panel);
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px var(--nz-shadow);
+  pointer-events: none;
+  will-change: transform;
+}
+
+.nz-card[hidden] {
+  display: none;
+}
+
+.nz-card__title {
+  font-size: var(--nz-size-md);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-card__subtitle {
+  margin-top: 2px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  word-break: break-all;
+}
+
+.nz-card__body {
+  margin-top: 10px;
+  display: grid;
+  gap: 3px;
+}
+
+.nz-card__row {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: var(--nz-size-sm);
+}
+
+.nz-card__label {
+  color: var(--nz-text-faint);
+}
+
+.nz-card__value {
+  color: var(--nz-text);
+  font-family: var(--nz-mono-family);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Why "cache read" sits three orders of magnitude above "tokens out". */
+.nz-card__note {
+  margin-top: 8px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+}
+
+/* ------------------------------------------------------ history panel */
+
+.nz-history {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 15;
+  width: min(460px, 100%);
+  display: flex;
+  flex-direction: column;
+  background: var(--nz-panel);
+  border-left: 1px solid var(--nz-panel-border);
+  box-shadow: -12px 0 32px var(--nz-shadow);
+}
+
+.nz-history[hidden] {
+  display: none;
+}
+
+.nz-history__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--nz-panel-border);
+  flex: 0 0 auto;
+}
+
+.nz-history__title {
+  margin: 0;
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-history__head .nz-button {
+  margin-left: auto;
+}
+
+.nz-history__status {
+  margin: 0;
+  padding: 8px 16px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+  border-bottom: 1px solid var(--nz-panel-border);
+  flex: 0 0 auto;
+}
+
+.nz-history__list {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 4px 0 16px;
+}
+
+.nz-history__group {
+  padding-top: 8px;
+}
+
+.nz-history__project {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 6px 16px;
+  background: var(--nz-node-header);
+  border-block: 1px solid var(--nz-panel-border);
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  letter-spacing: var(--nz-tracking-wide);
+  text-transform: uppercase;
+  overflow-wrap: anywhere;
+}
+
+.nz-history__rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/*
+ * A real button in a real list: the panel is reachable with Tab alone, and a
+ * screen reader announces each row as "open session <id> in <project>".
+ */
+.nz-hrow {
+  display: grid;
+  grid-template-columns: auto auto;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 9px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--nz-panel-border);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz-hrow:hover {
+  background: var(--nz-node-header);
+}
+
+.nz-hrow.is-selected {
+  background: var(--nz-node-header);
+  box-shadow: inset 3px 0 0 var(--nz-accent);
+}
+
+.nz-hrow.is-loading {
+  opacity: 0.6;
+}
+
+.nz-hrow__when {
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+  color: var(--nz-text);
+}
+
+.nz-hrow__id {
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-sm);
+  color: var(--nz-accent-text);
+  justify-self: end;
+}
+
+.nz-hrow__facts {
+  grid-column: 1 / -1;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* -------------------------------------------------------------- bench */
+
+.nz-bench {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  z-index: 30;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: var(--nz-panel);
+  border: 1px solid var(--nz-panel-border);
+  color: var(--nz-text-muted);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+}
+
+/* ------------------------------------------------------------- WP4g */
+
+/*
+ * Naming a card.
+ *
+ * The hit area is a transparent strip over the title, appended after the drag
+ * handle so it takes the press first. It shows itself only on hover — a
+ * permanent outline around every card title would be four boxes of chrome on a
+ * canvas whose whole point is the trees.
+ */
+.nz-session__namehit {
+  fill: transparent;
+  cursor: text;
+}
+
+.nz-session:hover .nz-session__namehit {
+  fill: var(--nz-node-header);
+  fill-opacity: 0.55;
+}
+
+.nz-session__namehit:focus-visible {
+  outline: none;
+  stroke: var(--nz-accent);
+  stroke-width: 1.5;
+  fill: var(--nz-node-header);
+}
+
+/*
+ * A named card says so in the title's weight and nowhere else. The folder is
+ * still on the line below it, so there is nothing to explain and no badge to
+ * draw: the card simply has the word you gave it.
+ */
+.nz-session.is-named .nz-session__title {
+  fill: var(--nz-accent-text);
+}
+
+/*
+ * The editor. `position: fixed` and moved by `transform`, exactly like the two
+ * menus: the page's content policy drops a style *attribute* on the floor, and
+ * a CSSOM write is the way round it.
+ */
+.nz-rename {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 26;
+  width: 160px;
+  padding: 2px 6px;
+  border: 1px solid var(--nz-accent);
+  border-radius: 6px;
+  background: var(--nz-canvas);
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-rename[hidden] {
+  display: none;
+}
+
+/* A project tab: the folder mark, and a name that reads as a place. */
+.nz-tab__folder {
+  flex: none;
+  color: var(--nz-text-faint);
+}
+
+.nz-tab.is-active .nz-tab__folder,
+.nz-tab.is-project:hover .nz-tab__folder {
+  color: var(--nz-accent);
+}
+
+/* The card menu's folder list: the name, then the path it stands for. */
+.nz-menu__item--folder {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.nz-menu__item--folder:disabled {
+  color: var(--nz-text-faint);
+  cursor: default;
+}
+
+.nz-menu__item--folder:disabled:hover {
+  background: transparent;
+}
+
+.nz-menu__hint {
+  overflow: hidden;
+  max-width: 190px;
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one line in this menu that is not a control: how to rename a terminal. */
+.nz-menu__note {
+  margin: 2px 8px 6px;
+  max-width: 230px;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  line-height: 1.45;
+}
+
+/* ----------------------------------------------- sidebar: folder tabs */
+
+.nz-projects__list {
+  margin: 0 0 6px;
+  padding: 0;
+  list-style: none;
+}
+
+.nz-projects__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 10px 2px 4px;
+  border-radius: 8px;
+}
+
+.nz-projects__item:hover {
+  background: var(--nz-node-header);
+}
+
+.nz-projects__name {
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-md);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.nz-projects__counts {
+  flex: none;
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+  white-space: nowrap;
+}
+
+.nz-projects__remove {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-text-faint);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nz-projects__remove:hover {
+  background: var(--nz-panel-border);
+  color: var(--nz-text);
+}
+
+.nz-projects__field {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--nz-accent);
+  border-radius: 8px;
+  background: var(--nz-canvas);
+  color: var(--nz-text);
+  font: inherit;
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-sm);
+}
+
+.nz-projects__count {
+  font-size: var(--nz-size-sm);
+}
+
+/*
+ * `.nz-item` sets `display: flex`, which beats the browser's own `[hidden]`
+ * rule on specificity — so a sidebar button hidden from script would stay on
+ * screen without this. "count past sessions" is hidden from script once there
+ * is nothing left to count.
+ */
+.nz-item[hidden] {
+  display: none;
+}
+
+/* --------------------------------------------- sidebar: the sessions */
+
+/*
+ * N-WP11: one row per session on the canvas — the name over the folder it is
+ * running in, and one button that opens a tab for that folder. The row is two
+ * lines because a redacted path is up to 80 characters and a sidebar is not:
+ * the name reads at a glance, the folder underneath is the thing the button
+ * acts on, and both are ellipsised rather than allowed to widen the drawer.
+ */
+.nz-sessions__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nz-sessions__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px 4px 6px;
+  border-radius: 8px;
+}
+
+.nz-sessions__item:hover {
+  background: var(--nz-node-header);
+}
+
+.nz-sessions__text {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  overflow: hidden;
+}
+
+.nz-sessions__name {
+  overflow: hidden;
+  color: var(--nz-text);
+  font-size: var(--nz-size-md);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nz-sessions__folder {
+  overflow: hidden;
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-size: var(--nz-size-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nz-sessions__open {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.nz-sessions__open:hover {
+  border-color: var(--nz-accent);
+  color: var(--nz-text);
+}
+
+.nz-sessions__open.is-current {
+  color: var(--nz-accent-text);
+}
+
+/* A history heading that a project owns: your name, then the slug it maps to. */
+.nz-history__project.is-project {
+  color: var(--nz-accent-text);
+}
+
+.nz-history__slug {
+  margin-left: 8px;
+  color: var(--nz-text-faint);
+  font-family: var(--nz-mono-family);
+  font-weight: var(--nz-weight-medium);
+  text-transform: none;
+  letter-spacing: 0;
+}

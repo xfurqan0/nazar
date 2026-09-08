@@ -1,0 +1,56 @@
+# cargo-deny policy for the Rust half of Nazar. `cargo deny check` covers licences,
+# advisories, duplicate versions and unexpected sources; `node scripts/check-licenses.mjs`
+# covers the licence half with nothing installed beyond the toolchain the repository
+# already needs. CI runs the script; a maintainer with cargo-deny installed gets the rest.
+#
+#   cargo install cargo-deny --locked
+#   cargo deny check
+#
+# The same policy as the sibling repository nazar-tray, deliberately: two products from
+# one maintainer that disagree about what may be linked are two products one of which is
+# wrong.
+
+[graph]
+all-features = false
+
+[licenses]
+version = 2
+# Permissive only. Copyleft in an MIT product is a rewrite, not a paperwork problem.
+allow = [
+    "0BSD",
+    "Apache-2.0",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BSL-1.0",
+    "CC0-1.0",
+    # Mozilla's root certificate list (data, not code) via webpki-roots. No share-alike
+    # clause. It reaches us through reqwest, which tauri itself depends on.
+    "CDLA-Permissive-2.0",
+    "ISC",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "Unlicense",
+    "Zlib",
+]
+exceptions = []
+confidence-threshold = 0.9
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+# Nothing here yet. A crate that reads credentials or opens a socket without the product
+# asking it to belongs in this list with the reason written beside it.
+deny = []
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

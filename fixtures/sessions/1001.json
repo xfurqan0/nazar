@@ -1,0 +1,21 @@
+{
+  "pid": 1001,
+  "sessionId": "00000000-0000-4000-8000-000000000001",
+  "cwd": "C:/proj/example",
+  "startedAt": 1788697701170,
+  "procStart": "134330000000000001",
+  "version": "2.1.263",
+  "peerProtocol": 1,
+  "peerFeatures": ["notify_idle", "artifact_yield"],
+  "kind": "interactive",
+  "entrypoint": "cli",
+  "pidDomain": "win32:example-user",
+  "messagingSocketPath": "\\\\.\\pipe\\LOCAL\\cc-msg-00000000000000000000000000000000",
+  "name": "session-a",
+  "nameSource": "derived",
+  "nameSince": 1788697701170,
+  "status": "busy",
+  "updatedAt": 1788751348625,
+  "statusUpdatedAt": 1788751348625,
+  "bridgeSessionId": "session_000000000000000000000001"
+}

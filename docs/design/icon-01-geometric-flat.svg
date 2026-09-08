@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 01 - geometric flat.
+       Bead = one deep-blue disc. Eye = the lens where two 30r circles overlap
+       (centres 32,12 and 32,52). Iris = a third circle pushed off-centre and
+       clipped by the lens, so the eye reads as a sideways glance rather than a
+       target. No outline, no gradient, no highlight. -->
+  <defs>
+    <clipPath id="d01-lens">
+      <path d="M 9.639 32 A 30 30 0 0 1 54.361 32 A 30 30 0 0 1 9.639 32 Z"/>
+    </clipPath>
+  </defs>
+
+  <circle cx="32" cy="32" r="31" fill="#0E2A5A"/>
+
+  <path d="M 9.639 32 A 30 30 0 0 1 54.361 32 A 30 30 0 0 1 9.639 32 Z" fill="#FFFFFF"/>
+
+  <g clip-path="url(#d01-lens)">
+    <circle cx="41" cy="32" r="12.5" fill="#3FA9F5"/>
+  </g>
+
+  <ellipse cx="41" cy="32" rx="3.4" ry="7.4" fill="#0A0A0F"/>
+</svg>

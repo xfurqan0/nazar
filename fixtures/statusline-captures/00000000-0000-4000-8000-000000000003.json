@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-07T07:56:03Z",
+  "wrapper": "nazar-statusline/0.1.0",
+  "sessionId": "00000000-0000-4000-8000-000000000003",
+  "payload": {
+    "session_id": "00000000-0000-4000-8000-000000000003",
+    "transcript_path": "C:/claude-home/projects/C--proj-example/00000000-0000-4000-8000-000000000003.jsonl",
+    "cwd": "C:/proj/example",
+    "model": {
+      "id": "claude-haiku-5",
+      "display_name": "Haiku 5"
+    },
+    "version": "2.1.263",
+    "workspace": {
+      "current_dir": "C:/proj/example",
+      "project_dir": "C:/proj/example"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 03 - monoline.
+       One weight, one colour, 24-unit grid with a 2-unit stroke, so it sits in
+       the same optical family as Lucide/Feather glyphs. The lids are two
+       separate strokes that stop short of the corners; the cuts are square, not
+       rounded, so the open tips read as a deliberate break in the line instead
+       of two knobs stuck on the ends. -->
+  <g fill="none" stroke="#3FA9F5" stroke-width="2" stroke-linecap="butt">
+    <path d="M 4.0 13.2 C 7.0 5.0 17.0 5.0 20.0 13.2"/>
+    <path d="M 4.0 10.8 C 7.0 19.0 17.0 19.0 20.0 10.8"/>
+  </g>
+  <circle cx="12" cy="12" r="2.8" fill="#3FA9F5"/>
+</svg>

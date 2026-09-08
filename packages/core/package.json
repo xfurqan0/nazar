@@ -1,0 +1,23 @@
+{
+  "name": "@nazar/core",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Watchers, parsers and state for Nazar.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc --build",
+    "test": "node --import tsx --test test/index.test.ts test/paths.test.ts test/project-slug.test.ts test/session-file.test.ts test/liveness.test.ts test/claude-agents.test.ts test/session-registry.test.ts test/transcript-tailer.test.ts test/transcript-extract.test.ts test/transcript-stats.test.ts test/subagent-meta.test.ts test/agent-tree.test.ts test/agent-done.test.ts test/session-tree.test.ts test/state.test.ts test/statusline-captures.test.ts test/project-settings.test.ts test/limits-file.test.ts test/quota.test.ts test/state-quota.test.ts test/pinned-paths.test.ts test/history.test.ts test/history-leak.test.ts"
+  }
+}

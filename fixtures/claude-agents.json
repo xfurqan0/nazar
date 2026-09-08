@@ -1,0 +1,38 @@
+[
+  {
+    "pid": 1001,
+    "cwd": "C:/proj/example",
+    "kind": "interactive",
+    "startedAt": 1788697701170,
+    "sessionId": "00000000-0000-4000-8000-000000000001",
+    "name": "session-a",
+    "status": "busy"
+  },
+  {
+    "pid": 1002,
+    "cwd": "C:/proj/example",
+    "kind": "interactive",
+    "startedAt": 1788720913587,
+    "sessionId": "00000000-0000-4000-8000-000000000002",
+    "name": "session-b",
+    "status": "busy"
+  },
+  {
+    "pid": 1003,
+    "cwd": "C:/proj/example",
+    "kind": "interactive",
+    "startedAt": 1788741594169,
+    "sessionId": "00000000-0000-4000-8000-000000000003",
+    "name": "session-c",
+    "status": "idle"
+  },
+  {
+    "pid": 1004,
+    "cwd": "C:/proj/example",
+    "kind": "interactive",
+    "startedAt": 1788743765384,
+    "sessionId": "00000000-0000-4000-8000-000000000004",
+    "name": "session-d",
+    "status": "idle"
+  }
+]

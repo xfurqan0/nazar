@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="512" height="512" role="img" aria-label="Nazar">
+  <!-- Direction 06 - eye and tree.
+       The pupil is the root node of a three-node tree: one session, two
+       subagents. The fork is wide and shallow, reaching for the corners of the
+       eye - a root left with children right is the share glyph, a steep
+       downward fork is a user avatar, and an upward fork is a pair of ears.
+       Branch weight is tuned so the edges fade before the root does; at 16 px
+       what survives is the pupil plus a soft trace of the fork. This is the
+       busiest mark in the set and the one with the lowest small-size ceiling. -->
+
+  <path d="M 8 32 A 26.7 26.7 0 0 1 56 32 A 26.7 26.7 0 0 1 8 32 Z" fill="#3FA9F5"/>
+
+  <g stroke="#0E2A5A" stroke-width="2.2" stroke-linecap="round">
+    <path d="M 32 30 L 18.5 36.5"/>
+    <path d="M 32 30 L 45.5 36.5"/>
+  </g>
+
+  <g fill="#0E2A5A">
+    <circle cx="18.5" cy="36.5" r="2.9"/>
+    <circle cx="45.5" cy="36.5" r="2.9"/>
+  </g>
+
+  <circle cx="32" cy="30" r="5.6" fill="#0A0A0F"/>
+</svg>
