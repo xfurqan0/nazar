@@ -195,15 +195,32 @@ export class FakeElement {
     this.parent?.removeChild(this);
   }
 
+  /*
+   * N-WP15b: `class` is the class list and not an entry in the attribute map.
+   *
+   * `web/dom.ts`'s `svg()` names an element by writing the attribute, while
+   * everything afterwards asks `classList`, and a double that kept the two
+   * apart would answer "no such element" to every query about a card the canvas
+   * had just drawn. The browser has one place for this; so does this.
+   */
   setAttribute(name: string, value: string): void {
+    if (name === 'class') {
+      this.className = value;
+      return;
+    }
     this.attrs.set(name, value);
   }
 
   getAttribute(name: string): string | null {
+    if (name === 'class') return this.classes.size === 0 ? null : this.className;
     return this.attrs.get(name) ?? null;
   }
 
   removeAttribute(name: string): void {
+    if (name === 'class') {
+      this.classes.clear();
+      return;
+    }
     this.attrs.delete(name);
   }
 
@@ -273,6 +290,14 @@ export function install(): void {
   if (globals.document === undefined) {
     globals.document = {
       createElement: (tag: string): FakeElement => new FakeElement(tag),
+      /*
+       * N-WP15b: the canvas is SVG, so driving it needs the namespaced half of
+       * the same one call. The namespace is dropped on the floor — there is no
+       * second document here for it to distinguish, and every element this
+       * double makes behaves the same way — so it is `createElement` with an
+       * argument in front of it.
+       */
+      createElementNS: (_ns: string, tag: string): FakeElement => new FakeElement(tag),
     };
   }
   if (globals.window === undefined) globals.window = { innerWidth: 1280, innerHeight: 800 };

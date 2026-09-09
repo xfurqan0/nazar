@@ -132,33 +132,47 @@ test('moving the switch re-opens the stream, because the server decided at subsc
   // The server reads `?task=1` once, when it accepts the subscription, so a
   // change of mind is a new connection rather than a new frame on the old one.
   // Leaving the old one open would go on pushing frames of the old shape.
+  //
+  // N-WP15b: and the last of the four is a whole frame — measure, place, draw —
+  // because both card geometries move with the setting now. That frame is
+  // driven in `test/dom/task-line.test.ts`; what is asserted here is only that
+  // the four steps are present and in this order.
   assert.match(
     app,
-    /taskText = !taskText;\s*\n\s*writeTaskText\(storage, taskText\);[\s\S]{0,120}restartStream\(\);/,
+    /taskText = next;\s*\n\s*writeTaskText\(storage, taskText\);[\s\S]{0,160}restartStream\(\);\s*\n\s*schedule\(\);/,
     'the switch has to save, reconnect and redraw',
   );
   assert.ok(app.includes('source.close();'), 'the old stream is closed, not abandoned');
 });
 
-test('the card geometry is the same in both states, and the node geometry is not', () => {
+test('both geometries pay for the line, and both pay through one function', () => {
   /*
-   * The asymmetry is the design, and it is the answer to "does turning this on
-   * move the cards I placed".
+   * N-WP15b corrects what N-WP15a claimed here.
    *
-   * A session card's header already had a 28 px gap between the folder path and
-   * the identity line, so the task line goes there and `CARD.headerHeight` never
-   * moves — which is what every stored width and every dragged height is held
-   * against. A subagent node has no gap at all, so its extra line has to be paid
-   * for, and `TREE_SPEC_TASK` is where it is paid.
+   * The old version of this test asserted that a session card is the same
+   * height in both states, on the reasoning that the header "already had a
+   * 28 px gap" between the folder path and the identity line. It does not: that
+   * 28 px is the ordinary leading between two consecutive rows of this header,
+   * the same step it puts between identity and model. The line went into it and
+   * landed 12 px above the identity line — two rows of 11.5 px type touching —
+   * and this test passed anyway, because it asserted the premise instead of the
+   * pixels. `test/dom/task-line.test.ts` asserts the pixels now.
    *
-   * (N-WP15 changed the header height itself, 212 → 180, by taking two rows of
-   * token counters off every card. That is a different question from this one:
-   * what is asserted here is that switching *task text* on and off moves
-   * nothing, and it is asserted against whatever the constant currently is.)
+   * So the card pays for its row exactly as the node has always paid for its
+   * own, and the two constants are the two answers: `CARD_TASK_LINE` for the
+   * header and `AGENT.taskLine` for the node. What has *not* changed is the
+   * promise underneath: a stored height is a floor and a stored position is
+   * read back unchanged, so a card the user placed keeps its corner.
    */
-  assert.ok(canvas.includes('headerHeight: 180'), 'the header height is a constant, still');
+  assert.ok(canvas.includes('headerHeight: 180'), 'the header height moved off its constant');
+  assert.ok(canvas.includes('export const CARD_TASK_LINE = 16'), 'the card pays for its row');
+  assert.match(
+    canvas,
+    /const CARD_TASK: CardSpec & \{ readonly radius: number \} = \{\s*\n\s*\.\.\.CARD,\s*\n\s*headerHeight: CARD\.headerHeight \+ CARD_TASK_LINE,/,
+  );
   assert.match(canvas, /const task = svg\('text', 'nz-session__task'\);/);
-  assert.match(canvas, /setAttr\(task, 'y', CARD\.pad \+ 46\);/, 'in the gap, not below it');
+  assert.match(canvas, /setAttr\(task, 'y', HEADER\.task\);/, 'still under the folder path');
+  assert.match(canvas, /task: CARD\.pad \+ 46,/, 'and still where N-WP15a put it');
 
   assert.ok(canvas.includes('taskLine: 15'), 'the node pays for its extra line');
   assert.match(canvas, /export const TREE_SPEC_TASK: TreeSpec = \{/);
@@ -167,10 +181,54 @@ test('the card geometry is the same in both states, and the node geometry is not
     /export function treeSpecFor\(showTask: boolean\): TreeSpec \{\s*\n\s*return showTask \? TREE_SPEC_TASK : TREE_SPEC;/,
     'one function, so the measure pass and the draw pass cannot drift',
   );
-  // The background grows with the spec, or the seventh line is drawn outside
-  // the rectangle it belongs to.
+  assert.match(
+    canvas,
+    /export function cardSpecFor\(showTask: boolean\): CardSpec & \{ readonly radius: number \} \{\s*\n\s*return showTask \? CARD_TASK : CARD;/,
+    'and one for the card, for the same reason',
+  );
+  // Both halves of the measure pass ask the same question on the same frame.
+  assert.match(canvas, /const spec = treeSpecFor\(showTask\);/);
+  assert.match(canvas, /const card = cardSpecFor\(showTask\);/);
+  // The background grows with the spec, or the extra line is drawn outside the
+  // rectangle it belongs to.
   assert.ok(
     canvas.includes("setAttr(agentEls.bg, 'height', showTask ? AGENT.height + AGENT.taskLine : AGENT.height)"),
+  );
+});
+
+test('the header is positioned on every frame, not once when the card is born', () => {
+  /*
+   * The other half of the N-WP15b bug, and the half that made it look like a
+   * *live switch* problem: every conditional row was written in
+   * `createSession`, which runs once. An element born on a frame with the
+   * setting off kept that y for ever, so the page was only right if it had been
+   * loaded with the setting already on.
+   *
+   * `test/dom/task-line.test.ts` drives the two frames and compares them. What
+   * is asserted here is that the numbers have no second home to drift back to:
+   * the rows live in one table and nothing writes a literal y into a header
+   * element at creation.
+   */
+  assert.match(canvas, /const HEADER = \{/, 'the rows are not in one table');
+  assert.match(canvas, /const shift = label\.taskText === true \? CARD_TASK_LINE : 0;/);
+  for (const row of ['identity', 'model', 'meta']) {
+    assert.ok(
+      canvas.includes(`setAttr(els.${row}, 'y', HEADER.`),
+      `the ${row} row is not written on every frame`,
+    );
+  }
+  // The rule, the folded-tree chips and the chevron ride on the header too.
+  assert.ok(canvas.includes("setAttr(els.ruleGroup, 'transform'"));
+  assert.ok(canvas.includes("setAttr(els.hiddenRow, 'transform'"));
+  assert.ok(canvas.includes("setAttr(els.chevron, 'transform'"));
+  const created = canvas.slice(
+    canvas.indexOf('private createSession('),
+    canvas.indexOf('private createAgent('),
+  );
+  assert.equal(
+    /setAttr\((?:identity|activity|model|meta|cost|context|blocked), 'y'/.test(created),
+    false,
+    'a header row is still positioned once, at creation',
   );
 });
 

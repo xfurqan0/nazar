@@ -481,10 +481,11 @@ test('a resize is a re-layout, not a scale', () => {
   // question the measure pass asked, or a drag could squeeze a card under the
   // tree that is actually in it.
   assert.ok(app.includes('minWidth: cardMinimumFor(session, metric.collapsed, taskText).width'));
-  assert.ok(
-    app.includes(
-      'minHeight: isCornerHandle(handle) ? minCardHeight(CARD) : metric.box.contentHeight',
-    ),
+  // N-WP15b: and so does the height floor, because the header is a line taller
+  // in the same state — `minCardHeight` is the header plus an empty tree strip.
+  assert.match(
+    app,
+    /minHeight: isCornerHandle\(handle\)\s*\n?\s*\? minCardHeight\(cardSpecFor\(taskText\)\)\s*\n?\s*: metric\.box\.contentHeight,/,
     'an edge drag could push the card under its own tree, or a corner could only grow',
   );
 });
@@ -537,8 +538,12 @@ test('a missing cost and context can carry its reason', () => {
   assert.ok(canvas.includes('captureBlockedLabel'));
   assert.ok(css.includes('.nz-session__blocked'), 'the reason is set but styled nowhere');
   // It takes the line the two numbers would have used, so no card changes size.
-  assert.ok(canvas.includes("setAttr(blocked, 'y', 150)"));
-  assert.ok(canvas.includes("setAttr(cost, 'y', 150)"));
+  // N-WP15b: all three of them are one row of the header's table now, written
+  // on every frame rather than once, because the row moves with the task line.
+  assert.match(canvas, /capture: 150,/);
+  assert.ok(canvas.includes("setAttr(els.blocked, 'y', HEADER.capture + shift)"));
+  assert.ok(canvas.includes("setAttr(els.cost, 'y', HEADER.capture + shift)"));
+  assert.ok(canvas.includes("setAttr(els.context, 'y', HEADER.capture + shift)"));
 });
 
 test('every WP4f class the canvas sets has a rule that gives it a meaning', () => {

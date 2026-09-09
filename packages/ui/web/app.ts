@@ -142,6 +142,7 @@ import {
   CanvasRenderer,
   CARD,
   cardMinimumFor,
+  cardSpecFor,
   isWaiting,
   MAX_CARD_HEIGHT,
   MAX_CARD_WIDTH,
@@ -1018,27 +1019,37 @@ function start(): void {
   sidebar.set(layout.sidebar, false);
 
   /*
-   * N-WP15a: the everyday switch.
+   * N-WP15a: the everyday switch. N-WP15b: and it is a whole frame.
    *
-   * Three things happen on a click and all three are needed. The choice is
-   * remembered for this browser; the stream is re-opened, because the server
-   * decides whether to send the field from the URL that subscribed; and the
-   * canvas is re-measured, because a node carrying a task is a line taller and
-   * the cards have to be sized around the tree again.
+   * Four things happen on a click and all four are needed. The choice is
+   * remembered for this browser; the switch is repainted; the stream is
+   * re-opened, because the server decides whether to send the field from the
+   * URL that subscribed; and the canvas goes through a **full pass** — measure,
+   * place, draw — exactly as if a snapshot had just landed.
    *
-   * The card the user placed does not move: the session card's task line lives
-   * in a gap the header already had, so `CARD.headerHeight` — which is what
-   * every stored width and dragged height is held against — is the same number
-   * in both states.
+   * That last one is the whole of N-WP15b. Both card geometries move with the
+   * setting now: a subagent node is a line taller (`AGENT.taskLine`) and so is
+   * a session card's header (`CARD_TASK_LINE`), so a redraw that reused the
+   * sizes of the previous frame would draw a taller header into a shorter card.
+   * `schedule()` is the same one frame every SSE snapshot asks for, and
+   * `measureCards` is inside it, which is why there is no second measuring path
+   * here to fall out of step with that one.
+   *
+   * The card the user placed does not move. A position is stored per card and
+   * `resolvePlacements` reads it back unchanged; a stored *height* is a floor
+   * and `cardSize` draws the card at the taller of that floor and its contents,
+   * so a sized card grows by the line and keeps both its corner and its width.
    */
-  paintSwitch(taskTextButton, taskText);
-  taskTextButton.addEventListener('click', () => {
-    taskText = !taskText;
+  const setTaskText = (next: boolean): void => {
+    if (next === taskText) return;
+    taskText = next;
     writeTaskText(storage, taskText);
     paintSwitch(taskTextButton, taskText);
     restartStream();
     schedule();
-  });
+  };
+  paintSwitch(taskTextButton, taskText);
+  taskTextButton.addEventListener('click', () => setTaskText(!taskText));
 
   /*
    * N-WP16: the sound settings.
@@ -2632,8 +2643,15 @@ function start(): void {
              * grow is not a corner. So a corner takes the absolute floor, and
              * containment is left where it is enforced for every card anyway:
              * `cardSize` draws the card at the taller of its contents and this.
+             *
+             * N-WP15b: the absolute floor is a line taller while the task line
+             * is drawn, for the same reason `minWidth` above asks about the
+             * setting — the header is a line taller, so the shortest a card can
+             * be at all moves with it.
              */
-            minHeight: isCornerHandle(handle) ? minCardHeight(CARD) : metric.box.contentHeight,
+            minHeight: isCornerHandle(handle)
+              ? minCardHeight(cardSpecFor(taskText))
+              : metric.box.contentHeight,
             maxHeight: MAX_CARD_HEIGHT,
           },
         };

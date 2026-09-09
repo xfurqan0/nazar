@@ -103,6 +103,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   now names the shell. The rewrite is nazar-tray's own installer's job; doctor
   prints its dry run and, as ever, runs nothing.
 
+- **The task line gets a row of its own, and the switch redraws the canvas it is
+  measuring** (N-WP15b). N-WP15a put the session card's task line at `pad + 46`
+  on the strength of *the header already has a 28 px gap between the folder path
+  and the identity line, so no card changes size*. That 28 px is not spare room:
+  it is the header's ordinary leading, the same step it puts between the
+  identity line and the model line. The task therefore landed 12 px above the
+  identity line, and at 11.5 px type two rows of glyphs touched — the line was
+  drawn *on* the identity row rather than in one of its own. The header pays for
+  the row now, exactly as a subagent node has always paid for its own through
+  `AGENT.taskLine`: `CARD_TASK_LINE` is 16 px, the task keeps the place under
+  the folder path where it belongs, and the identity line and everything below
+  it drop by that one line. A card the user placed keeps its corner — a position
+  is stored per card and read back unchanged, and a dragged height is a floor,
+  so a sized card grows by the line rather than clipping its own header.
+
+  The second half is why it looked like a switch that only half worked. Every
+  conditional row was positioned in `createSession`, which runs the first time a
+  card is drawn and never again, so an element born on a frame with the setting
+  off kept that geometry for ever: the page was only right if it had been
+  *loaded* with the setting already on. The rows live in one table now and are
+  written on every frame, and moving the switch runs a full pass — measure,
+  place, draw — as though a snapshot had just landed. Both card geometries come
+  from one function each, `treeSpecFor` for the tree and `cardSpecFor` for the
+  card, so the measure pass and the drawing cannot disagree about how tall a
+  card is. With the setting off nothing moves by a pixel: the canvas renders
+  byte-identically to the one before this change.
+
 ### Added
 
 - **The task text, switched off** (N-WP15a). Nazar draws *how much* and *how

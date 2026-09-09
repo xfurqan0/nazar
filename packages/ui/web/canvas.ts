@@ -112,6 +112,76 @@ export const CARD: CardSpec & { readonly radius: number } = {
 };
 
 /**
+ * N-WP15b: how much taller a session card's header is while it draws a task
+ * line, and why it has to be taller at all.
+ *
+ * N-WP15a put the line at `pad + 46` on the strength of "the header already has
+ * a 28 px gap between the folder path and the identity line, so the line goes
+ * there and no card changes size". That gap is not spare room — it is the
+ * ordinary leading between two consecutive rows of this header, the same 26–28
+ * px that separates identity from model and model from meta. Dropping a line
+ * into it left the task 16 px under the path and **12 px** over the identity
+ * line, which at 11.5 px type is two rows of glyphs touching: the line was
+ * drawn *on* the identity row rather than in a row of its own.
+ *
+ * So the row is paid for, exactly the way `AGENT.taskLine` pays for the node's:
+ * 16 px, which is the title→path step, so the task stays in the block it
+ * belongs to — what this session *is* — and the identity line drops to the
+ * 28 px block gap below it. Everything under it moves by the same 16 px and
+ * `headerHeight` moves with them, so the tree still starts where the header
+ * ends and WP4c's containment rule is the same rule.
+ *
+ * A stored width is untouched by any of this. A stored *height* is a floor
+ * (N-WP10), and `cardSize` draws a card at the taller of that floor and its
+ * contents — so a card the user sized grows by this line and never loses its
+ * position, which is what {@link resolvePlacements} is holding.
+ */
+export const CARD_TASK_LINE = 16;
+
+/** The same card spec, one line taller: what a card showing a task needs. */
+const CARD_TASK: CardSpec & { readonly radius: number } = {
+  ...CARD,
+  headerHeight: CARD.headerHeight + CARD_TASK_LINE,
+};
+
+/**
+ * N-WP15b: which of the two the canvas is measuring and drawing with.
+ *
+ * The card half of {@link treeSpecFor}, and it exists for the same reason: the
+ * measure pass, the placement pass, the drawing and the resize gesture all have
+ * to be given the same answer on the same frame. A live switch is a full pass
+ * through every one of them, so none of them may hold a header height of its
+ * own — this is the only place either number is written.
+ */
+export function cardSpecFor(showTask: boolean): CardSpec & { readonly radius: number } {
+  return showTask ? CARD_TASK : CARD;
+}
+
+/**
+ * N-WP15b: the header's rows, as baselines, before the task line is paid for.
+ *
+ * They were written into `createSession` and set once, which is precisely how a
+ * live switch turns into "the page is only right if it was loaded that way": an
+ * element created on a frame with the setting off kept the y it was born with
+ * for ever. They live here now and are written on every frame, from the shift
+ * the frame was given.
+ */
+const HEADER = {
+  title: CARD.pad + 14,
+  path: CARD.pad + 30,
+  /** N-WP15a's place for it, kept — a row of its own now rather than a squeeze. */
+  task: CARD.pad + 46,
+  identity: 74,
+  model: 100,
+  meta: 128,
+  /** WP3': cost and context, or the one line saying why there are neither. */
+  capture: 150,
+  rule: 156,
+  /** The chevron, the folded-tree chips and the "N hidden · show" row. */
+  chevron: 159,
+} as const;
+
+/**
  * N-WP15: the agent node is three lines, and 106 → 61 px.
  *
  * It had six — type, model, meta, two rows of token counters and the activity
@@ -376,7 +446,16 @@ export function cardMinimumFor(
   collapsed: boolean,
   showTask = false,
 ): CardMinimum {
-  return cardMinimum(toTreeInput(session.roots), collapsed, treeSpecFor(showTask), CARD);
+  // N-WP15b: both halves of the geometry, from the same answer. The tree spec
+  // decides how the nodes stack and the card spec how tall the header above
+  // them is; a gesture given one and not the other could squeeze a card under
+  // its own tree the moment the task line appeared.
+  return cardMinimum(
+    toTreeInput(session.roots),
+    collapsed,
+    treeSpecFor(showTask),
+    cardSpecFor(showTask),
+  );
 }
 
 /** The widest any card may be dragged. One number, from the card spec. */
@@ -426,7 +505,12 @@ export function measureCards(
   options: MeasureOptions = {},
 ): Map<string, CardMetric> {
   const metrics = new Map<string, CardMetric>();
-  const spec = treeSpecFor(options.taskText === true);
+  const showTask = options.taskText === true;
+  const spec = treeSpecFor(showTask);
+  // N-WP15b: and the card spec that goes with it. The header is a line taller
+  // while the task is drawn, so the tree starts a line lower and the card is a
+  // line taller — measured here, once, for the placement pass and the drawing.
+  const card = cardSpecFor(showTask);
   for (const session of sessions) {
     const folded = collapsed.has(session.id);
     const stored = options.widths?.[session.id];
@@ -445,11 +529,11 @@ export function measureCards(
     const height =
       storedHeight === undefined
         ? undefined
-        : clampCardHeight(storedHeight, minCardHeight(CARD), CARD);
+        : clampCardHeight(storedHeight, minCardHeight(card), card);
     const metric: { -readonly [K in keyof CardMetric]: CardMetric[K] } = {
       id: session.id,
       tree,
-      box: cardSize(tree, folded, CARD, {
+      box: cardSize(tree, folded, card, {
         ...(width === undefined ? {} : { width }),
         ...(height === undefined ? {} : { height }),
       }),
@@ -568,6 +652,13 @@ interface SessionEls {
   readonly context: SVGTextElement;
   readonly treeLabel: SVGTextElement;
   readonly rule: SVGLineElement;
+  /**
+   * N-WP15b: the two groups that ride on the rule line, held so the frame can
+   * move them. They used to be positioned once, at creation, which is why a
+   * canvas whose task setting moved after a card was drawn kept the old rows.
+   */
+  readonly ruleGroup: SVGGElement;
+  readonly hiddenRow: SVGGElement;
   readonly handle: SVGRectElement;
   /** WP4g: the strip over the title that opens the inline name editor. */
   readonly nameHit: SVGRectElement;
@@ -716,6 +807,35 @@ export class CanvasRenderer {
     setAttr(els.bg, 'height', box.height);
     setAttr(els.handle, 'width', box.width);
     setClass(els.g, 'is-collapsed', collapsed);
+
+    /*
+     * N-WP15b: the header's rows, on every frame rather than at creation.
+     *
+     * Everything from the identity line down moves by one line while the task
+     * line is drawn, and the same `shift` is in `CARD_TASK_LINE`, which is what
+     * `measureCards` sized this card with. Writing them here rather than in
+     * `createSession` is the fix for the switch itself: an element positioned
+     * once keeps the geometry of the frame it was born on for ever, so the page
+     * was only ever right if it had been *loaded* with the setting already on.
+     * `setAttr` writes only when the value moved, so the frames where nothing
+     * changed cost nothing.
+     */
+    const shift = label.taskText === true ? CARD_TASK_LINE : 0;
+    setAttr(els.identity, 'y', HEADER.identity + shift);
+    setAttr(els.activity, 'y', HEADER.identity + shift);
+    setAttr(els.model, 'y', HEADER.model + shift);
+    setAttr(els.meta, 'y', HEADER.meta + shift);
+    setAttr(els.cost, 'y', HEADER.capture + shift);
+    setAttr(els.context, 'y', HEADER.capture + shift);
+    setAttr(els.blocked, 'y', HEADER.capture + shift);
+    setAttr(els.ruleGroup, 'transform', `translate(${CARD.pad},${HEADER.rule + shift})`);
+    setAttr(els.hiddenRow, 'transform', `translate(${CARD.pad},${HEADER.chevron + shift})`);
+    setAttr(els.chevron, 'transform', `translate(${CARD.pad},${HEADER.chevron + shift})`);
+    setAttr(
+      els.summary,
+      'transform',
+      `translate(${CARD.pad},${cardSpecFor(label.taskText === true).headerHeight + 8})`,
+    );
 
     // ---- state: the frame, the ring, and the word -------------------
     // One answer, four places. `activityOf` decides it; everything below only
@@ -1242,7 +1362,7 @@ export class CanvasRenderer {
 
     const title = svg('text', 'nz-session__title');
     setAttr(title, 'x', CARD.pad + BADGE + 12);
-    setAttr(title, 'y', CARD.pad + 14);
+    setAttr(title, 'y', HEADER.title);
 
     /*
      * WP4g: the rename target.
@@ -1267,36 +1387,36 @@ export class CanvasRenderer {
 
     const path = svg('text', 'nz-session__path');
     setAttr(path, 'x', CARD.pad + BADGE + 12);
-    setAttr(path, 'y', CARD.pad + 30);
+    setAttr(path, 'y', HEADER.path);
 
     /*
-     * N-WP15a: the task line, in the gap the header already had.
+     * N-WP15a's task line, in the row N-WP15b gives it.
      *
-     * The path sits at y=46 and the identity line at y=74, which left 28 px of
-     * nothing between them — this line goes there rather than growing the
-     * header, and that is the whole answer to "does the card change size when
-     * the setting is on". It does not. `CARD.headerHeight` is untouched, so
-     * every stored width, every dragged height and N-WP10's whole size model
-     * are the same numbers in both states, and switching the setting on and off
-     * cannot move a card the user placed.
+     * It sits where N-WP15a put it — `pad + 46`, one title→path step under the
+     * folder, because what the session was asked to do belongs with what the
+     * session *is*. What N-WP15a got wrong is what happens underneath: it read
+     * the 28 px between the path and the identity line as spare room, and 28 px
+     * is one row of this header's ordinary leading. The line landed 12 px over
+     * the identity line and the two rows of 11.5 px type touched.
      *
-     * (The subagent node is the opposite case — six lines and no gap — which is
-     * why `AGENT.taskLine` exists and why only *that* geometry is conditional.)
+     * So the header pays for the row — {@link CARD_TASK_LINE} — and everything
+     * from the identity line down is drawn `shift` lower on every frame. The
+     * subagent node pays for its own line the same way, through
+     * `AGENT.taskLine`; neither geometry is fixed any more, and both come from
+     * the one answer the frame was given.
      */
     const task = svg('text', 'nz-session__task');
     setAttr(task, 'x', CARD.pad + BADGE + 12);
-    setAttr(task, 'y', CARD.pad + 46);
+    setAttr(task, 'y', HEADER.task);
     setAttr(task, 'display', 'none');
 
     const identity = svg('text', 'nz-session__identity');
     setAttr(identity, 'x', CARD.pad);
-    setAttr(identity, 'y', 74);
 
     // Right-aligned on the identity line, under the ring: the word that says
     // what the ring's colour means, or — on a waiting card — what the session is
-    // waiting for. `x` follows the card width on every draw.
+    // waiting for. `x` and `y` both follow the card on every draw.
     const activity = svg('text', 'nz-session__activity');
-    setAttr(activity, 'y', 74);
 
     /*
      * N-WP15: the model and the effort, as text.
@@ -1308,11 +1428,9 @@ export class CanvasRenderer {
      */
     const model = svg('text', 'nz-session__model');
     setAttr(model, 'x', CARD.pad);
-    setAttr(model, 'y', 100);
 
     const meta = svg('text', 'nz-session__meta');
     setAttr(meta, 'x', CARD.pad);
-    setAttr(meta, 'y', 128);
 
     /*
      * WP3'. The one line on the card whose source is optional: what this run
@@ -1329,10 +1447,8 @@ export class CanvasRenderer {
      */
     const cost = svg('text', 'nz-session__cost');
     setAttr(cost, 'x', CARD.pad);
-    setAttr(cost, 'y', 150);
 
     const context = svg('text', 'nz-session__context');
-    setAttr(context, 'y', 150);
 
     /*
      * WP4f. The sentence that takes the same line when there is nothing to put
@@ -1342,7 +1458,6 @@ export class CanvasRenderer {
      */
     const blocked = svg('text', 'nz-session__blocked');
     setAttr(blocked, 'x', CARD.pad);
-    setAttr(blocked, 'y', 150);
     const blockedNote = svg('title');
     setText(blockedNote, captureBlockedNote());
     const blockedGroup = svg('g');
@@ -1353,7 +1468,6 @@ export class CanvasRenderer {
     setAttr(rule, 'y1', 0);
     setAttr(rule, 'y2', 0);
     const ruleGroup = svg('g');
-    setAttr(ruleGroup, 'transform', `translate(${CARD.pad},156)`);
     const treeLabel = svg('text', 'nz-tree__label');
     setAttr(treeLabel, 'x', CHEVRON + 6);
     setAttr(treeLabel, 'y', 15);
@@ -1362,7 +1476,6 @@ export class CanvasRenderer {
     // The chip that offers the cleared subagents back. Its own group, so it can
     // sit on the rule line without being inside the group that draws the rule.
     const hiddenRow = svg('g', 'nz-hidden');
-    setAttr(hiddenRow, 'transform', `translate(${CARD.pad},159)`);
     const hiddenChip = makeChip(hiddenRow, 'hidden');
     hiddenChip.g.dataset['action'] = 'restore';
     hiddenChip.g.setAttribute('role', 'button');
@@ -1371,7 +1484,6 @@ export class CanvasRenderer {
 
     // Folded state: the chips that stand in for sixty nodes.
     const summary = svg('g', 'nz-summary');
-    setAttr(summary, 'transform', `translate(${CARD.pad},${CARD.headerHeight + 8})`);
     const summaryChipEls = [
       makeChip(summary, 'count'),
       makeChip(summary, 'running'),
@@ -1393,7 +1505,6 @@ export class CanvasRenderer {
     handle.dataset['drag'] = 'card';
 
     const chevron = svg('g', 'nz-chevron');
-    setAttr(chevron, 'transform', `translate(${CARD.pad},159)`);
     chevron.dataset['action'] = 'collapse';
     chevron.setAttribute('role', 'button');
     chevron.setAttribute('tabindex', '0');
@@ -1508,6 +1619,8 @@ export class CanvasRenderer {
       context,
       treeLabel,
       rule,
+      ruleGroup,
+      hiddenRow,
       handle,
       nameHit,
       nameNote,
