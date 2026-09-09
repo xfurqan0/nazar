@@ -19,6 +19,11 @@ fixtures/local/
 # Local pack artifacts from "npm pack".
 *.tgz
 
+# Where "npm run screenshots -- --out docs/screenshots/_preview" puts a trial
+# run. The pictures that are committed live one directory up; these are for
+# looking at before deciding to overwrite those.
+docs/screenshots/_preview/
+
 # The Rust half: build output, and the npm bundle staged for the Tauri bundler.
 target/
 # A second Cargo target directory, for when CARGO_TARGET_DIR is pointed away from

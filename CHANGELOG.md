@@ -243,6 +243,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   once by whoever is connected, where a snapshot is replayed to everyone who
   reconnects. Zero runtime dependencies, as before.
 
+- **Development: `npm run screenshots` regenerates every image in the README**
+  from the demo canvas, in one command, byte-identically, and without adding a
+  dependency to build or to develop with.
+
 ### Changed
 
 - **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's

@@ -51,6 +51,7 @@
     "typecheck": "tsc --project tsconfig.typecheck.json && tsc --project packages/ui/web/tsconfig.json && tsc --project packages/ui/test/dom/tsconfig.json",
     "test": "npm run test --workspaces && node --import tsx --test test/fixtures.test.ts test/licenses.test.ts test/no-writes.test.ts test/packaging.test.ts",
     "smoke": "node scripts/pack-smoke.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
     "prepack": "npm run build && npm run build:package",
     "start": "node bin/nazar.mjs"
   },
