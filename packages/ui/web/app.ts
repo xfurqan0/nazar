@@ -37,6 +37,7 @@ import {
   formatDuration,
   formatElapsed,
   orUnknown,
+  pidLabel,
 } from '../src/format.ts';
 import { finishedAgentIds, hideAgents } from '../src/hidden.ts';
 import { formatStamp, historySnapshot, shortSessionId } from '../src/history-view.ts';
@@ -501,7 +502,7 @@ class HoverCard {
           })
         : t('hover.subtitleLive', {
             folder: orUnknown(session.cwd),
-            pid: session.pid,
+            pid: pidLabel(session.pid),
             status: session.status,
             state: session.state,
           }),
@@ -795,6 +796,13 @@ function start(): void {
     }
     const session = drawn().sessions.find((one) => one.id === sessionId);
     if (session === undefined) return;
+    // N-WP18: a Codex session names no process, so there is nothing to raise.
+    // Refused before the shell is consulted, and refused with a sentence: the
+    // jump is *absent* on such a card rather than offered and then failed.
+    if (session.pid <= 0) {
+      showHint(t('hint.noPidNoTerminal'));
+      return;
+    }
     if (shell === undefined) {
       showHint(`${jumpNeedsShell()} — ${t('hint.inABrowser')}`);
       return;

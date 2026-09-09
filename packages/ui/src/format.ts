@@ -326,6 +326,21 @@ export function orUnknown(value: string | undefined): string {
   return value === undefined || value.length === 0 ? unknownWord() : value;
 }
 
+/**
+ * A process id, or the word for "unknown".
+ *
+ * N-WP18: a Codex rollout names no process anywhere Nazar can read, so such a
+ * session carries `NO_PID` — the one field in the model that has a sentinel
+ * rather than an absence, because `Session.pid` is a number for every consumer
+ * that already existed. The card must still not print `pid 0`, which is exactly
+ * what rule 3 of docs/pinned-internal-formats.md forbids, so the sentinel is
+ * turned back into "unknown" here rather than at each of the two places that
+ * draw it.
+ */
+export function pidLabel(pid: number | undefined): string {
+  return pid === undefined || !Number.isFinite(pid) || pid <= 0 ? unknownWord() : String(pid);
+}
+
 /* ------------------------------------------------------------------ *
  * Collapsed trees (WP4c)
  * ------------------------------------------------------------------ */

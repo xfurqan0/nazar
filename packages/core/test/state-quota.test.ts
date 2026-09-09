@@ -172,6 +172,8 @@ function stateOver(dir: string, sources: Sources): NazarState {
     }),
     captures: sources.captures === undefined ? null : new FakeCaptures(sources.captures),
     limits: sources.limits === undefined ? null : new FakeLimits(sources.limits),
+    // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+    codex: null,
     coalesceMs: 5,
     now: () => NOW,
     createTree:
@@ -424,6 +426,8 @@ async function blockedVerdict(pid: number, options: BlockedCase): Promise<string
         }),
         captures: options.captures === undefined ? null : new FakeCaptures(options.captures),
         limits: null,
+        // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+        codex: null,
         statusLines: probe,
         coalesceMs: 5,
         now: () => NOW,
@@ -508,6 +512,8 @@ test('an unread project directory draws nothing rather than guessing', async () 
         }),
         captures: new FakeCaptures(WRAPPER_INSTALLED),
         limits: null,
+        // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+        codex: null,
         statusLines: probe,
         coalesceMs: 5,
         now: () => NOW,

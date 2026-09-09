@@ -98,6 +98,7 @@
   "hint.frozenNoNames": "a finished session is a read of the past; names live on the live canvas",
   "hint.frozenNoNotes": "a finished session is a read of the past; notes live on the live canvas",
   "hint.frozenNoTerminal": "this session has ended; there is no terminal to jump to",
+  "hint.noPidNoTerminal": "this session names no process, so there is no terminal to jump to",
   "hint.inABrowser": "this is Nazar in a browser tab",
   "hint.jumpNeedsShell": "Jump needs the desktop app",
   "hint.nameCleared": "name cleared — back to the folder",

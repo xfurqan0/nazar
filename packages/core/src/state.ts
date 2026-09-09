@@ -7,6 +7,14 @@
  * deduplicated token totals. Neither of them knows about the other, and the
  * canvas needs both, so this file is the join.
  *
+ * N-WP18 added a third source that is not Claude Code's at all: the Codex
+ * rollout store. It is joined here rather than inside the registry, because a
+ * Codex thread has no pid, no session file and no subagent tree — nothing the
+ * registry is built around — and the one thing the canvas needs is for both to
+ * arrive in the same snapshot. A machine without Codex produces exactly the
+ * state it produced before, for the same reason the two below do: the reader
+ * answers "not installed" rather than zero.
+ *
  * WP3'/WP5 added two more, both optional and neither ours: the status-line
  * captures under `~/.nazar/statusline` (cost, context window, live effort, and
  * the two rate-limit windows) and `~/.nazar/limits.json` (every quota window
@@ -26,6 +34,9 @@
  */
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
+
+import type { CodexSessionsOptions } from './codex-rollout.js';
+import { CodexSessions } from './codex-rollout.js';
 
 import type { LimitsScan, LimitsWatcherOptions } from './limits-file.js';
 import { LimitsWatcher } from './limits-file.js';
@@ -200,6 +211,14 @@ export interface NazarStateOptions {
   /** Options for the limits reader this builds when none is handed in. */
   readonly limitsOptions?: LimitsWatcherOptions;
   /**
+   * N-WP18: the Codex rollout reader. Pass `null` to run without it, which is
+   * what `nazar --no-codex` does and what every test that is not about Codex
+   * does; tests that are inject one over a temporary store.
+   */
+  readonly codex?: CodexSessions | null;
+  /** Options for the Codex reader this builds when none is handed in. */
+  readonly codexOptions?: CodexSessionsOptions;
+  /**
    * Builds the watcher for one session. Returning `undefined` means "no tree
    * for this session". Injected by tests so no watcher ever touches `~/.claude`.
    */
@@ -242,6 +261,9 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
   /** The `limits.json` reader, or `undefined` when the join runs without it. */
   readonly limits: LimitsWatcher | undefined;
 
+  /** N-WP18: the Codex reader, or `undefined` when the join runs without it. */
+  readonly codex: CodexSessions | undefined;
+
   readonly projectsDir: string;
 
   readonly coalesceMs: number;
@@ -274,6 +296,10 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
       options.limits === null
         ? undefined
         : (options.limits ?? new LimitsWatcher(options.limitsOptions ?? {}));
+    this.codex =
+      options.codex === null
+        ? undefined
+        : (options.codex ?? new CodexSessions(options.codexOptions ?? {}));
     this.statusLines =
       options.statusLines === null
         ? undefined
@@ -319,6 +345,9 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
     this.limits?.on('change', () => {
       if (this.started) this.schedulePublish();
     });
+    this.codex?.on('change', () => {
+      if (this.started) this.schedulePublish();
+    });
 
     // The two optional readers are started alongside the registry rather than
     // after it: neither can fail in a way that matters — an absent directory is
@@ -327,6 +356,7 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
       this.registry.start(),
       this.captures?.start() ?? Promise.resolve(),
       this.limits?.start() ?? Promise.resolve(),
+      this.codex?.start() ?? Promise.resolve(),
     ]);
     if (!this.started) return;
     await this.syncTrees();
@@ -343,6 +373,7 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
     this.registry.stop();
     this.captures?.stop();
     this.limits?.stop();
+    this.codex?.stop();
   }
 
   /** `~/.claude/projects/<slug>` for a session's working directory. */
@@ -475,7 +506,29 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
     // WP4f. Fired before the views are built, so the *next* publish has the
     // answer; the probe caches for minutes, so a machine at rest reads nothing.
     this.probeStatusLines(raw, now, captures);
-    const sessions = raw.map((session) => this.viewOf(session, now, captures));
+    const sessions = [
+      ...raw.map((session) => this.viewOf(session, now, captures)),
+      // N-WP18. A Codex thread arrives already complete: it has no tree watcher
+      // to join, no status-line capture (the wrapper is Claude Code's), and no
+      // subagent forest of its own — a thread it spawns is a *sibling* rollout
+      // with a card of its own, not a node under this one. So the view is the
+      // session plus the three empty tree fields, and `treeRead` is `true`
+      // because the rollout genuinely was read: the card says "no subagents"
+      // rather than "not read yet", which is the difference between an answer
+      // and a shrug.
+      ...(this.codex?.snapshot() ?? []).map(
+        (session): SessionView => ({
+          ...session,
+          roots: [],
+          orphans: [],
+          treeRead: true,
+          // The rollout is both the registry entry and the transcript for a
+          // Codex thread, so the one mtime fills both fields the canvas ages a
+          // card from. Absent when the file has not been stat'd yet.
+          ...(session.lastWriteAt === undefined ? {} : { transcriptAt: session.lastWriteAt }),
+        }),
+      ),
+    ];
 
     const next: {
       -readonly [K in keyof StateSnapshot]: StateSnapshot[K];

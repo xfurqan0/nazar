@@ -335,3 +335,158 @@ test('the capture fixtures cover the three shapes the reader has to survive', ()
     assert.equal(key in three, false, `the missing-fields fixture should not carry ${key}`);
   }
 });
+
+/* ------------------------------------------------------------------ *
+ * N-WP18: the Codex rollout fixtures
+ * ------------------------------------------------------------------ */
+
+/**
+ * Every field of a Codex rollout that can hold something a person or a machine
+ * actually wrote.
+ *
+ * A rollout is much wetter than a Claude Code transcript: one line can carry
+ * the command that ran, its stdout and stderr, the unified diff it produced,
+ * the model's own prose, the base instructions and an MCP call's arguments. So
+ * the gate is a **sweep by key name, at every depth**, rather than a walk of
+ * the shapes we happen to know: a shape Codex adds tomorrow is covered by it,
+ * and a fixture that quietly grows a real command is not.
+ *
+ * The value must be exactly `[redacted]` — not merely short, not merely
+ * sanitized-looking. That is the rule the Claude Code slices are held to,
+ * restated over the keys Codex uses instead.
+ */
+const CODEX_WET_KEYS = new Set([
+  'text',
+  'input',
+  'output',
+  'arguments',
+  'result',
+  'stdout',
+  'stderr',
+  'aggregated_output',
+  'formatted_output',
+  'unified_diff',
+  'content',
+  'last_agent_message',
+  'developer_instructions',
+  'instructions',
+  'query',
+  'cmd',
+]);
+
+/** Keys whose value is a *list* of wet strings rather than one. */
+const CODEX_WET_LISTS = new Set(['command', 'queries']);
+
+/** The placeholder task text, which is the one readable string on purpose. */
+const CODEX_PLACEHOLDER = /task placeholder$/;
+
+function codexFixtures(): Array<[string, string]> {
+  return fixtures.filter(([name]) => name.startsWith('codex/'));
+}
+
+function sweepWet(value: unknown, at: string, report: (where: string, what: string) => void): void {
+  if (Array.isArray(value)) {
+    value.forEach((item, i) => {
+      sweepWet(item, `${at}[${i}]`, report);
+    });
+    return;
+  }
+  if (typeof value !== 'object' || value === null) return;
+  for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
+    const where = at === '' ? key : `${at}.${key}`;
+    if (CODEX_WET_KEYS.has(key) && typeof child === 'string') report(where, child);
+    else if (CODEX_WET_LISTS.has(key) && Array.isArray(child)) {
+      child.forEach((item, i) => {
+        if (typeof item === 'string') report(`${where}[${i}]`, item);
+      });
+    }
+    sweepWet(child, where, report);
+  }
+}
+
+test('N-WP18: the Codex fixtures are there, and are rollouts', () => {
+  const found = codexFixtures();
+  assert.ok(
+    found.length >= 3,
+    'the open, closed and subagent rollouts should all be here: each pins a state the reader has to get right',
+  );
+  for (const [name] of found) {
+    assert.match(name, /^codex\/rollout-[a-z-]+\.jsonl$/, `${name} is not shaped like a rollout`);
+  }
+});
+
+test('N-WP18: no Codex fixture carries a prompt, a command or an output', () => {
+  const found = codexFixtures();
+  assert.ok(found.length > 0);
+  for (const [name, raw] of found) {
+    const lines = raw.split('\n').filter((line) => line.length > 0);
+    lines.forEach((line, index) => {
+      sweepWet(JSON.parse(line) as unknown, '', (where, what) => {
+        // Two exceptions, and both are the point of having a fixture at all.
+        // The human turn's own text is what `task-text.ts` reads, so it has to
+        // be *readable* — and it is therefore a placeholder written for this
+        // file. The environment block is what the stripper has to remove, so it
+        // has to be recognisable as one; its contents are still redacted.
+        if (CODEX_PLACEHOLDER.test(what)) return;
+        if (what.startsWith('<environment_context>')) return;
+        assert.equal(what, '[redacted]', `${name} line ${index + 1}: ${where} was not redacted`);
+      });
+    });
+  }
+});
+
+test('N-WP18: the Codex fixtures still carry the fields the reader must skip', () => {
+  // A fixture reduced to the fields Nazar keeps would prove nothing: the risk
+  // is that a rollout carries far more than that, and it has to go on carrying
+  // far more than that.
+  const raw = readFileSync(path.join(fixturesDir, 'codex', 'rollout-open.jsonl'), 'utf8');
+  for (const key of [
+    'stdout',
+    'stderr',
+    'command',
+    'arguments',
+    'output',
+    'aggregated_output',
+    'formatted_output',
+    'last_agent_message',
+    'developer_instructions',
+    'parsed_cmd',
+  ]) {
+    assert.ok(raw.includes(`"${key}"`), `the open rollout lost ${key}, which is what makes it a leak test`);
+  }
+});
+
+test('N-WP18: the three Codex fixtures cover three different verdicts', () => {
+  const read = (name: string): Array<Record<string, unknown>> =>
+    readFileSync(path.join(fixturesDir, 'codex', name), 'utf8')
+      .split('\n')
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+
+  const turnBalance = (lines: Array<Record<string, unknown>>): number =>
+    lines.reduce((open, line) => {
+      const payload = line['payload'] as Record<string, unknown> | undefined;
+      if (payload?.['type'] === 'task_started') return open + 1;
+      if (payload?.['type'] === 'task_complete' || payload?.['type'] === 'turn_aborted') {
+        return open - 1;
+      }
+      return open;
+    }, 0);
+
+  // Open: a turn still running, which is the only way a Codex thread is busy.
+  assert.equal(turnBalance(read('rollout-open.jsonl')), 1);
+  // Closed: every turn finished, which is idle.
+  assert.equal(turnBalance(read('rollout-closed.jsonl')), 0);
+
+  // Subagent: spawned by another thread, which is a *sibling* card and not a
+  // node under its parent. The link is in `session_meta`, and losing it would
+  // make the fixture indistinguishable from the closed one.
+  const meta = read('rollout-subagent.jsonl')[0]?.['payload'] as Record<string, unknown>;
+  const source = meta['source'] as Record<string, unknown>;
+  const spawn = (source['subagent'] as Record<string, unknown>)['thread_spawn'] as Record<
+    string,
+    unknown
+  >;
+  assert.equal(typeof spawn['parent_thread_id'], 'string');
+  assert.notEqual(spawn['parent_thread_id'], meta['id']);
+});

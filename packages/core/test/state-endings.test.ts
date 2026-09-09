@@ -14,8 +14,9 @@
  * - it does **not** fire on start-up, however many sessions were already gone
  *   when the process came up.
  *
- * Nothing here touches `~/.claude`: the registry runs over a temporary directory
- * with `runAgents: null`, and no tree watcher is ever built.
+ * Nothing here touches `~/.claude` or `~/.codex`: the registry runs over a
+ * temporary directory with `runAgents: null`, the Codex reader is off, and no
+ * tree watcher is ever built.
  */
 import assert from 'node:assert/strict';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
@@ -63,6 +64,8 @@ function makeState(dir: string, isAlive: () => boolean): NazarState {
     captures: null,
     limits: null,
     statusLines: null,
+    // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+    codex: null,
     registry: new SessionRegistry({
       sessionsDir: dir,
       watch: false,

@@ -6,10 +6,30 @@
 
 import type { AgentDoneSignal } from './agent-done.js';
 
-/** Providers Nazar can draw on the canvas. Codex arrives in v2. */
-export const providers = ['claude'] as const;
+/**
+ * Providers Nazar can draw on the canvas.
+ *
+ * N-WP18 added `codex`. The two agree about very little — Codex keeps one
+ * append-only rollout per thread rather than a session file plus a transcript,
+ * counts its tokens cumulatively rather than per message, and exposes no
+ * process id at all — so each has its own reader, and this union is the one
+ * place a card learns which of them it came from.
+ */
+export const providers = ['claude', 'codex'] as const;
 
 export type Provider = (typeof providers)[number];
+
+/**
+ * The `pid` a session gets when its provider does not expose one.
+ *
+ * Codex writes no process id anywhere Nazar can read: the rollout carries the
+ * thread's id, its working directory and its model, and nothing that names the
+ * process appending to it. So the field is filled with this rather than with a
+ * guess, the canvas renders it as *unknown* rather than as `0`
+ * (docs/pinned-internal-formats.md, rule 3), and jump-to-terminal is **absent**
+ * on such a card rather than offered and then failed.
+ */
+export const NO_PID = 0;
 
 /**
  * The three statuses Claude Code writes for a live session, plus Nazar's
@@ -160,11 +180,15 @@ export interface AgentNode {
   readonly children: readonly AgentNode[];
 }
 
-/** One Claude Code session, as far as WP1's two sources can describe it. */
+/**
+ * One agent session, as far as its provider's sources can describe it: Claude
+ * Code's registry plus transcript (WP1/WP2), or a Codex rollout (N-WP18).
+ */
 export interface Session {
   /** `sessionId` when a source gave one, otherwise `pid-<pid>`. */
   readonly id: string;
   readonly provider: Provider;
+  /** The process appending to this session's files, or {@link NO_PID}. */
   readonly pid: number;
   readonly cwd?: string;
   /** `interactive` or `background`; only `interactive` was ever observed. */

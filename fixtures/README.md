@@ -5,7 +5,9 @@ parsers can be tested without a live Claude Code session, and so CI can run on a
 machine that has never seen Claude Code.
 
 All of them were captured on the maintainer's machine on **2026-09-07** with
-**Claude Code 2.1.263** on **Windows 11**, then stripped by hand. `test/fixtures.test.ts`
+**Claude Code 2.1.263** on **Windows 11**, then stripped by hand. The exception is
+`codex/`, added by N-WP18: those three are **built** from measured shapes rather than
+stripped from a capture, for the reason its own section gives. `test/fixtures.test.ts`
 is the gate: it fails if any file here contains an email address, a real user home path
 (the Windows per-user directory, or a macOS or Linux home directory), either of the
 maintainer's handles, or a hexadecimal run of 32 characters or more that is not an
@@ -29,6 +31,7 @@ what you removed, then run `npm test`. Never commit a raw capture; `.gitignore` 
 | Request id | `req_0000000000000000000000NN` |
 | Tool use id | `toolu_00000000000000000000000N` |
 | Free text written by a person | `[redacted]` or `task placeholder` |
+| Codex thread / turn id | `00000000-0000-7000-8000-0000000000NN` |
 
 Note on path separators: real Windows payloads use backslashes, JSON-escaped
 (`"C:\\proj\\example"`). Most fixtures here use forward slashes, so they do not exercise
@@ -249,6 +252,65 @@ concurrent sessions overwrite each other.
   reader deliberately recomputes rather than trusts.
 - **Updating it** is a two-repository change, in nazar-tray's order: its `limits.rs` and
   its sample first, then this copy, then run `npm test` here.
+
+### `codex/rollout-{open,closed,subagent}.jsonl` (N-WP18)
+
+Three Codex rollouts, and the first fixtures here that are **synthetic rather than
+sanitized**. That is deliberate and it is the safer direction: a rollout is far wetter
+than a Claude Code transcript — one line can carry the command that ran, its stdout and
+stderr, the unified diff it produced, an MCP call's arguments, the model's own prose and
+the whole system prompt — so rather than strip a real capture and hope the strip was
+exhaustive, these are built line by line from the **shapes** the N-WP18 audit measured on
+the maintainer's machine, with every wet field written as the literal string
+`"[redacted]"` from the start.
+
+- **Origin:** the record shapes of `~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl`
+  as observed under **Codex 0.153.4** (and four earlier builds back to `0.150.0-alpha.8`)
+  on **Windows 11, 2026-09-09**, across 19 real rollouts. The audit read **keys and
+  numbers only**: no value of `content`, `text`, `input`, `arguments`, `output`, `stdout`,
+  `stderr` or `command` was ever printed, and none reached this directory.
+- **Kept as observed:** the `{timestamp, type, payload}` envelope; the eleven
+  `payload.type` values Nazar reads and several it does not; the **order** Codex writes
+  them in — and one detail that a guessed fixture would have got backwards: a completed
+  item arrives **between** a `custom_tool_call` and its `custom_tool_call_output`, not
+  after it. That ordering is what lets an `exec` call be renamed by what actually ran, so
+  a fixture with the two swapped would silently disable that path. The token record's six
+  counters are real *shapes* with invented values that preserve the two measured
+  properties: `total_tokens == input + output`, and `cached_input_tokens` **inside**
+  `input_tokens`.
+- **Invented:** every id (`00000000-0000-7000-8000-…`), the working directory
+  (`/proj/demo`), the model name (`gpt-0-demo`), the CLI version (`0.0.0`), the MCP server
+  and tool names (`demo-server` / `search`), and every counter.
+- **The one readable string is the point:** a `user` turn's own text is `task placeholder`,
+  because `task-text.ts` reads exactly that and a fixture with nothing readable in it could
+  not exercise the reader at all. `rollout-open.jsonl` also carries an
+  `<environment_context>[redacted]</environment_context>` turn — Codex injects that block,
+  and the stripper has to remove it — so the tag is recognisable while its contents are not.
+- **Kept on purpose, unread:** `stdout`, `stderr`, `command`, `parsed_cmd`, `arguments`,
+  `result`, `aggregated_output`, `formatted_output`, `last_agent_message`,
+  `developer_instructions` and `base_instructions.text` are all present. A fixture reduced
+  to the fields Nazar keeps would prove nothing; the risk is that a rollout carries far
+  more than that, and these have to go on carrying far more than that.
+  `test/fixtures.test.ts` sweeps **every** one of those key names at **every depth** and
+  fails on any value that is not `[redacted]`, and
+  `packages/core/test/codex-rollout.test.ts` fails if that string ever reaches an emitted
+  event.
+- **The three shapes, and why each is needed:** `open` has a turn still running and a tool
+  call still out, which is the only way a Codex thread is `busy`; `closed` has every turn
+  completed, which is `idle`; `subagent` was spawned by another thread
+  (`session_meta.payload.source.subagent.thread_spawn`), which is what proves a spawned
+  Codex thread is a **sibling card** rather than a node under its parent.
+- **Not represented:** an approval request — because **Codex writes none**. All 19 real
+  rollouts were swept for a request-shaped key at every depth, including the four turns
+  that ran under `approval_policy: on-request`, and every hit was a *policy*. So `waiting`
+  is unreachable for a Codex card and there is no shape here to pin. Also absent:
+  `FileChange` items with a `unified_diff`, the realtime and multi-agent record types, and
+  a non-zero `cache_write_input_tokens` (`0` on all 16 real rollouts with a token record,
+  so whether it sits inside `input_tokens` is unobserved).
+
+There is **no lock fixture**, and there cannot usefully be one: a thread lock is a
+zero-byte file under `~/.codex/thread-writer-locks` whose *existence* is the entire datum,
+so the tests create and delete real ones in a temporary directory.
 
 ## What has no fixture yet
 

@@ -202,6 +202,7 @@ export {
   formatTokens,
   modelChip,
   orUnknown,
+  pidLabel,
   summarize,
   summaryChips,
 } from './format.js';

@@ -207,3 +207,67 @@ export function statuslineCapturesDir(
 ): string {
   return path.join(nazarHomeDir(env, home), 'statusline');
 }
+
+/* ------------------------------------------------------------------ *
+ * N-WP18: Codex
+ *
+ * A third root, and the first one that does not belong to Claude Code. Codex
+ * writes one append-only JSONL "rollout" per thread under a date-partitioned
+ * tree, and takes a lock file named after the thread while a writer holds it
+ * open. Nazar reads both and **writes neither** — the same rule as everywhere
+ * else, and `test/no-writes.test.ts` is what makes it a property of the code.
+ *
+ * `~/.codex/auth.json` sits in that directory and is on the "not read" table.
+ * Nothing here resolves it, nothing opens it, and the rollout reader accepts a
+ * file name only when it matches `rollout-*.jsonl`.
+ * ------------------------------------------------------------------ */
+
+/** Root of Codex's configuration. Holds credentials; only two paths are read. */
+export const CODEX_HOME_DIR = '~/.codex';
+
+/** Date-partitioned root of the rollout store: `<year>/<month>/<day>`. */
+export const CODEX_SESSIONS_DIR = '~/.codex/sessions';
+
+/** One thread's rollout. Append-only JSONL, tailed by byte offset. */
+export const CODEX_ROLLOUT_FILE = '~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl';
+
+/** Directory Codex keeps one lock file per **open** thread in. */
+export const CODEX_THREAD_LOCKS_DIR = '~/.codex/thread-writer-locks';
+
+/**
+ * The lock itself: zero bytes, named after the thread, held open by the writer.
+ * Nazar reads the directory **listing** and never opens the file.
+ */
+export const CODEX_THREAD_LOCK_FILE = '~/.codex/thread-writer-locks/<thread_id>.lock';
+
+/** Credential material in the same directory. Never opened. */
+export const CODEX_AUTH_FILE = '~/.codex/auth.json';
+
+/**
+ * Root of Codex's configuration directory. `CODEX_HOME` overrides it — the
+ * variable Codex itself honours — otherwise it is `<home>/.codex`.
+ */
+export function codexHomeDir(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir(),
+): string {
+  const configured = env['CODEX_HOME'];
+  if (typeof configured === 'string' && configured.length > 0) return configured;
+  return path.join(home, '.codex');
+}
+
+/** Absolute path of the rollout store on this machine. */
+export function codexSessionsDirPath(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir(),
+): string {
+  return path.join(codexHomeDir(env, home), 'sessions');
+}
+
+/** Absolute path of the thread lock directory on this machine. */
+export function codexThreadLocksDirPath(
+  env: NodeJS.ProcessEnv = process.env,
+  home: string = os.homedir(),
+): string {
+  return path.join(codexHomeDir(env, home), 'thread-writer-locks');
+}

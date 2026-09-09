@@ -98,6 +98,7 @@
   "hint.frozenNoNames": "종료된 세션은 과거를 읽은 것입니다. 이름은 실시간 캔버스에 있습니다",
   "hint.frozenNoNotes": "종료된 세션은 과거를 읽은 것입니다. 메모는 실시간 캔버스에 있습니다",
   "hint.frozenNoTerminal": "이 세션은 끝났습니다. 이동할 터미널이 없습니다",
+  "hint.noPidNoTerminal": "이 세션은 프로세스를 알려주지 않아 이동할 터미널이 없습니다",
   "hint.inABrowser": "브라우저 탭에서 실행 중인 Nazar 입니다",
   "hint.jumpNeedsShell": "이동하려면 데스크톱 앱이 필요합니다",
   "hint.nameCleared": "이름을 지웠습니다 — 폴더 이름으로 돌아갑니다",

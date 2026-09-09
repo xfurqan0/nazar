@@ -30,7 +30,15 @@ const fixtures = path.join(here, '..', '..', '..', 'fixtures');
 
 /** A configuration directory built from the repo's sanitized fixtures. */
 async function makeConfigDir(
-  options: { sessions?: boolean; store?: boolean; limits?: boolean; captures?: boolean } = {},
+  options: {
+    sessions?: boolean;
+    store?: boolean;
+    limits?: boolean;
+    captures?: boolean;
+    /** N-WP18: a Codex rollout store, with or without a lock held. */
+    codex?: boolean;
+    codexLock?: boolean;
+  } = {},
 ): Promise<{
   dir: string;
   cleanup: () => Promise<void>;
@@ -79,6 +87,33 @@ async function makeConfigDir(
       'chain.json',
     ]) {
       await cp(path.join(fixtures, 'statusline-captures', name), path.join(capturesDir, name));
+    }
+  }
+
+  // N-WP18. `~/.codex` belongs to a different vendor's tool; the fixtures are
+  // three synthetic rollouts that still carry every field the reader must skip.
+  if (options.codex === true) {
+    const dayDir = path.join(dir, '.codex', 'sessions', '2026', '09', '09');
+    await mkdir(dayDir, { recursive: true });
+    const rollout = path.join(
+      dayDir,
+      'rollout-2026-09-09T04-00-00-00000000-0000-7000-8000-000000000001.jsonl',
+    );
+    await cp(path.join(fixtures, 'codex', 'rollout-open.jsonl'), rollout);
+    // `cp` carries the fixture's own mtime across on this platform, and the
+    // silence window is measured against it — so a fixture committed last week
+    // would make every unlocked thread look finished. Stamp it deliberately:
+    // "this rollout is being written to right now" is the state under test.
+    const now = new Date();
+    await utimes(rollout, now, now);
+    const locksDir = path.join(dir, '.codex', 'thread-writer-locks');
+    await mkdir(locksDir, { recursive: true });
+    if (options.codexLock === true) {
+      await writeFile(
+        path.join(locksDir, '00000000-0000-7000-8000-000000000001.lock'),
+        '',
+        'utf8',
+      );
     }
   }
 
@@ -1019,6 +1054,94 @@ test('the same settings file on another platform is a command line somebody mean
     const text = report.lines.join('\n');
     assert.ok(!text.includes('Git Bash'));
     assert.match(text, /the wrapper is not installed/);
+  } finally {
+    await cleanup();
+  }
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP18: Codex
+ * ------------------------------------------------------------------ */
+
+test('doctor says Codex is not installed rather than saying nothing', async () => {
+  const { dir, cleanup } = await makeConfigDir();
+  try {
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+    });
+    const text = report.lines.join('\n');
+    assert.equal(report.codexSessions, 0);
+    assert.match(text, /Codex \(N-WP18\)/);
+    assert.match(text, /missing, so Codex is not installed here/);
+    // Not a warning, and not a row in the pinned-format checks that reads as a
+    // failure: most machines running Nazar have never installed Codex.
+    assert.match(text, /not validated: no rollout store/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('doctor counts the Codex threads the canvas would draw', async () => {
+  const { dir, cleanup } = await makeConfigDir({ codex: true, codexLock: true });
+  try {
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+    });
+    const text = report.lines.join('\n');
+    assert.equal(report.codexSessions, 1);
+    assert.match(text, /1 rollout in the last 7 days/);
+    assert.match(text, /1 lock held right now/);
+    assert.match(text, /1 Codex thread, 1 with a writer still holding the lock/);
+    // The two sentences that exist because they surprise people.
+    assert.match(text, /shows no pid and offers no jump/);
+    assert.match(text, /never shown as waiting/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('a Codex store with no lock still draws a thread that is being written to', async () => {
+  const { dir, cleanup } = await makeConfigDir({ codex: true });
+  try {
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+    });
+    const text = report.lines.join('\n');
+    // The fixture's own mtime is *now*, so the thread is inside the silence
+    // window and keeps its card for one window — as `unknown`, never `alive`.
+    assert.equal(report.codexSessions, 1);
+    assert.match(text, /0 locks held right now/);
+    assert.match(text, /1 Codex thread, 0 with a writer still holding the lock/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('--no-codex means doctor opens no rollout at all', async () => {
+  const { dir, cleanup } = await makeConfigDir({ codex: true, codexLock: true });
+  try {
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+      codex: false,
+    });
+    const text = report.lines.join('\n');
+    assert.equal(report.codexSessions, 0);
+    assert.match(text, /reading is off for this run/);
+    // And the two pinned-format rows are gone with it: a row that says "not
+    // validated" would claim the store was looked at and found wanting.
+    assert.equal(/rollout in the last/.test(text), false);
   } finally {
     await cleanup();
   }

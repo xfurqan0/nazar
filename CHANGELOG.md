@@ -341,6 +341,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   strip is not drawn until there is a second tab**. Card names (WP4g) and task
   text (N-WP15a) are untouched; this package took the noise underneath them.
 
+### Added
+
+- **Codex sessions on the canvas** (N-WP18). Nazar draws Codex threads beside
+  Claude Code sessions, from the rollout store Codex already writes at
+  `~/.codex/sessions`. Nothing is installed, nothing is configured, and a
+  machine without Codex is unchanged: the reader answers *not installed* rather
+  than failing. A Codex card carries the working directory, the model and
+  reasoning effort, the tool the thread is running, its tool count, its exact
+  token totals and — under the same opt-in switch as everywhere else — the last
+  thing it was asked to do.
+
+  Three things it deliberately does **not** do, because the rollout does not
+  say them:
+
+  - **No pid, and therefore no jump to a terminal.** A rollout names no
+    process anywhere. The card shows *pid unknown* rather than `0`, and the
+    jump is absent on it rather than offered and then failed.
+  - **Never *waiting*.** Codex records the approval *policy* — and, on the 19
+    rollouts this was audited against, never a single approval *request*, not
+    even in the turns that ran under `on-request`. A thread sitting on a
+    permission prompt is indistinguishable on disk from one thinking hard, so
+    Nazar says what it can see and no more.
+  - **No subagent tree.** A thread Codex spawns gets its own rollout, so it
+    gets its own card beside its parent instead of a node underneath it.
+    Nesting it would mean keeping one card alive because a *different* file is
+    being written.
+
+  Liveness comes from `~/.codex/thread-writer-locks`, which Codex takes while a
+  writer holds a thread open: a lock is *alive*, recent bytes with no lock are
+  *unknown*, and a thread that was already finished when Nazar started gets no
+  card at all. Only the directory listing is read; the lock file is never
+  opened. `nazar doctor` gained a **Codex** section that reports the store, the
+  locks and the threads on the canvas, and `nazar --no-codex` switches the
+  reader off entirely — with no reader constructed, no rollout is opened on
+  that run. The format is pinned, with its own inventory and its own not-read
+  table, in `docs/pinned-internal-formats.md`.
+
 ## [0.1.0] — unreleased
 
 First release. A local canvas that draws every running Claude Code session on

@@ -4,7 +4,9 @@
  * states that are easy to render wrongly are present — a session waiting for a
  * permission prompt, a process whose liveness is unknown, a finished subagent,
  * a subagent with no transcript at all, an orphan, and — since WP4d made the
- * two tell each other apart — a session that is alive and *not* working.
+ * two tell each other apart — a session that is alive and *not* working. And,
+ * since N-WP18, a session from the other provider: no pid, no subagents, no
+ * cost and no context window, which is four absences a card has to draw.
  */
 import assert from 'node:assert/strict';
 
@@ -16,9 +18,10 @@ import { forestOf, makeDemoState } from '../src/demo.ts';
 
 const NOW = 1_788_756_000_000;
 
-test('the default canvas is four sessions and fourteen subagents', () => {
+test('the default canvas is five sessions and fourteen subagents', () => {
   const state = makeDemoState({ now: NOW });
-  assert.equal(state.sessions.length, 4);
+  // N-WP18 added the fifth: a Codex thread, which brings no subagents with it.
+  assert.equal(state.sessions.length, 5);
   assert.equal(
     state.sessions.reduce((sum, session) => sum + session.agents.length, 0),
     14,
@@ -119,6 +122,26 @@ test('forestOf hangs children under parents and orphans at the root', () => {
   assert.equal(roots[0]?.agent.id, 'a');
   assert.equal(roots[0]?.children[0]?.agent.id, 'b');
   assert.equal(roots[1]?.agent.id, 'c', 'an orphan attaches to the session root');
+});
+
+test('N-WP18: the canvas carries a Codex thread, with its gaps intact', () => {
+  const state = makeDemoState({ now: NOW, quota: 'limits' });
+  const codex = state.sessions.filter((session) => session.provider === 'codex');
+  assert.equal(codex.length, 1, 'exactly one Codex card, so the badge path is exercised');
+  const [thread] = codex;
+  assert.ok(thread !== undefined);
+  // The four things a rollout cannot say. `quota: 'limits'` is asked for above
+  // precisely so that the two capture fields are filled on every *other* card:
+  // absent here has to mean "Codex has none", not "the demo has none".
+  assert.equal(thread.pid, 0, 'a rollout names no process');
+  assert.deepEqual(thread.agents, [], 'a spawned Codex thread is a sibling, not a child');
+  assert.equal(thread.costUsd, undefined, 'cost comes from the status-line wrapper');
+  assert.equal(thread.contextWindow, undefined, 'so does the context window');
+  assert.notEqual(thread.status, 'waiting', 'Codex never records an approval request');
+  assert.ok(
+    state.sessions.some((session) => session.costUsd !== undefined),
+    'the Claude cards do carry a capture, or the assertions above prove nothing',
+  );
 });
 
 test('every session in the demo canvas has been read from disk', () => {

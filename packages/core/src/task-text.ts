@@ -134,6 +134,24 @@ const WRAPPERS: readonly RegExp[] = [
   /<command-args>[\s\S]*?(?:<\/command-args>|$)/g,
   /<local-command-stdout>[\s\S]*?(?:<\/local-command-stdout>|$)/g,
   /<local-command-stderr>[\s\S]*?(?:<\/local-command-stderr>|$)/g,
+  /*
+   * N-WP18. Codex writes its own injections into the same slot: a rollout's
+   * `user` turns carry the environment block, the plugin catalogue, the
+   * delegation notice and a skill's own text alongside anything a person typed
+   * — 51 of the 228 user turns measured on the maintainer's machine. They are
+   * the same category as a system reminder and are dropped for the same two
+   * reasons: nobody typed them, and they are the part of a user turn that can
+   * carry instructions.
+   *
+   * Stripping them from a Claude Code line costs nothing — the tags never
+   * appear there — which is why there is one list rather than one per provider.
+   * A second cleaner is a second thing that can drift.
+   */
+  /<environment_context>[\s\S]*?(?:<\/environment_context>|$)/g,
+  /<user_instructions>[\s\S]*?(?:<\/user_instructions>|$)/g,
+  /<recommended_plugins>[\s\S]*?(?:<\/recommended_plugins>|$)/g,
+  /<realtime_delegation>[\s\S]*?(?:<\/realtime_delegation>|$)/g,
+  /<skill>[\s\S]*?(?:<\/skill>|$)/g,
 ];
 
 /** What Claude Code writes where a turn was abandoned. */

@@ -98,6 +98,7 @@
   "hint.frozenNoNames": "已结束的会话是对过去的读取；名称属于实时画布",
   "hint.frozenNoNotes": "已结束的会话是对过去的读取；便签属于实时画布",
   "hint.frozenNoTerminal": "这个会话已经结束；没有可以跳转的终端",
+  "hint.noPidNoTerminal": "这个会话没有记录进程；没有可以跳转的终端",
   "hint.inABrowser": "这是浏览器标签页里的 Nazar",
   "hint.jumpNeedsShell": "跳转需要桌面应用",
   "hint.nameCleared": "名称已清除 — 回到文件夹名",

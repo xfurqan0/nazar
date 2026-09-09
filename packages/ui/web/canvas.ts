@@ -39,6 +39,7 @@ import {
   formatTotal,
   modelChip,
   orUnknown,
+  pidLabel,
   renameNote,
   resizeEdgeNote,
   resizeNote,
@@ -260,6 +261,10 @@ const CHEVRON = 18;
 /** Where the provider badge comes from. Served from disk; never a CDN. */
 const BADGE_SOURCE: Readonly<Record<string, string>> = {
   claude: 'assets/claude-color.png',
+  // N-WP18. The mark was already in `assets/` under the same lobehub licence as
+  // the other two; a Codex card is a card with a different badge on it and
+  // nothing else, which is the whole point of the map being a map.
+  codex: 'assets/codex-color.png',
 };
 
 /**
@@ -835,7 +840,7 @@ export class CanvasRenderer {
               agents: formatCount(session.agents.length),
             })
           : t('card.identityLive', {
-              pid: session.pid,
+              pid: pidLabel(session.pid),
               name: orUnknown(session.name),
               status: session.status,
             }),

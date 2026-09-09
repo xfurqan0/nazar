@@ -23,6 +23,12 @@ export {
   CLAUDE_SESSIONS_DIR,
   CLAUDE_SUBAGENTS_DIR,
   CLAUDE_WORKFLOW_RUN_DIR,
+  CODEX_AUTH_FILE,
+  CODEX_HOME_DIR,
+  CODEX_ROLLOUT_FILE,
+  CODEX_SESSIONS_DIR,
+  CODEX_THREAD_LOCK_FILE,
+  CODEX_THREAD_LOCKS_DIR,
   NAZAR_CAPTURE_FILE,
   NAZAR_CHAIN_FILE,
   NAZAR_HOME_DIR,
@@ -31,6 +37,9 @@ export {
   agentIdFromMetaFileName,
   agentIdFromTranscriptFileName,
   claudeConfigDir,
+  codexHomeDir,
+  codexSessionsDirPath,
+  codexThreadLocksDirPath,
   nazarHomeDir,
   nazarLimitsPath,
   projectsDirPath,
@@ -49,7 +58,13 @@ export {
   projectSlugIsTruncated,
 } from './project-slug.js';
 
-export { KNOWN_SESSION_STATUS, KNOWN_WAITING_FOR, providers, toSessionStatus } from './types.js';
+export {
+  KNOWN_SESSION_STATUS,
+  KNOWN_WAITING_FOR,
+  NO_PID,
+  providers,
+  toSessionStatus,
+} from './types.js';
 export type {
   Agent,
   AgentNode,
@@ -168,6 +183,33 @@ export type { DirectoryWatcher, WatchFactory } from './fs-watch.js';
 
 export { SessionRegistry } from './session-registry.js';
 export type { SessionRegistryEvents, SessionRegistryOptions } from './session-registry.js';
+
+/* N-WP18: Codex. Its own reader, joined into the same snapshot by `state.ts`. */
+
+export {
+  CODEX_LOCK_SUFFIX,
+  CODEX_ROLLOUT_PREFIX,
+  CODEX_ROLLOUT_SUFFIX,
+  CodexRollout,
+  CodexSessions,
+  DEFAULT_CODEX_DAYS,
+  DEFAULT_CODEX_SILENCE_MS,
+  MAX_CODEX_STRING,
+  codexInstalled,
+  extractCodexLine,
+  readCodexStore,
+  threadIdFromLockName,
+  threadIdFromRolloutName,
+} from './codex-rollout.js';
+export type {
+  CodexEvent,
+  CodexExtractOptions,
+  CodexRolloutFacts,
+  CodexScan,
+  CodexSession,
+  CodexSessionsEvents,
+  CodexSessionsOptions,
+} from './codex-rollout.js';
 
 export { TranscriptTailer } from './transcript-tailer.js';
 export type { TailerReadResult, TranscriptTailerOptions } from './transcript-tailer.js';

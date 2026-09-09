@@ -119,6 +119,8 @@ test('a session gets a tree watcher, and its snapshot carries both halves', asyn
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry: new SessionRegistry({
         sessionsDir: dir,
         watch: false,
@@ -174,6 +176,8 @@ test('a session with no tree yet reads as unread rather than as empty', async ()
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry: new SessionRegistry({
         sessionsDir: dir,
         watch: false,
@@ -211,6 +215,8 @@ test('a session with no session id of its own gets no tree', async () => {
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry: new SessionRegistry({
         sessionsDir: dir,
         watch: false,
@@ -252,6 +258,8 @@ test('a session that goes away takes its watcher with it', async () => {
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry,
       coalesceMs: 5,
       now: () => NOW,
@@ -290,6 +298,8 @@ test('a change on either half publishes one coalesced snapshot', async () => {
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry: new SessionRegistry({
         sessionsDir: dir,
         watch: false,
@@ -332,6 +342,8 @@ test('projectDirFor puts a session under the slug the resolver produces', () => 
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
     registry: new SessionRegistry({ watch: false, runAgents: null }),
     projectsDir,
   });
@@ -360,6 +372,8 @@ test('the snapshot header reports what the registry knows about its sources', as
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry: new SessionRegistry({
         sessionsDir: dir,
         watch: false,
@@ -392,6 +406,8 @@ test('a SessionView is usable anywhere a Session is', async () => {
       // what is or is not installed under the home directory it runs in.
       captures: null,
       limits: null,
+      // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+      codex: null,
       registry: new SessionRegistry({
         sessionsDir: dir,
         watch: false,
@@ -423,6 +439,8 @@ function emptyState(dir: string, alive: boolean, agents: boolean): NazarState {
   return new NazarState({
     captures: null,
     limits: null,
+    // N-WP18: and no Codex reader either, so no test reaches ~/.codex.
+    codex: null,
     registry: new SessionRegistry({
       sessionsDir: dir,
       watch: false,

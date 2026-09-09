@@ -9,6 +9,10 @@ fixture that pins it.
 a real machine in the WP0 data-layer audit or in the work package that added it; nothing
 here is copied from documentation without a matching observation.
 
+Everything above the Codex heading is Claude Code's. **Codex is a second provider with a
+completely different shape**, so it has its own section at the foot of this page — its own
+inventory, its own not-read table, and its own version stamp.
+
 Rules that follow from this table:
 
 1. A parser reads **only** the fields in its "fields used" column. Anything else is
@@ -67,7 +71,7 @@ Rules that follow from this table:
 | `message.content` text and `tool_use.input` | Metadata only. Tool **names** are read; tool **inputs** never are. |
 | `agent-*.meta.json` -> `description` | Written by a person, describing their own work. Never written to disk, never serialised into an event, dropped entirely past 200 characters. **It is the only prose field in the node model, so it stops at three gates rather than one:** the live tree parses it into memory for the hover card, `toWireAgent` drops it before the wire (live *and* history), and **the history builder never constructs it at all** — `HistoryScanner` passes `omitDescription: true`, so a frozen session's `History` has no such key in memory either. `packages/core/test/history-leak.test.ts` keeps `description` off its allowed-key list and asserts on a synthetic session that the key is absent from the object, not merely from the wire. |
 | `~/.claude/sessions/<pid>.json` -> `name` | A session title a user may have typed. Live only: it is redacted by `redact()` before the wire, and **history has no `name` field at all** — neither `History` nor `HistorySummary` declares one, and the history scanner never reads the sessions registry, so a past session is known by its id, its project slug and its measurements alone. |
-| `~/.codex/sessions/**` | Codex is v2. The rollout format is audited but no code reads it yet. **Codex quota still reaches the canvas** — through `~/.nazar/limits.json`, which nazar-tray builds from that log. Reading it a second time here would be a second implementation of someone else's parser. |
+| `~/.codex/auth.json`, and everything under `~/.codex` that is not one of the two paths below | **N-WP18 shipped the Codex reader**, so the rollout store and the thread locks moved out of this table and into the Codex section at the foot of this page, which has a not-read table of its own. What stays here is the rest of that directory, credentials first. **Codex quota still does not come from the rollout** — it reaches the canvas through `~/.nazar/limits.json`, which nazar-tray builds from Codex's API; `payload.rate_limits` is read by nobody here. |
 | a capture's `cwd`, `transcript_path`, `scratchpad_dir`, `workspace.*`, `session_name`, `prompt_id` | The capture is the whole status-line payload, so every one of these is in the file. The parser builds a new object from a closed list rather than filtering a parsed one, so a field that is not on the list is gone with the parse result. The envelope's `sessionId` is the map key and is the only identifier that survives. A leak test plants a sentinel in each of the fields above and fails if it appears anywhere in the output or in `JSON.stringify` of it. |
 | `~/.nazar/statusline/chain.json`, and the tray's writer lock beside `limits.json` | The wrapper's record of the status line it displaced, and the lock that makes "one writer" enforced rather than promised. Neither is quota. The first is skipped **by name** while listing captures, so it never even counts as a malformed one; the second is never named at all. |
 | `~/.nazar`, for **writing** | Nazar consumes that directory and never writes to it. One writer per file and neither is us: `nazar-statusline` owns the captures, nazar-tray owns `limits.json`. `test/no-writes.test.ts` is the same gate here as it is for `~/.claude`, and it is a static one — it proves no code path *can* write, not that one particular run did not. **This is about `~/.nazar` and not about every directory with `nazar` in its name.** `%APPDATA%\nazar` is a different directory, and Nazar does write one file in it — its own `desktop.json`, which has a row in the table above. |
@@ -150,3 +154,123 @@ list, that none is longer than 200 characters, that twenty words sampled at test
 time from each file's own `text` and `thinking` blocks appear nowhere in the
 output, and that no home path, account name or e-mail address does either. It
 skips on a machine with no transcript store, so CI does not fake a pass.
+
+## Codex (N-WP18)
+
+**Observed under Codex 0.153.4 (and four earlier builds back to 0.150.0-alpha.8),
+Windows 11, 2026-09-09**, over the 19 rollouts on the maintainer's machine — 4,600 lines,
+46 MB, `originator` `codex_exec` and `Codex Desktop`. Every claim below was measured
+there; the audit read **keys and numbers only** and no prompt, command or output text was
+ever printed, written to a file, or put in a fixture.
+
+Codex writes nothing that corresponds to `~/.claude/sessions/<pid>.json`. There is no
+registry of live sessions, no process id anywhere in the record, and no `claude agents
+--json` to ask. One append-only JSONL per thread is the whole of it, plus a lock file
+while a writer holds the thread open.
+
+### Line shape
+
+Every line is `{ timestamp, type, payload }`, plus an `ordinal`. **`ordinal` is not a line
+index**: a thread forked out of another one starts at the parent's
+`history_base.end_ordinal_exclusive`, so one 118-line file ends at ordinal 410. Offsets
+are bytes, as everywhere else in this codebase.
+
+`type` is one of six, and `payload.type` refines two of them:
+
+| `type` | `payload.type` | Seen | Read? |
+|---|---|---|---|
+| `session_meta` | — | 20 | yes: `id`, `timestamp`, `cwd`, `cli_version`, `source`, `parent_thread_id`, `base_instructions.provenance.model` |
+| `turn_context` | — | 42 | yes: `model`, `effort`, `cwd`, `turn_id` |
+| `token_usage_record` | — | 246 | yes: `thread_token_usage` (six counters) |
+| `event_msg` | `item_completed` | 802 | only `item.type`, `item.status`, and `item.tool` on an MCP call |
+| `event_msg` | `token_count` | 363 | yes: `info.total_token_usage` |
+| `event_msg` | `task_started` | 41 | yes: `turn_id` |
+| `event_msg` | `task_complete` | 37 | yes: `turn_id` |
+| `event_msg` | `turn_aborted` | 3 | yes: `turn_id` |
+| `event_msg` | `thread_settings_applied` | 31 | yes: `thread_settings.{model, reasoning_effort, cwd}` |
+| `response_item` | `custom_tool_call` / `function_call` | 318 | yes: `name` |
+| `response_item` | `custom_tool_call_output` / `function_call_output` | 318 | the line's existence, and nothing in it |
+| `response_item` | `message` | 229 | `role`; the text **only** under the task-text switch |
+| `response_item` | `reasoning` / `agent_message` | 319 | no |
+| `world_state`, `realtime_item`, `inter_agent_communication_metadata` | — | 52 | no |
+
+### The five facts a card is built from
+
+- **Tokens are cumulative for the thread and need no deduplication.** Both
+  `token_usage_record.thread_token_usage` and `event_msg/token_count.info.total_token_usage`
+  carry the same six counters and the same values; the last one in the file is the answer.
+  `total_tokens == input_tokens + output_tokens` held on all 16 rollouts with a record, and
+  `cached_input_tokens` is a **subset of** `input_tokens` — the opposite of the Anthropic
+  usage block, where the two are disjoint. So the reader reports `in = input − cached` and
+  gives the cached read its own field, or the same number would mean two things on two
+  cards. `cache_write_input_tokens` was `0` on all 16, so whether it too sits inside
+  `input_tokens` is unobserved and it is passed through untouched.
+- **A turn is a bracket.** `task_started` opens one and `task_complete` or `turn_aborted`
+  closes it, matched on `turn_id`. Open means `busy`, closed means `idle`, and no bracket
+  at all means `unknown`. The brackets balanced on 18 of the 19 files; the one that did not
+  is a multi-agent thread whose last turn was still open when it was last written.
+- **A tool call is a second bracket.** `custom_tool_call` / `function_call` opens it and the
+  matching `*_output` closes it; they balanced exactly on every finished file. Codex routes
+  shell, `apply_patch` and MCP through one custom tool called `exec`, so the *name* on the
+  call is rarely informative — the `item_completed` that follows names what actually ran
+  (`CommandExecution`, `FileChange`, `McpToolCall`, `Extension`, `CollabAgentToolCall`,
+  `ImageView`), and an `McpToolCall` names its own `tool`. That is where the card's current
+  tool comes from.
+- **Model and effort move mid-thread.** `session_meta` carries only the model the base
+  instructions were provenanced from; `turn_context.model` / `.effort` and
+  `thread_settings_applied` are what a `/model` actually changes, and both were observed
+  changing inside one file.
+- **Subagents exist, and they are siblings rather than children.** A thread Codex spawns
+  gets its **own rollout file**, with `session_meta.payload.source.subagent.thread_spawn`
+  carrying `parent_thread_id`, `agent_nickname`, `agent_path` and `depth`. Three of the 19
+  files are such threads. Nazar draws them as their own cards: nesting them would mean
+  keeping a card alive because *another* file is being written, which is exactly the "no
+  news is still running" inference the rest of the product refuses.
+
+### Liveness, and the one thing that is honestly missing
+
+**There is no pid.** Not in `session_meta`, not in `turn_context`, not anywhere: the only
+process id in a rollout is `item.process_id` on a `CommandExecution`, which is the *child*
+Codex spawned and not Codex. A Codex card therefore shows no pid and offers no
+jump-to-terminal — absent, rather than offered and then failed. Matching a rollout to a
+`codex.exe` by start time does not work either and was tried: one long-lived Codex Desktop
+process opened a thread five and a half hours after the process itself started.
+
+What does exist is `~/.codex/thread-writer-locks/<thread id>.lock` — zero bytes, named
+after the thread, held open by the writer while the thread is open. On this machine, 19
+rollouts had exactly **one** lock and it named the newest thread; opening the file for
+writing fails with `EBUSY`. Nazar reads the **listing only** and never opens it: a lock is
+`state: 'alive'`, and a rollout with no lock but a write in the last 90 seconds is
+`state: 'unknown'` for one window and then gone.
+
+**No approval request is ever written down.** All 19 rollouts were swept for a
+request-shaped key at every depth — `approval`, `pending`, `awaiting`, `confirm`,
+`permission`, `elicit`, `user_input`, `clarif` — and every hit was a *policy*:
+`turn_context.approval_policy`, `.approvals_reviewer`, `.permission_profile`,
+`thread_settings_applied.thread_settings.approval_policy`, and
+`world_state.state.permissions.approved_command_prefixes`. Four turns ran under
+`approval_policy: on-request` and none of them recorded a request. So a Codex thread
+sitting on a permission prompt is indistinguishable on disk from one thinking hard, and
+**Nazar never shows a Codex session as `waiting`**. If Codex starts persisting the event,
+this is the row to change.
+
+### Inventory
+
+| Path | Fields used | Version observed | Fixture | Notes |
+|---|---|---|---|---|
+| `~/.codex/sessions` | directory listing only: `<year>/<month>/<day>` names | 0.153.4 | none needed | Walked newest-first by **name**, not by `stat`. Only the newest 7 day directories are listed, which bounds a store that gains a directory a day for as long as Codex is installed. |
+| `~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl` | `timestamp`, `type`, `payload.type`, and per record: `id`, `cwd`, `cli_version`, `source`, `parent_thread_id`, `base_instructions.provenance.model`, `model`, `effort`, `turn_id`, `thread_token_usage`, `info.total_token_usage`, `thread_settings.{model, reasoning_effort, cwd}`, `item.{type, status, tool}`, `name`, `role` | 0.153.4 | `fixtures/codex/rollout-{open,closed,subagent}.jsonl` | Append-only; tailed by byte offset with the same `TranscriptTailer` the Claude Code side uses. A name that does not match `rollout-*.jsonl` is not opened. |
+| `~/.codex/thread-writer-locks` | directory listing only: one `~/.codex/thread-writer-locks/<thread_id>.lock` per open thread | 0.153.4 | none — a lock is a zero-byte file whose *existence* is the datum | The liveness signal, and the only one there is. The listing is read and the file is **never opened**: it is held open by its writer, and on Windows opening it fails with `EBUSY`. `.coordination.lock` is Codex's own global lock and is skipped by its leading dot. |
+
+### Not read, on purpose
+
+| Path or field | Why not |
+|---|---|
+| `~/.codex/auth.json` | Credential material sitting in the same directory. **Never opened**, and nothing in `paths.ts` resolves it. |
+| `~/.codex/*.sqlite`, `~/.codex/config.toml`, `~/.codex/hooks.json`, `~/.codex/archived_sessions`, `~/.codex/attachments`, `~/.codex/generated_images`, `~/.codex/dictation-history` | Everything else in that directory. Nazar opens two paths under `~/.codex` and no others. |
+| `payload.item.{command, parsed_cmd, stdout, stderr, aggregated_output, formatted_output, changes, arguments, result, content}` | The command that ran, its output, and the diff it produced — raw file contents and command output, which is exactly the kind of leak Nazar exists not to be. Tool *kinds* are read; tool inputs and outputs never are. |
+| `payload.base_instructions.text`, `collaboration_mode.settings.developer_instructions`, `payload.instructions` | The system prompt, in three places. |
+| `response_item/reasoning`, `response_item/agent_message`, `payload.last_agent_message` | The model's own prose and its private reasoning. Not read at any setting, including with task text on: that switch reads the **human** turn and nothing else. |
+| `payload.rate_limits` on `token_count` | Codex's own usage windows. They reach the canvas already, through `~/.nazar/limits.json`, which nazar-tray builds from Codex's API — one reader per fact, and it is not this one. |
+| `world_state`, `realtime_item`, `inter_agent_communication_metadata`, `payload.item.questions` | Whole record types Nazar has no use for. Only the eleven `payload.type` values in the table above are read at all. |
+| `~/.codex/sessions/**` for **writing**, and `~/.codex/thread-writer-locks/*.lock` for **opening** | Nazar writes nothing here and takes no lock. `test/no-writes.test.ts` is the static gate; the lock is decided by the directory listing precisely so that no handle is ever taken on a file another process owns. |

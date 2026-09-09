@@ -65,13 +65,16 @@ export interface OutputStream {
 const HELP = `nazar - keep a watchful eye on your agents
 
 Usage:
-  nazar [--port <number>] [--no-open] [--no-task-text]
+  nazar [--port <number>] [--no-open] [--no-task-text] [--no-codex]
   nazar doctor [--verbose]
 
 Options:
   --port <number>  Port for the local canvas server (default ${DEFAULT_PORT})
   --open           Open the canvas in your browser (default)
   --no-open        Start the server but do not open a browser
+  --no-codex       Do not read Codex rollouts. Codex sessions are read from
+                   ~/.codex/sessions when that directory exists; this stops it,
+                   and a machine without Codex is unaffected either way.
   --no-task-text   Never read the task text out of a transcript, whatever the
                    canvas asks for. Task text is off in every browser until
                    somebody switches it on; this makes it unavailable, which is
@@ -91,7 +94,7 @@ writes; it installs no hooks and changes no settings.
 
 /** One line, printed under every "unknown option". */
 export const USAGE =
-  'usage: nazar [--port <number>] [--no-open] [--no-task-text] | nazar doctor [--verbose]';
+  'usage: nazar [--port <number>] [--no-open] [--no-task-text] [--no-codex] | nazar doctor [--verbose]';
 
 /** Flags every level answers to. */
 const HELP_FLAGS = ['-h', '--help'];
@@ -101,7 +104,15 @@ const VERSION_FLAGS = ['-V', '--version'];
 const DOCTOR_FLAGS = ['-v', '--verbose'];
 
 /** What the serve path accepts, on top of the two above. */
-const SERVE_FLAGS = ['--open', '--no-open', '--port', '--task-text', '--no-task-text'];
+const SERVE_FLAGS = [
+  '--open',
+  '--no-open',
+  '--port',
+  '--task-text',
+  '--no-task-text',
+  '--codex',
+  '--no-codex',
+];
 
 /** Environment variable that switches task text off without a flag (N-WP15a). */
 export const TASK_TEXT_VAR = 'NAZAR_TASK_TEXT';
@@ -211,6 +222,19 @@ export function parseTaskText(
   return env[TASK_TEXT_VAR] !== '0';
 }
 
+/**
+ * N-WP18: whether this process may read Codex rollouts at all.
+ *
+ * The shape is `parseOpen`'s and the negative wins for the same reason: a
+ * wrapper can always append `--no-codex` and be sure of the answer. There is no
+ * environment variable, because unlike task text this switches off a *source*
+ * rather than a privacy surface — a machine with no `~/.codex/sessions` already
+ * reads nothing, and a machine with one has asked for Codex by installing it.
+ */
+export function parseCodex(argv: readonly string[]): boolean {
+  return !argv.includes('--no-codex');
+}
+
 export interface ServeOptions {
   readonly port: number;
   readonly open: boolean;
@@ -220,6 +244,12 @@ export interface ServeOptions {
    * three places at once: the live readers, the history scanner and the wire.
    */
   readonly taskText?: boolean;
+  /**
+   * N-WP18. Defaults to `true`, which means "read Codex if it is installed".
+   * `false` is `--no-codex` and reaches the reader itself, so with it off no
+   * rollout is opened at all.
+   */
+  readonly codex?: boolean;
   readonly out: OutputStream;
   readonly err: OutputStream;
 }
@@ -252,7 +282,13 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
    */
   const taskText = options.taskText !== false;
 
-  const state = new NazarState({ treeOptions: { taskText } });
+  // N-WP18. `null` is the whole of `--no-codex`: with no reader constructed
+  // there is no poll, no watch and no rollout opened on this run.
+  const codex = options.codex !== false;
+  const state = new NazarState({
+    treeOptions: { taskText },
+    ...(codex ? { codexOptions: { taskText } } : { codex: null }),
+  });
   await state.start();
 
   // WP4b. Constructing it costs nothing: the scanner walks no directory until
@@ -281,7 +317,7 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
   const count = snapshot.sessions.length;
   options.out.write(
     count === 0
-      ? 'no Claude Code sessions found yet; the canvas updates as they start\n'
+      ? 'no agent sessions found yet; the canvas updates as they start\n'
       : `watching ${count} session${count === 1 ? '' : 's'}\n`,
   );
   if (!snapshot.commandAvailable) {
@@ -293,6 +329,10 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
   // it. A silent hard-disable is a promise nobody can check.
   if (!taskText) {
     options.out.write('task text is off: no transcript text is read on this run\n');
+  }
+  // Same reasoning: a switch nobody can check is a promise, not a switch.
+  if (!codex) {
+    options.out.write('codex is off: no rollout is read on this run\n');
   }
 
   // Not awaited: the canvas is already reachable, and an opener that takes
@@ -378,6 +418,7 @@ export async function main(
       port,
       open: parseOpen(argv),
       taskText: parseTaskText(argv),
+      codex: parseCodex(argv),
       out,
       err,
     });

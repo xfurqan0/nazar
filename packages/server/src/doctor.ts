@@ -48,6 +48,7 @@ import type {
   AgentsRunResult,
   AgentsRunner,
   CaptureScan,
+  CodexScan,
   LimitsScan,
   ProjectStatusLine,
   SessionFileEntry,
@@ -62,11 +63,16 @@ import {
   CLAUDE_SESSION_TRANSCRIPT,
   CLAUDE_SUBAGENTS_DIR,
   CLAUDE_WORKFLOW_RUN_DIR,
+  CODEX_ROLLOUT_FILE,
+  CODEX_THREAD_LOCKS_DIR,
+  DEFAULT_CODEX_DAYS,
   NAZAR_LIMITS_FILE,
   NAZAR_STATUSLINE_DIR,
   WRAPPER_COMMAND,
   captureAgeSource,
   claudeConfigDir,
+  codexSessionsDirPath,
+  codexThreadLocksDirPath,
   createClaudeAgentsRunner,
   extractTranscriptLine,
   isPidAlive,
@@ -74,6 +80,7 @@ import {
   newestCapture,
   projectsDirPath,
   readCapturesDir,
+  readCodexStore,
   readLimitsFile,
   readProjectStatusLinesUpward,
   readSessionsDir,
@@ -98,6 +105,11 @@ const MAX_SUBAGENT_PROBES = 400;
 export interface DoctorOptions {
   /** Print absolute paths and per-source detail. Off by default. */
   readonly verbose?: boolean;
+  /**
+   * N-WP18: read the Codex rollout store. On by default, and a machine without
+   * `~/.codex/sessions` reports "not installed" rather than an error.
+   */
+  readonly codex?: boolean;
   readonly env?: NodeJS.ProcessEnv;
   readonly home?: string;
   /** Injected by tests so no real `claude` is spawned. */
@@ -116,6 +128,8 @@ export interface DoctorReport {
   readonly lines: readonly string[];
   /** Sessions the canvas would draw right now. */
   readonly liveSessions: number;
+  /** N-WP18: Codex threads the canvas would draw right now. */
+  readonly codexSessions: number;
 }
 
 /** A pinned-format row and what checking it against this machine produced. */
@@ -384,6 +398,7 @@ async function checkFormats(
   store: StoreSurvey,
   captures: CaptureScan,
   limits: LimitsScan,
+  codex: CodexScan | undefined,
 ): Promise<FormatCheck[]> {
   const checks: FormatCheck[] = [];
 
@@ -542,6 +557,33 @@ async function checkFormats(
           ? `not validated: the file is there and could not be read (${limits.error ?? 'unknown reason'})`
           : 'not validated: no limits file, so nazar-tray is not installed',
   });
+
+  /*
+   * N-WP18. Two rows rather than one, because they are two different claims:
+   * that a rollout still parses into the fields the reader wants, and that the
+   * lock directory is where liveness comes from. A machine with Codex installed
+   * but nothing open validates the first and not the second, and the report has
+   * to be able to say so — "no lock" is the normal state of a quiet machine,
+   * not a broken shape.
+   */
+  if (codex !== undefined) {
+    checks.push({
+      name: CODEX_ROLLOUT_FILE,
+      ok: codex.configured && codex.rollouts > 0,
+      detail: !codex.configured
+        ? 'not validated: no rollout store, so Codex is not installed'
+        : codex.rollouts === 0
+          ? 'not validated: the store exists and holds no rollout in the days scanned'
+          : `${plural(codex.rollouts, 'rollout')} listed, ${plural(codex.warnings, 'unreadable file')}, ${plural(codex.sessions, 'open thread')}`,
+    });
+    checks.push({
+      name: CODEX_THREAD_LOCKS_DIR,
+      ok: codex.locksConfigured,
+      detail: codex.locksConfigured
+        ? `${plural(codex.locks, 'lock')} held; a lock is what makes a Codex thread "alive" rather than merely recent`
+        : 'not validated: no lock directory, so liveness falls back to the silence window alone',
+    });
+  }
 
   return checks;
 }
@@ -980,6 +1022,63 @@ function canvasVerdict(
 }
 
 /**
+ * N-WP18: what Codex looks like on this machine.
+ *
+ * Four sentences at most, and each is a fact rather than a status: whether the
+ * store exists, how much of it the scanner looked at, how many threads are open
+ * right now, and — the one that surprises people — that a Codex card never
+ * offers jump-to-terminal, because a rollout carries no process id anywhere.
+ *
+ * A machine without Codex gets one line saying so. That is not a warning: most
+ * machines running Nazar have never installed it.
+ */
+function codexSection(
+  scan: CodexScan | undefined,
+  sessions: readonly { readonly status: string; readonly state: string }[],
+  paths: { readonly sessionsDir: string; readonly locksDir: string },
+  home: string,
+  verbose: boolean,
+): string[] {
+  const show = (target: string): string => displayPath(target, home, verbose);
+  if (scan === undefined) {
+    return [`  reading is off for this run (--no-codex); no rollout was opened`];
+  }
+  if (!scan.configured) {
+    return [
+      `  rollout store   ${show(paths.sessionsDir)} - missing, so Codex is not installed here`,
+    ];
+  }
+
+  const lines: string[] = [];
+  lines.push(
+    `  rollout store   ${show(paths.sessionsDir)} - ${plural(scan.rollouts, 'rollout')} in the last ${plural(DEFAULT_CODEX_DAYS, 'day')}, ${plural(scan.warnings, 'unreadable file')}`,
+  );
+  lines.push(
+    `  thread locks    ${show(paths.locksDir)} - ${
+      scan.locksConfigured
+        ? `${plural(scan.locks, 'lock')} held right now`
+        : 'missing; liveness falls back to the silence window alone'
+    }`,
+  );
+  const alive = sessions.filter((session) => session.state === 'alive').length;
+  lines.push(
+    `  on the canvas   ${plural(scan.sessions, 'Codex thread')}, ${alive} with a writer still holding the lock`,
+  );
+  if (verbose) {
+    for (const session of sessions) {
+      lines.push(`    ${session.status} - process ${session.state}`);
+    }
+  }
+  lines.push(
+    '  a rollout names no process, so a Codex card shows no pid and offers no jump to a terminal.',
+  );
+  lines.push(
+    '  Codex records the approval policy and never a request, so a thread is never shown as waiting.',
+  );
+  return lines;
+}
+
+/**
  * Build the report. Nothing is started and nothing is written; the caller
  * prints the lines.
  */
@@ -987,6 +1086,7 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
   const env = options.env ?? process.env;
   const home = options.home ?? os.homedir();
   const verbose = options.verbose ?? false;
+  const readCodex = options.codex !== false;
   const alive = options.isAlive ?? isPidAlive;
   const show = (target: string): string => displayPath(target, home, verbose);
 
@@ -999,13 +1099,23 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
   const capturesDir = statuslineCapturesDir(env, home);
   const limitsFile = nazarLimitsPath(env, home);
 
+  // N-WP18. Codex's own two directories, resolved the same way: `CODEX_HOME`
+  // when it is set, `<home>/.codex` otherwise.
+  const codexSessionsDir = codexSessionsDirPath(env, home);
+  const codexLocksDir = codexThreadLocksDirPath(env, home);
+
   const runAgents = options.agents ?? createClaudeAgentsRunner();
-  const [agents, sessions, store, captures, limits] = await Promise.all([
+  const [agents, sessions, store, captures, limits, codex] = await Promise.all([
     runAgents(),
     readSessionsDir(sessionsDir),
     surveyStore(projectsDir),
     readCapturesDir(capturesDir),
     readLimitsFile(limitsFile),
+    // One pass and nothing started: the reader is constructed, refreshed once
+    // and thrown away, so `doctor` still starts no watcher and no timer.
+    readCodex
+      ? readCodexStore({ sessionsDir: codexSessionsDir, locksDir: codexLocksDir })
+      : Promise.resolve(undefined),
   ]);
 
   const liveEntries = sessions.entries.filter((entry) => alive(entry.pid));
@@ -1143,8 +1253,20 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
   );
   lines.push('');
 
+  lines.push('Codex (N-WP18)');
+  lines.push(
+    ...codexSection(
+      codex?.scan,
+      codex?.sessions ?? [],
+      { sessionsDir: codexSessionsDir, locksDir: codexLocksDir },
+      home,
+      verbose,
+    ),
+  );
+  lines.push('');
+
   lines.push('Pinned formats (docs/pinned-internal-formats.md)');
-  const checks = await checkFormats(agents, sessions, store, captures, limits);
+  const checks = await checkFormats(agents, sessions, store, captures, limits, codex?.scan);
   const width = Math.max(...checks.map((check) => check.name.length));
   for (const check of checks) {
     lines.push(`  ${check.ok ? 'ok' : '--'}  ${check.name.padEnd(width)}  ${check.detail}`);
@@ -1168,5 +1290,9 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
     lines.push('  absolute paths and one line per live session.');
   }
 
-  return { lines, liveSessions: liveEntries.length };
+  return {
+    lines,
+    liveSessions: liveEntries.length,
+    codexSessions: codex?.scan.sessions ?? 0,
+  };
 }

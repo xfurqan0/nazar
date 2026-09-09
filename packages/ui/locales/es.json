@@ -98,6 +98,7 @@
   "hint.frozenNoNames": "una sesión terminada es una lectura del pasado; los nombres viven en el lienzo en vivo",
   "hint.frozenNoNotes": "una sesión terminada es una lectura del pasado; las notas viven en el lienzo en vivo",
   "hint.frozenNoTerminal": "esta sesión ha terminado; no hay terminal al que saltar",
+  "hint.noPidNoTerminal": "esta sesión no nombra ningún proceso, así que no hay terminal al que saltar",
   "hint.inABrowser": "esto es Nazar en una pestaña del navegador",
   "hint.jumpNeedsShell": "El salto necesita la aplicación de escritorio",
   "hint.nameCleared": "nombre borrado — de vuelta a la carpeta",

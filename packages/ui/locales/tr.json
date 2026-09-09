@@ -98,6 +98,7 @@
   "hint.frozenNoNames": "biten bir oturum geçmişin okunmasıdır; adlar canlı tuvalde yaşar",
   "hint.frozenNoNotes": "biten bir oturum geçmişin okunmasıdır; notlar canlı tuvalde yaşar",
   "hint.frozenNoTerminal": "bu oturum bitmiş; gidilecek bir terminal yok",
+  "hint.noPidNoTerminal": "bu oturum bir süreç adı taşımıyor, gidilecek bir terminal yok",
   "hint.inABrowser": "bu, tarayıcı sekmesindeki Nazar",
   "hint.jumpNeedsShell": "Terminale gitmek için masaüstü uygulaması gerekir",
   "hint.nameCleared": "ad temizlendi — klasöre dönüldü",

@@ -198,6 +198,13 @@ export function forestOf(agents: readonly Agent[]): AgentNode[] {
 interface SessionSeed {
   readonly id: string;
   readonly pid: number;
+  /**
+   * N-WP18. `claude` unless the seed says otherwise, so every seed written
+   * before Codex existed keeps its meaning without being edited.
+   */
+  readonly provider?: SessionView['provider'];
+  /** The agent's own version string. Claude Code's unless the seed says. */
+  readonly version?: string;
   readonly cwd: string;
   readonly name: string;
   readonly status: SessionView['status'];
@@ -232,7 +239,7 @@ function buildSession(seed: SessionSeed, now: number, captures: boolean): Sessio
     -readonly [K in keyof SessionView]: SessionView[K];
   } = {
     id: seed.id,
-    provider: 'claude',
+    provider: seed.provider ?? 'claude',
     pid: seed.pid,
     cwd: seed.cwd,
     kind: 'interactive',
@@ -241,7 +248,7 @@ function buildSession(seed: SessionSeed, now: number, captures: boolean): Sessio
     state: seed.state,
     source: seed.source,
     lastSeenAt: now,
-    version: '2.1.263',
+    version: seed.version ?? '2.1.263',
     agents,
     roots,
     orphans: seed.orphans ?? [],
@@ -557,6 +564,40 @@ const SEEDS: readonly SessionSeed[] = [
         state: 'done',
       },
     ],
+  },
+  {
+    /*
+     * N-WP18: a Codex thread.
+     *
+     * Everything a Codex card cannot show is absent here rather than filled
+     * with a plausible number, because the point of having one in the demo is
+     * that the *gaps* get drawn too. It has no pid (a rollout names no
+     * process, so the identity line reads "pid unknown" and the card offers no
+     * jump), no subagents (a thread Codex spawns is a sibling rollout with a
+     * card of its own, never a node under this one), and no cost or context
+     * window (both come from the status-line wrapper, which is Claude Code's).
+     *
+     * It is `busy` because a turn is open, which is the only way a Codex thread
+     * can be busy: `waiting` is unreachable, since Codex records the approval
+     * policy and never the request.
+     */
+    id: '00000000-0000-7000-8000-000000000005',
+    pid: 0,
+    provider: 'codex',
+    version: '0.0.0',
+    cwd: 'C:/proj/puantaj',
+    name: 'thread-e',
+    status: 'busy',
+    state: 'alive',
+    source: 'files',
+    model: 'gpt-0-demo',
+    effort: 'high',
+    currentTool: 'exec',
+    tokens: tokens(18_402, 6_118, 902_144, 0),
+    toolCalls: 63,
+    startedMinutesAgo: 26,
+    writeSecondsAgo: 4,
+    agents: [],
   },
 ];
 

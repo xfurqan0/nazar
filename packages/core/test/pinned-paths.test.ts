@@ -39,6 +39,21 @@ function nazarPathLiterals(source: string): string[] {
 }
 
 /**
+ * The same again, for Codex (N-WP18).
+ *
+ * A fourth root, and the first that belongs to a *different vendor's* tool. It
+ * is the one where an unlisted path would be most dangerous, because
+ * `~/.codex/auth.json` sits in it: the gate is what makes "Nazar opens two
+ * paths under `~/.codex` and no others" a property of the code rather than a
+ * sentence in a README. The bare root is matched too, so a reader that reached
+ * for `~/.codex` itself would have to say so in the document.
+ */
+function codexPathLiterals(source: string): string[] {
+  const found = source.match(/~\/\.codex(?:\/[A-Za-z0-9._<>*/-]*)?/g) ?? [];
+  return found.map((literal) => literal.replace(/\.+$/, ''));
+}
+
+/**
  * The same again, for a **project's** own Claude Code settings (WP4f).
  *
  * `<cwd>/.claude/...` is a third root, and it is the one that belongs to the
@@ -175,6 +190,43 @@ test('every <cwd>/.claude path the core reads is listed in docs/pinned-internal-
   }
 });
 
+test('N-WP18: the two paths the Codex reader opens each have their own row', () => {
+  for (const literal of [
+    '~/.codex/sessions',
+    '~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl',
+    '~/.codex/thread-writer-locks',
+  ]) {
+    assert.ok(isPinned(literal), `${literal} is not pinned`);
+  }
+});
+
+test('every ~/.codex path the core names is listed in docs/pinned-internal-formats.md', () => {
+  const files = sourceFiles(srcDir);
+  const seen = new Map<string, string>();
+  for (const file of files) {
+    for (const literal of codexPathLiterals(readFileSync(file, 'utf8'))) {
+      if (!seen.has(literal)) seen.set(literal, path.relative(srcDir, file));
+    }
+  }
+
+  assert.ok(seen.size > 0, 'the core names nothing under ~/.codex, which cannot be right');
+  for (const [literal, file] of seen) {
+    assert.ok(
+      isPinned(literal),
+      `${file} names ${literal}, which is not in docs/pinned-internal-formats.md`,
+    );
+  }
+});
+
+test('N-WP18: the Codex credentials file stays in a "not read" table', () => {
+  const doc = readFileSync(pinnedDoc, 'utf8');
+  // Named in the Codex section's own not-read table, and named nowhere else as
+  // something that is read: the reader must never resolve it.
+  assert.ok(doc.includes('`~/.codex/auth.json`'));
+  const section = doc.slice(doc.indexOf('## Codex (N-WP18)'));
+  assert.ok(section.includes('Never opened'), 'the reason has to be stated, not implied');
+});
+
 test('the gate bites: an unlisted path is not accepted', () => {
   const literals = claudePathLiterals('const todos = "~/.claude/todos/<id>.json";');
   assert.deepEqual(literals, ['~/.claude/todos/<id>.json']);
@@ -187,6 +239,14 @@ test('the gate bites: an unlisted path is not accepted', () => {
   const project = projectPathLiterals('const mcp = "<cwd>/.claude/mcp.json";');
   assert.deepEqual(project, ['<cwd>/.claude/mcp.json']);
   assert.equal(isPinned('<cwd>/.claude/mcp.json'), false);
+
+  const codex = codexPathLiterals('const keys = "~/.codex/auth.json";');
+  assert.deepEqual(codex, ['~/.codex/auth.json']);
+  // And this one is the point of the gate: the credentials file is *named* in
+  // the document, in a not-read table, so `isPinned` says yes. A source that
+  // named it would still be a bug — which is why the reader never does, and why
+  // the row above asserts the reason rather than only the path.
+  assert.equal(isPinned('~/.codex/auth.json'), true);
 });
 
 test('the credential files stay in the "not read" table', () => {
