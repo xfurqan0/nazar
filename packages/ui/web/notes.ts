@@ -100,6 +100,9 @@ export class NotesLayer {
 
   private pendingText: { id: string; text: string } | undefined;
 
+  /** The note whose ⋯ menu is open, if one is. At most one ever is. */
+  private menuOpen: string | undefined;
+
   constructor(options: NotesLayerOptions) {
     this.options = options;
   }
@@ -129,6 +132,7 @@ export class NotesLayer {
       if (live.has(id)) continue;
       els.root.remove();
       this.notes.delete(id);
+      if (this.menuOpen === id) this.menuOpen = undefined;
     }
   }
 
@@ -140,12 +144,68 @@ export class NotesLayer {
     els.text.setSelectionRange(els.text.value.length, els.text.value.length);
   }
 
-  /** Close any open note menu. The canvas closes them on an outside press. */
+  /** The note whose ⋯ menu is open, if one is. */
+  get openMenuFor(): string | undefined {
+    return this.menuOpen;
+  }
+
+  /**
+   * Open one note's ⋯ menu.
+   *
+   * `at` is where the pointer was, for a right-click; without it the menu hangs
+   * off the ⋯ button, which is where a click on the button expects it. One
+   * element, one set of entries, two ways in — N-WP14's whole point is that the
+   * gesture everybody tries first reaches the menu that already existed, rather
+   * than a second copy of it or the browser's.
+   */
+  openMenu(id: string, at?: { readonly clientX: number; readonly clientY: number }): void {
+    const els = this.notes.get(id);
+    if (els === undefined) return;
+    this.closeMenus(id);
+    const style = els.menu.style;
+    if (at === undefined) {
+      // Back to the stylesheet's own placement, under the ⋯ at the note's right
+      // edge: three empty strings, because three properties are exactly what
+      // the pointer placement below writes.
+      style.left = '';
+      style.top = '';
+      style.right = '';
+    } else {
+      // The layer carries the canvas's own `scale()`, so the pointer's distance
+      // from the note's corner is measured in screen pixels and divided back
+      // into the canvas units the panel is positioned in. A CSSOM write, never
+      // a style attribute: this page's CSP drops the attribute silently.
+      const rect = els.root.getBoundingClientRect();
+      const scale = Math.max(0.01, this.options.scale());
+      style.left = `${Math.round((at.clientX - rect.left) / scale)}px`;
+      style.top = `${Math.round((at.clientY - rect.top) / scale)}px`;
+      style.right = 'auto';
+    }
+    els.menu.hidden = false;
+    els.menuButton.setAttribute('aria-expanded', 'true');
+    this.menuOpen = id;
+    // The move `placeMenu` makes for the card and canvas menus, for the same
+    // reason: a menu that opens without focus is one the keyboard cannot reach.
+    els.menu.querySelector<HTMLButtonElement>('button')?.focus();
+  }
+
+  /**
+   * Close any open note menu. The canvas closes them on an outside press.
+   *
+   * Focus comes back to the ⋯ button of whichever menu was holding it. That
+   * button is the menu's declared owner (`aria-haspopup`) and it is part of the
+   * note, so the keyboard lands back where the menu was opened from whichever
+   * of the two ways opened it; dropping focus on the body instead would send
+   * the next Tab to the top of the page.
+   */
   closeMenus(except?: string): void {
     for (const [id, els] of this.notes) {
       if (id === except) continue;
+      const held = !els.menu.hidden && els.menu.contains(document.activeElement);
       els.menu.hidden = true;
       els.menuButton.setAttribute('aria-expanded', 'false');
+      if (this.menuOpen === id) this.menuOpen = undefined;
+      if (held) els.menuButton.focus();
     }
   }
 
@@ -211,10 +271,17 @@ export class NotesLayer {
     menu.append(chips, remove);
 
     menuButton.addEventListener('click', () => {
-      const open = menu.hidden;
-      this.closeMenus(note.id);
-      menu.hidden = !open;
-      menuButton.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (menu.hidden) this.openMenu(note.id);
+      else this.closeMenus();
+    });
+
+    // Escape, caught on the panel exactly as `CardMenu` and `CanvasMenu` catch
+    // it, and stopped here so it closes the menu without also closing the
+    // drawer behind it. `closeMenus` puts focus back on the ⋯ button.
+    menu.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      this.closeMenus();
     });
 
     const text = html('textarea', 'nz-note__text');
@@ -390,6 +457,7 @@ export class NotesLayer {
   reset(): void {
     for (const els of this.notes.values()) els.root.remove();
     this.notes.clear();
+    this.menuOpen = undefined;
     clear(this.options.root);
   }
 }

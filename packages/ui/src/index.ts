@@ -260,7 +260,12 @@ export {
 export type { BeadLayer } from './bead.js';
 
 /* WP4e: what a right-click means, and where a browser menu is left alone. */
-export { CANVAS_MENU_ITEMS, contextActionOf, suppressesNativeMenu } from './contextmenu.js';
+export {
+  CANVAS_MENU_ITEMS,
+  contextActionOf,
+  opensOwnMenu,
+  suppressesNativeMenu,
+} from './contextmenu.js';
 export type { CanvasMenuItem, ContextAction, ContextHit } from './contextmenu.js';
 
 /* WP4e: the strip, collapsed to one bead and a panel behind it. */

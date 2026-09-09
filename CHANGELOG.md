@@ -32,6 +32,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The right-click is the page's, everywhere, and a note answers it with its
+  own menu** (N-WP14). Right-clicking the top bar, the sidebar, the tab bar or a
+  frozen history tree used to hand over the browser's menu — *Reload*, *View
+  page source*, *Save image as* — none of which has anything to say about a
+  canvas you arrange. It is gone from all of them: a card still opens its **⋯**
+  menu at the pointer and empty canvas still offers **Add note here · Arrange ·
+  Fit**, and everywhere else the gesture now simply does nothing rather than
+  producing the wrong menu, because a page that answers it in four places out of
+  five looks broken in the fifth. **A sticky note answers it too**, with the
+  same **⋯** menu the button opens — the four colours and *Delete* — placed at
+  the pointer instead of under the button. It is the same element and the same
+  entries, opened two ways: the menu takes the keyboard when it opens, `Esc`
+  closes it, and focus goes back to the note's **⋯**. **The one exception is a
+  text field.** An `<input>`, a `<textarea>` and a note you are typing into keep
+  the browser's own menu, because that is where Cut, Copy, Paste, Undo and the
+  spell-checker live and no menu this canvas draws could carry them — a
+  browser's menu is the only one allowed to touch the clipboard unasked. What
+  makes a note a text field is the **caret**, not the pointer: a note being
+  typed into is being edited, and a note merely under the pointer is an object
+  on a canvas. Press `Esc` to leave its text box and the right-click is the
+  note's own again.
+
 - **The left menu is three sections and a gear** (N-WP12). The drawer behind the hamburger keeps only what you use while you work — **Sessions**, **Folder tabs**, **View** — and a bar at its foot, outside the scrolling area, carries a gear and the version. The gear opens a **settings panel in the drawer's own place**: same width, no overlay, no dimmed canvas, so the sessions behind it stay visible and stay updating while you pick a colour. The panel holds **Appearance** (light/dark, the four palettes, the five frame colours), **Behaviour**, **Language** (arriving next), **Usage limits** and **About**. `Esc` or the arrow at its head goes back; `a`, `0` and `h` keep working while it is open. Four controls that said their own state in their label — `demo data: off`, `start with Windows: off`, `auto-create projects for new folders: on`, `light or dark: system` — are now switches and a three-way light/dark segment, announced to a screen reader as the controls they are. **Nothing changed meaning**: every setting does exactly what it did, in the same place in storage, and the panel itself remembers nothing — the drawer always opens on the menu.
 
 - **A folder tab is opened from a session you can see, and the typed project

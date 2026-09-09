@@ -1849,6 +1849,69 @@ function start(): void {
   const inNote = (node: EventTarget | null): boolean =>
     node instanceof Element && node.closest('.nz-note') !== null;
 
+  /** The note a pointer event happened in, if it happened in one. */
+  const noteIdAt = (node: EventTarget | null): string | undefined =>
+    node instanceof Element
+      ? node.closest<HTMLElement>('.nz-note')?.dataset['noteId']
+      : undefined;
+
+  /** The note being typed into right now, if one is. */
+  const noteWithCaret = (): string | undefined => {
+    const caret = document.activeElement;
+    return caret instanceof HTMLTextAreaElement
+      ? caret.closest<HTMLElement>('.nz-note')?.dataset['noteId']
+      : undefined;
+  };
+
+  /**
+   * Which note had the caret when the last press *began*, and whether a press
+   * is what asked for the menu at all.
+   *
+   * Read at `pointerdown` and not at `contextmenu`, because putting the caret
+   * into a text field is the **default action of the press that opens the
+   * menu**: by the time `contextmenu` fires, right-clicking a note's text box
+   * has already focused it, and asking then would answer *being edited* for
+   * every note anybody right-clicks — which is exactly the note this gesture
+   * exists to open a menu for. The press is the last moment the question still
+   * has its real answer.
+   *
+   * A menu asked for from the keyboard (the Menu key, Shift+F10) is preceded by
+   * no press, moved no caret, and has to be answered from the caret as it is
+   * now. Which of the two happened is read off the event that came last rather
+   * than off `event.button`, which is 2 for the right-click that opens this
+   * menu on Windows and 0 for the Control-click that opens it on a Mac.
+   */
+  let caretNoteAtPress: string | undefined;
+  let askedByPointer = false;
+  document.addEventListener(
+    'pointerdown',
+    () => {
+      caretNoteAtPress = noteWithCaret();
+      askedByPointer = true;
+    },
+    true,
+  );
+  document.addEventListener(
+    'keydown',
+    () => {
+      askedByPointer = false;
+    },
+    true,
+  );
+
+  /**
+   * True when the browser's own menu is the useful one: a text field.
+   *
+   * `isContentEditable` answers for the ancestors too and is false for
+   * `contenteditable="false"`, so no `closest()` is needed for that half; an
+   * `<input>` and a `<textarea>` have no element children, so the event target
+   * *is* the field whenever the pointer is in one.
+   */
+  const inTextField = (node: EventTarget | null): boolean =>
+    node instanceof HTMLInputElement ||
+    node instanceof HTMLTextAreaElement ||
+    (node instanceof HTMLElement && node.isContentEditable);
+
   /** Where on the canvas a screen point is, in the coordinates cards use. */
   const canvasPointOf = (clientX: number, clientY: number): { x: number; y: number } => {
     const rect = host.getBoundingClientRect();
@@ -1856,27 +1919,46 @@ function start(): void {
   };
 
   /*
-   * WP4e: the right-click.
+   * WP4e, N-WP14: the right-click, for the whole page.
    *
-   * `contextActionOf` decides, and it is a pure function in `src/contextmenu.ts`
-   * so the rule can be tested without a DOM. Two of its three answers suppress
-   * the browser's menu; the third — inside a note, or on a frozen tree — leaves
-   * it alone, because a text box's own menu is the only useful one there and a
-   * menu of refusals is worse than no menu.
+   * On `document` rather than on the canvas, because the complaint was about
+   * the top bar and the drawer as much as about a card: a page that answers the
+   * gesture on four of its five surfaces looks broken on the fifth. What it
+   * answers *with* is `contextActionOf`, a pure function in
+   * `src/contextmenu.ts` so the rule can be tested without a DOM. Only one of
+   * its five answers leaves the browser's menu alone — a text field, which is
+   * the one menu this application cannot draw.
    */
-  host.addEventListener('contextmenu', (event) => {
+  document.addEventListener('contextmenu', (event) => {
+    // Something closer to the target has already answered — the drawer's
+    // session rows open the card menu themselves. Nothing to add, and closing
+    // menus here would close the one that handler has just opened.
+    if (event.defaultPrevented) return;
+    const note = noteIdAt(event.target);
     const sessionId = sessionIdOf(event.target);
+    // A press moved the caret itself, so the note it was in beforehand is the
+    // honest answer; the keyboard's own menu key moved nothing.
+    const caret = askedByPointer ? caretNoteAtPress : noteWithCaret();
     const action = contextActionOf({
+      editable: inTextField(event.target),
+      onCanvas: event.target instanceof Node && host.contains(event.target),
+      ...(note === undefined ? {} : { noteId: note, editing: caret === note }),
       ...(sessionId === undefined ? {} : { sessionId }),
-      inNote: inNote(event.target),
       frozen: isFrozen(),
     });
     if (action === 'native') return;
     event.preventDefault();
+    // The chrome and the frozen tree: the browser's menu is gone and there is
+    // nothing to put in its place.
+    if (action === 'suppress') return;
     cardMenu.close();
     canvasMenu.close();
     notesLayer.closeMenus();
     const anchor = { left: event.clientX, top: event.clientY, bottom: event.clientY };
+    if (action === 'note-menu' && note !== undefined) {
+      notesLayer.openMenu(note, { clientX: event.clientX, clientY: event.clientY });
+      return;
+    }
     if (action === 'card-menu' && sessionId !== undefined) {
       openCardMenu(sessionId, anchor);
       return;
@@ -2363,6 +2445,14 @@ function start(): void {
     if (action === undefined) return;
 
     if (action.kind === 'close') {
+      // N-WP14: a note menu is a menu like the other two, so Escape closes it
+      // first and closes nothing else. Escape *inside* the panel never reaches
+      // here — `web/notes.ts` catches it there, as the card menu does — so this
+      // is the case where the menu is open and the keyboard is elsewhere.
+      if (notesLayer.openMenuFor !== undefined) {
+        notesLayer.closeMenus();
+        return;
+      }
       if (canvasMenu.isOpen) {
         canvasMenu.close();
         return;
