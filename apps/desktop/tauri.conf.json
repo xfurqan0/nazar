@@ -46,6 +46,19 @@
     "shortDescription": "A watchful eye on your Claude Code agents, in a window and in the tray.",
     "longDescription": "The desktop face of Nazar. It starts the same local server npx runs, draws the canvas in its own window, sits in the tray, and jumps from a session card to the terminal running that session. Needs Node 22+, which Claude Code needs too.",
     "resources": ["resources/server"],
+    "macOS": {
+      "minimumSystemVersion": "12.0",
+      "signingIdentity": "-"
+    },
+    "linux": {
+      "deb": {
+        "depends": [
+          "libwebkit2gtk-4.1-0",
+          "libgtk-3-0",
+          "libayatana-appindicator3-1"
+        ]
+      }
+    },
     "windows": {
       "webviewInstallMode": {
         "type": "downloadBootstrapper"

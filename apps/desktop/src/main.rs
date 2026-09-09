@@ -42,9 +42,21 @@ mod boot;
 mod config;
 mod i18n;
 mod icon;
+
+// N-WP19a. Both of these compile on all three platforms and only Windows *runs* the half
+// of them that jumps: `jump.rs` is a stub off Windows, and `titles.rs` — the session's own
+// names, read off disk — exists for rung (b) of the ladder and has no other caller. That
+// leaves the macOS and Linux builds with a page of `dead_code`, and the two ways out are
+// both worse than the allow. Putting the modules behind `#[cfg(windows)]` would stop them
+// compiling on the platforms the port has to land on, which is exactly the drift the
+// three-OS CI exists to catch; deleting them would delete the port's starting point. So
+// they are built everywhere, checked everywhere, and the lint is silenced only where the
+// caller is absent — Windows, where clippy runs with `-D warnings`, still sees all of it.
+#[cfg_attr(not(windows), allow(dead_code))]
 mod jump;
 mod node;
 mod server;
+#[cfg_attr(not(windows), allow(dead_code))]
 mod titles;
 mod tray;
 

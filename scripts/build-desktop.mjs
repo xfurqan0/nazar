@@ -17,15 +17,27 @@
 //    is minutes rather than tens of minutes — and whose binary keeps its console, which
 //    is what makes `nazar-desktop --jump <pid>` printable.
 //
+// **Three operating systems, one script (N-WP19a).** None of the four steps above is
+// Windows-specific and none of the code below is either: `--bundles` and `--target` are
+// handed straight to `cargo tauri build`, which is how the CI jobs ask for a `.dmg` on
+// macOS and an `.AppImage` + `.deb` on Linux without this file having to know what any of
+// those are. What the script does have to know is *where the bundler leaves its output* —
+// a path that moves when `--target` is given — so the last step reads the bundle
+// directory and prints what is actually in it, rather than an expected filename that
+// would be a fiction on two platforms out of three.
+//
 // Usage:
 //   node scripts/build-desktop.mjs            stage and bundle a release installer
 //   node scripts/build-desktop.mjs --debug    stage and bundle a debug installer
 //   node scripts/build-desktop.mjs --stage    stage only; no cargo, no bundler
 //   node scripts/build-desktop.mjs --icons    regenerate apps/desktop/icons from the SVG
 //   --skip-npm-build                          trust the dist/ that is already there
+//   --target <triple>                         cross-compile: x86_64-apple-darwin, …
+//   --bundles <kind…>                         override the config's bundle targets,
+//                                             space or comma separated: `--bundles dmg app`
 
 import { execFileSync } from 'node:child_process';
-import { cp, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { appendFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -33,7 +45,50 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const crate = path.join(root, 'apps', 'desktop');
 const staged = path.join(crate, 'resources', 'server');
 
-const flags = new Set(process.argv.slice(2));
+/**
+ * The arguments, split into switches and the two that carry values.
+ *
+ * `--bundles` is greedy in exactly the way `cargo tauri build --bundles` is greedy — it
+ * takes every following word that is not itself an option, and a comma is a separator too
+ * — so the CI matrix can write `--bundles appimage deb` or `--bundles dmg,app` and get
+ * the same answer. Anything else stays a plain switch, which is what the four original
+ * flags are.
+ */
+function parseArguments(argv) {
+  const flags = new Set();
+  let triple;
+  let bundles = [];
+
+  for (let at = 0; at < argv.length; at += 1) {
+    const argument = argv[at];
+    const equals = argument.startsWith('--') ? argument.indexOf('=') : -1;
+    const name = equals === -1 ? argument : argument.slice(0, equals);
+    const inlineValue = equals === -1 ? undefined : argument.slice(equals + 1);
+
+    if (name === '--target') {
+      const value = inlineValue ?? argv[++at];
+      if (!value || value.startsWith('--')) throw new Error('--target needs a triple');
+      triple = value;
+      continue;
+    }
+
+    if (name === '--bundles') {
+      const values = [];
+      if (inlineValue !== undefined) values.push(inlineValue);
+      while (at + 1 < argv.length && !argv[at + 1].startsWith('--')) values.push(argv[++at]);
+      const kinds = values.flatMap((value) => value.split(',')).filter(Boolean);
+      if (kinds.length === 0) throw new Error('--bundles needs at least one bundle kind');
+      bundles = bundles.concat(kinds);
+      continue;
+    }
+
+    flags.add(argument);
+  }
+
+  return { flags, triple, bundles };
+}
+
+const { flags, triple, bundles } = parseArguments(process.argv.slice(2));
 
 function run(command, args, options = {}) {
   execFileSync(command, args, { cwd: root, stdio: 'inherit', shell: false, ...options });
@@ -160,6 +215,95 @@ async function stage() {
   );
 }
 
+/**
+ * Everything under a path, in bytes.
+ *
+ * A macOS `.app` is a *directory*, and the number worth reporting for it is the size of
+ * the bundle rather than the size of its `Contents` entry — which is what a plain `stat`
+ * would give and which is the same small number for every application ever built.
+ */
+async function treeBytes(target) {
+  const info = await stat(target);
+  if (!info.isDirectory()) return info.size;
+
+  let total = 0;
+  for (const entry of await readdir(target, { withFileTypes: true })) {
+    total += await treeBytes(path.join(target, entry.name));
+  }
+  return total;
+}
+
+/**
+ * What the bundler actually produced, read off disk rather than predicted.
+ *
+ * Three platforms produce five kinds of artefact between them and the CI matrix asks for
+ * different ones on each, so a hard-coded `nazar-desktop_0.1.0_x64-setup.exe` would be
+ * right on one runner and silently wrong on the others. `target/[<triple>/]<profile>/bundle`
+ * has one directory per bundle kind — `nsis/`, `dmg/`, `macos/`, `appimage/`, `deb/` — and
+ * listing them answers "what came out of this job, and how big is it" with the truth.
+ *
+ * The sizes go to `GITHUB_STEP_SUMMARY` when there is one, because the number a person
+ * actually wants after a release build is the download size, and hunting for it in a log
+ * that is mostly `Compiling` lines is how it ends up unchecked.
+ */
+async function reportBundles(profile) {
+  const directory = path.join(root, 'target', ...(triple ? [triple] : []), profile, 'bundle');
+  if (!(await exists(directory))) {
+    process.stdout.write(`desktop: no bundle directory at ${path.relative(root, directory)}\n`);
+    return;
+  }
+
+  const produced = [];
+  for (const kind of await readdir(directory, { withFileTypes: true })) {
+    if (!kind.isDirectory()) continue;
+    const inside = path.join(directory, kind.name);
+    for (const entry of await readdir(inside, { withFileTypes: true })) {
+      // A deliverable is a file — `.exe`, `.dmg`, `.deb`, `.AppImage` — with one
+      // exception: a macOS `.app` is a directory, and it is the thing the `.dmg` carries.
+      // Everything else in these directories is scaffolding the bundler left behind: the
+      // `AppDir` an AppImage is squashed from, the unpacked tree a `.deb` is built out of,
+      // and the `linuxdeploy` binaries the AppImage bundler downloads for itself.
+      const isBundleDirectory = entry.isDirectory() && entry.name.endsWith('.app');
+      if (!entry.isFile() && !isBundleDirectory) continue;
+      if (entry.name.startsWith('linuxdeploy')) continue;
+      produced.push({
+        kind: kind.name,
+        name: entry.name,
+        path: path.join(inside, entry.name),
+      });
+    }
+  }
+
+  if (produced.length === 0) {
+    process.stdout.write(`desktop: ${path.relative(root, directory)} is empty\n`);
+    return;
+  }
+
+  const rows = [];
+  for (const item of produced) {
+    const megabytes = (await treeBytes(item.path)) / (1024 * 1024);
+    rows.push({ ...item, size: `${megabytes.toFixed(1)} MB` });
+  }
+  rows.sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const row of rows) {
+    process.stdout.write(`desktop: ${row.kind}/${row.name} — ${row.size}\n`);
+  }
+
+  const summary = process.env.GITHUB_STEP_SUMMARY;
+  if (!summary) return;
+  const heading = triple ? `\`${triple}\`, ${profile}` : profile;
+  const lines = [
+    `### Desktop bundles (${heading})`,
+    '',
+    '| Bundle | File | Size |',
+    '| --- | --- | --- |',
+    ...rows.map((row) => `| ${row.kind} | \`${row.name}\` | ${row.size} |`),
+    '',
+  ];
+  await appendFile(summary, `${lines.join('\n')}\n`, 'utf8');
+}
+
 async function main() {
   if (flags.has('--icons')) {
     run(process.execPath, ['scripts/render-app-icons.mjs']);
@@ -177,7 +321,13 @@ async function main() {
   const debug = flags.has('--debug');
   const args = ['tauri', 'build'];
   if (debug) args.push('--debug');
+  if (triple) args.push('--target', triple);
+  // Last, and deliberately: `--bundles` takes every following word that is not an option,
+  // so anything placed after it would be eaten as a bundle kind.
+  if (bundles.length > 0) args.push('--bundles', ...bundles);
   run('cargo', args, debug ? {} : { env: remappedEnvironment() });
+
+  await reportBundles(debug ? 'debug' : 'release');
 }
 
 await main();

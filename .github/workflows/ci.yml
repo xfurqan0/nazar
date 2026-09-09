@@ -3,6 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
+    # A release tag runs the whole file, which is what makes the `bundle` job's
+    # condition below reachable: it is the one job nobody wants on every push, and a
+    # tag is the moment its three artifacts are actually needed.
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -208,5 +212,125 @@ jobs:
           path: |
             target/debug/nazar-desktop.exe
             target/debug/bundle/nsis/*.exe
+          if-no-files-found: error
+          retention-days: 14
+
+  # N-WP19a. The macOS and Linux bundles — and the only jobs in this file that do not run
+  # on a push or a pull request.
+  #
+  # **Why they are gated.** A macOS runner is billed at ten times a Linux one, these are
+  # release builds rather than the `--debug` the Windows installer job uses, and none of
+  # the three artifacts decides whether a change is *correct*: `shell-core` already
+  # compiles and tests the pure crate on all three systems on every push, and `desktop`
+  # is the gate. So they are asked for by hand — `gh workflow run ci.yml --ref <branch>` —
+  # or by a `v*` tag, which is when a release actually needs them.
+  #
+  # **No `needs:`.** The Windows `installer` waits for `desktop` because the two share a
+  # machine's worth of the same compilation; these three do not, and making a macOS job
+  # queue behind a Windows one would only add a quarter of an hour to something a person
+  # is standing there waiting for.
+  #
+  # **Unsigned, and deliberately** (`docs/PLATFORMS.md`). The `.dmg` is ad-hoc signed —
+  # `bundle.macOS.signingIdentity: "-"` — so it runs after the quarantine flag is cleared
+  # and not before; notarisation costs $99 a year and is a decision for a download count
+  # that does not exist yet. Nothing here reads a secret, which is also why these jobs are
+  # safe to run from a branch.
+  bundle:
+    name: desktop bundle / ${{ matrix.label }} (${{ matrix.arch }})
+    runs-on: ${{ matrix.os }}
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Apple silicon is the host architecture of `macos-latest`; the Intel bundle is
+          # a cross-compile from the same runner, which is why both are one `include`
+          # entry each rather than a second operating system.
+          - os: macos-latest
+            label: macos
+            arch: arm64
+            target: aarch64-apple-darwin
+            bundles: app dmg
+            artifacts: |
+              target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          - os: macos-latest
+            label: macos
+            arch: x64
+            target: x86_64-apple-darwin
+            bundles: app dmg
+            artifacts: |
+              target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
+          - os: ubuntu-latest
+            label: linux
+            arch: x64
+            target: x86_64-unknown-linux-gnu
+            bundles: appimage deb
+            artifacts: |
+              target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+              target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: bundle-${{ matrix.label }}-${{ matrix.arch }}
+
+      # The Tauri v2 prerequisites for Debian and Ubuntu, plus `patchelf`, which the
+      # AppImage bundler uses to rewrite the interpreter path of the binary it packs.
+      # `libayatana-appindicator3-dev` and not `libappindicator3-dev`: the tray is the
+      # reason either is here, and on 24.04 the second is a transitional package for the
+      # first.
+      - name: Install the GTK and WebKit stack
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            patchelf \
+            wget
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      # Separate from the bundler step, and `--skip-npm-build` below because of it: when
+      # this fails it is the package that is broken, not the platform, and a job summary
+      # that says which of the two it was is worth one extra line here.
+      - name: Build
+        run: npm run build
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: tauri-cli
+
+      # The bundle kinds are passed on the command line rather than left to the config so
+      # that this matrix is the single place that says what each runner produces. The
+      # script writes the file names and their sizes to the job summary.
+      - name: Bundle
+        run: node scripts/build-desktop.mjs --skip-npm-build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: nazar-desktop-${{ matrix.label }}-${{ matrix.arch }}
+          path: ${{ matrix.artifacts }}
           if-no-files-found: error
           retention-days: 14

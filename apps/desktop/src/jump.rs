@@ -1426,9 +1426,14 @@ mod platform {
     /// The stub. It is a successful call that did nothing, not an error: the canvas asks
     /// [`super::supported`] before offering the entry, and a user who reaches this anyway
     /// deserves a sentence rather than a red box.
+    ///
+    /// The sentence names the platform rather than the port that is missing (N-WP19a).
+    /// There is a macOS and a Linux build now, so "Windows-only" read as a statement about
+    /// the *application* to somebody holding one of the other two; what is Windows-only is
+    /// this one feature, and the honest form of that is the one below.
     pub fn jump(_pid: u32) -> Result<JumpOutcome, String> {
         Ok(JumpOutcome::nothing(
-            "jumping to a terminal is Windows-only for now",
+            "jumping to a terminal is not available on this platform yet",
         ))
     }
 }

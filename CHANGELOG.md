@@ -138,6 +138,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Six UI languages: English, Türkçe, 中文, 한국어, Русский, Español** (N-WP13). Every word the canvas draws now comes from a catalogue — the sidebar and the settings panel, the cards and their menus, the tab bar, the history view, the usage panel, the empty states, and every tooltip and `aria-label` — and the desktop app's tray menu reads the very same files, so the tray and the canvas cannot end up in different languages. The picker is in **Settings → Language** and lists the six by name, with the one you are reading ticked. **There is no *follow the system* entry, and the behaviour it named is still what you get**: until you pick a language, Nazar takes the first of your browser's preferred languages it can paint itself in and falls back to English rather than to a page of message keys — so the option already ticked the first time you open the list is the language your machine asked for. **Changing language does not reload the page.** Your choice lives in this browser under `nazar.locale.v1`. English and Turkish were written by hand; Chinese, Korean, Russian and Spanish were machine-translated first and **corrections are welcome as pull requests** — `packages/ui/locales/README.md` has the rules and the status table. Numbers are deliberately not localised: durations, token counts, byte sizes and timestamps read the same everywhere, because this canvas is read next to other tools that print the same numbers.
 
+- **The desktop app for macOS and Linux** (N-WP19a). Until now the shell was one
+  artifact — a Windows installer — and on the other two platforms the desktop
+  application simply did not exist. There are now four: the NSIS installer, a
+  `.dmg` for Apple silicon, a `.dmg` for Intel, and an `.AppImage` plus a `.deb`
+  for x86-64 Linux. They come out of a new `desktop bundle` job that runs **on a
+  `v*` tag or when somebody asks for it by hand**, and not on every push: a macOS
+  runner bills at ten times a Linux one, and none of these artifacts is what
+  decides whether a change was correct.
+
+  **What each platform gets is written down rather than discovered** — the new
+  `docs/PLATFORMS.md` is a table of it. The window, the tray, close-to-tray and
+  start-at-login work on all three. **The jump to the terminal does not**: it is
+  still Windows-only, and on macOS and Linux the gesture answers *jumping to a
+  terminal is not available on this platform yet* instead of doing nothing
+  silently. The Linux tray is a **menu only**, because the protocol every modern
+  Linux desktop uses hands the click to the desktop rather than to the
+  application.
+
+  **Unsigned, and said out loud.** The `.dmg` is ad-hoc signed and not notarised,
+  so the first launch wants a right-click → Open, or one
+  `xattr -d com.apple.quarantine`. The `.AppImage` arrives without its executable
+  bit, because a zip cannot carry one, so it wants a `chmod +x`. Both are in
+  `docs/PLATFORMS.md`, next to the reason each is true.
+
 ### Changed
 
 - **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's
