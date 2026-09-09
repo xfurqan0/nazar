@@ -47,11 +47,24 @@ nazar doctor
 
 `doctor` starts no server. It prints where your Claude Code configuration directory resolved to (`CLAUDE_CONFIG_DIR` included), how many session files and transcripts it can see, whether `claude agents --json` answers and how long it takes, which usage-limits source it found and every window that source reports — or that neither source exists on this machine — which of the formats in [docs/pinned-internal-formats.md](docs/pinned-internal-formats.md) it could validate against your machine, the browser-opener chain it would walk, and — when the canvas would draw nothing — the reason. It also relates the two counts that used to sit in separate sections: every live session that has no status-line capture gets a line naming the likeliest reason — a `statusLine` its project sets for itself, a user-level status line that is not the wrapper, a session that started before the wrapper was installed, or simply a turn that has not happened yet, since Claude Code runs the status line after one. Paths are printed with your home directory collapsed to `~`; `--verbose` (`-v`) prints them in full.
 
-## Desktop app (Windows)
+## Desktop app
 
-There is a second way to run the same thing: `nazar-desktop_0.1.0_x64-setup.exe`, published beside the npm package on each release. It is a small Tauri window and a tray icon around **exactly the canvas above** — it starts the very package `npx` runs, on a loopback port it picks once and then remembers, and shows it.
+There is a second way to run the same thing: a desktop bundle, published beside the npm package on each release. It is a small Tauri window and a tray icon around **exactly the canvas above** — it starts the very package `npx` runs, on a loopback port it picks once and then remembers, and shows it.
 
-**The installer is unsigned.** There is no code-signing certificate behind it, so Windows SmartScreen warns the first time you run it and you have to choose *More info · Run anyway*. That clears itself once the download has built enough reputation, which is a matter of downloads rather than of anything that can be done to the file.
+**What you get depends on the operating system.** The canvas is the same everywhere; the things around it are not, and the honest summary is one table — the long form, with the reasons, is [docs/PLATFORMS.md](docs/PLATFORMS.md).
+
+| | Windows | macOS | Linux |
+|---|---|---|---|
+| Browser mode (`npx @xfurqan0/nazar`) | yes | yes | yes |
+| Desktop bundle | `.exe` (NSIS, per-user) | `.dmg` (Apple silicon and Intel) | `.AppImage` and `.deb` |
+| Tray icon | yes, with a menu | yes, in the menu bar | yes, menu only |
+| Jump to the terminal | **yes**, including the Windows Terminal tab | not yet | not yet |
+| Signed | no — SmartScreen warns once | ad-hoc only, not notarised — Gatekeeper warns | not applicable |
+| Tested in CI | every push | on a tag or by hand | on a tag or by hand |
+
+Windows is where the desktop app is developed and used daily; the other two are built and smoke-tested, not lived in yet.
+
+**The Windows installer is unsigned.** There is no code-signing certificate behind it, so Windows SmartScreen warns the first time you run it and you have to choose *More info · Run anyway*. That clears itself once the download has built enough reputation, which is a matter of downloads rather than of anything that can be done to the file.
 
 Two reasons it exists, and only the second is a real one:
 
