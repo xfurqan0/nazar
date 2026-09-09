@@ -77,6 +77,29 @@ export interface AgentActivityNode {
 
 export type ActivityNode = SessionActivityNode | AgentActivityNode;
 
+/** The two fields the waiting question is decided from, and nothing else. */
+export interface WaitingLike {
+  readonly status: ActivitySessionStatus;
+  readonly waitingFor?: string;
+}
+
+/**
+ * A session the user has to answer. The loudest thing the canvas can say.
+ *
+ * N-WP21 pulled this out of `web/canvas.ts` and made rule 2 below call it, so
+ * there is **one** definition of *waiting* on the page rather than two that
+ * happened to agree. The frame, the ring, the banner and the Needs-you strip
+ * are four drawings of this one predicate, and a card framed amber while the
+ * strip says nobody is waiting would be the canvas contradicting itself.
+ *
+ * Two clauses, because the two sources fail in opposite directions: `status`
+ * comes from the session file and `waitingFor` from `claude agents --json`, and
+ * either one on its own is enough to have to answer something.
+ */
+export function isWaiting(session: WaitingLike): boolean {
+  return session.status === 'waiting' || session.waitingFor !== undefined;
+}
+
 function wroteRecently(lastWriteAt: number | undefined, now: number): boolean {
   if (lastWriteAt === undefined || !Number.isFinite(lastWriteAt)) return false;
   const age = now - lastWriteAt;
@@ -97,8 +120,9 @@ export function activityOf(node: ActivityNode, now: number): Activity {
   }
 
   if (node.kind === 'session') {
-    // 2. Waiting wins, including over `busy`.
-    if (node.status === 'waiting' || node.waitingFor !== undefined) return 'waiting';
+    // 2. Waiting wins, including over `busy`. One predicate, shared with the
+    //    banner and the Needs-you strip: see `isWaiting` above.
+    if (isWaiting(node)) return 'waiting';
     // 3. The process did not answer.
     if (node.state === 'unknown') return 'unknown';
     if (node.status === 'busy') return 'working';

@@ -162,6 +162,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bit, because a zip cannot carry one, so it wants a `chmod +x`. Both are in
   `docs/PLATFORMS.md`, next to the reason each is true.
 
+- **A `Needs you` strip: who is waiting for you, for how long, and what finished
+  while you were away** (N-WP21). Nazar has shouted about a waiting session since
+  the first release — an amber frame, an expanding ring, and a banner across the
+  top that outranks everything else on the page. What it never said is **which
+  one to answer first**. With three sessions waiting, the banner is three folder
+  names in whatever order they came back in, and the one that has been sitting on
+  a permission prompt for eleven minutes looks exactly like the one that started
+  waiting four seconds ago.
+
+  So there is now a badge in the top bar — `Needs you · 2`, with the longest wait
+  next to it — and a list behind a click, **longest wait first**. Every row says
+  the card's name, the folder it runs in, what it is waiting for (a permission
+  prompt, an input request, a sandbox request, an open dialog — in all six
+  languages) and how long it has been waiting; clicking one takes you to that
+  card, switching tab and scrolling the canvas to it, and in the desktop app
+  raises its terminal as well. If a session answers one question and immediately
+  asks another, its timer starts again: the number is how long *this* question
+  has gone unanswered, not how long that terminal has been unattended.
+
+  Under it, **Finished while you were away** — sessions whose work went quiet in
+  the last ten minutes, with how long the run took and, where the status-line
+  wrapper supplies them, its token totals and cost. It clears itself, and a
+  session that picks work up again leaves it at once.
+
+  Three things it deliberately does not do. It **never guesses**: there is no
+  *stuck* verdict, because "nothing has been written for a while" is an
+  inference, and a monitor that infers is one you stop believing the first time
+  it is wrong. It **remembers nothing**: how long each session has been waiting
+  is held for as long as the page is open and is written nowhere — a reload
+  starts the clocks again, which is the honest answer for a page that was not
+  there. And it **changes nothing on the canvas**: the frame, the ring and the
+  banner are exactly as they were, and this list is their index. The badge is
+  keyboard-reachable, the arrows walk the list, Escape closes it, and the count
+  is announced when it changes.
+
+- **The jump is offered only where it can actually work** (N-WP21). The desktop
+  app has told the canvas whether it can raise a terminal since the Windows
+  release, and the canvas was not listening. That cost nothing while Windows was
+  the only build; with macOS and Linux builds it meant a **Jump to terminal**
+  entry in every card menu whose one possible answer was *not available on this
+  platform yet*, and a double-click on a card that appeared to do nothing. The
+  entry is no longer drawn where the platform has no jump — the menu keeps its
+  rule that an item which can never work is worse than an item that is not there
+  — the double-click and <kbd>Enter</kbd> are an ordinary click there, and the
+  line in **About** about double-clicking a card goes with them.
+
 ### Changed
 
 - **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's

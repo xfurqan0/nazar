@@ -373,6 +373,21 @@ export interface CardMenuOptions {
    * never work is worse than one that is not there.
    */
   readonly onJump?: (sessionId: string) => void;
+  /**
+   * N-WP21: whether the shell hosting this page can *actually* jump.
+   *
+   * A different question from the first, and N-WP19a is what made it one: there
+   * are macOS and Linux bundles now, and `apps/desktop/src/jump.rs` is
+   * `cfg!(windows)`. That file's own doc comment says *the canvas asks
+   * `supported()` before offering the entry* — and until this option existed
+   * the canvas never did, so a mac user got a menu item whose only possible
+   * answer was "jumping to a terminal is not available on this platform yet".
+   *
+   * Asked when the menu opens rather than when it was built, because
+   * `shell_info` answers a moment after the page loads. Absent means yes, which
+   * leaves every caller that does not ask behaving exactly as it did.
+   */
+  readonly canJump?: () => boolean;
 }
 
 export class CardMenu {
@@ -406,7 +421,7 @@ export class CardMenu {
     // the picture, and a user who came for it should not have to read past a tab list to
     // find it. Double-clicking the card does the same thing; this is the discoverable
     // half of the pair, and the one a screen reader can reach.
-    if (this.options.onJump !== undefined) {
+    if (this.options.onJump !== undefined && this.options.canJump?.() !== false) {
       const jump = html('button', 'nz-menu__item nz-menu__item--jump');
       jump.type = 'button';
       jump.setAttribute('role', 'menuitem');

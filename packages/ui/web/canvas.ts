@@ -1579,7 +1579,12 @@ export class CanvasRenderer {
   }
 }
 
-/** A session the user has to answer. The loudest thing the canvas can say. */
-export function isWaiting(session: SessionView): boolean {
-  return session.status === 'waiting' || session.waitingFor !== undefined;
-}
+/**
+ * A session the user has to answer. The loudest thing the canvas can say.
+ *
+ * N-WP21 moved the predicate into `../src/activity.ts`, so the frame, the ring,
+ * the banner and the Needs-you strip all read **one** definition rather than
+ * three copies of one line that happened to agree. It is re-exported from here
+ * because this is where the canvas's callers already look for it.
+ */
+export { isWaiting } from '../src/activity.ts';

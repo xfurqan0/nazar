@@ -149,6 +149,7 @@ export {
   activityLabel,
   activityOf,
   agentActivity,
+  isWaiting,
   sessionActivity,
 } from './activity.js';
 export type {
@@ -159,7 +160,33 @@ export type {
   AgentActivityNode,
   SessionActivityLike,
   SessionActivityNode,
+  WaitingLike,
 } from './activity.js';
+
+/* N-WP21: who is waiting for you, for how long, and what just finished. */
+export {
+  FINISHED_WINDOW_MS,
+  NO_NEEDS_YOU,
+  finishedRows,
+  finishedTitle,
+  needsYouAnnouncement,
+  needsYouBadge,
+  needsYouEmpty,
+  needsYouTitle,
+  observeSessions,
+  waitingForLabel,
+  waitingRows,
+} from './needs-you.js';
+export type {
+  FinishedRow,
+  FinishedSince,
+  NeedsYouAgent,
+  NeedsYouBadge,
+  NeedsYouSession,
+  NeedsYouState,
+  WaitSince,
+  WaitingRow,
+} from './needs-you.js';
 
 export {
   unknownWord,

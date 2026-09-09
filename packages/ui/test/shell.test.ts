@@ -277,3 +277,36 @@ test('a session opened from history is refused before its pid is used', () => {
   // has started since. Raising a window for it would be raising the wrong one.
   assert.match(app, /const jumpToTerminal[\s\S]{0,200}if \(isFrozen\(\)\)/);
 });
+
+test('N-WP21: the canvas reads jumpSupported, and offers the jump only where it is true', () => {
+  /*
+   * `ShellInfo.jumpSupported` has been on the wire since WP8 and nothing read
+   * it. Harmless while Windows was the only bundle, and a bug the day N-WP19a
+   * shipped macOS and Linux ones: `jump.rs` is `cfg!(windows)` and its own doc
+   * comment says *the canvas asks `supported()` before offering the entry*.
+   *
+   * The behaviour is driven in `test/dom/jump-gate.test.ts`; this is the half
+   * that cannot be driven, because it lives in `app.ts`'s one big closure — the
+   * three places the flag has to reach.
+   */
+  const jumpRs = readFileSync(path.join(desktopDir, 'src', 'jump.rs'), 'utf8');
+  assert.match(jumpRs, /pub const fn supported\(\) -> bool \{\s*cfg!\(windows\)/);
+  assert.match(mainRs, /jump_supported: jump::supported\(\)/);
+  assert.match(shell, /readonly jumpSupported: boolean;/);
+
+  // 1. It is read out of `shell_info` and held.
+  assert.match(app, /jumpSupported = info\.jumpSupported;/);
+  // 2. The gesture itself refuses, after the browser has had its hint: a shell
+  //    that cannot jump is silent rather than apologising on every double-click.
+  assert.match(app, /if \(!jumpSupported\) return;/);
+  // 3. Both menus ask before they draw the entry.
+  assert.equal(
+    (app.match(/canJump: \(\) => jumpSupported,/g) ?? []).length,
+    2,
+    'the card menu and the Needs-you strip do not both ask',
+  );
+  assert.match(tabbar, /this\.options\.onJump !== undefined && this\.options\.canJump\?\.\(\) !== false/);
+  // And the sentence in About goes with it — a shell that cannot jump has no
+  // more use for "double-click a card" than a browser has.
+  assert.match(app, /shellAbout\.hidden = !jumpSupported;/);
+});

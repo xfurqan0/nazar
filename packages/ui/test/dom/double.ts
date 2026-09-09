@@ -30,8 +30,30 @@
 export interface FakeEvent {
   readonly type: string;
   readonly key?: string;
+  /**
+   * N-WP21: which element the event happened on. The Needs-you strip's arrow
+   * keys need it — "move focus off the row that has it" is a question about the
+   * target and about nothing else.
+   */
+  readonly target?: unknown;
   stopPropagation?: () => void;
   preventDefault?: () => void;
+}
+
+/**
+ * What `getBoundingClientRect()` answers.
+ *
+ * There is no layout engine here, so it is a plain writable object: a test that
+ * cares where a popover is anchored says where the anchor is, exactly as it
+ * says where the list is scrolled to.
+ */
+export interface FakeRect {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
+  width: number;
+  height: number;
 }
 
 type Listener = (event: FakeEvent) => void;
@@ -71,8 +93,29 @@ export class FakeElement {
 
   scrollHeight = 0;
 
+  /*
+   * N-WP21. A popover anchored under a button reads three more numbers and
+   * writes one property, and all four are the same kind of thing as the scroll
+   * numbers above: a test states them, because there is nothing here to measure
+   * them. `style` is a plain object rather than a `CSSStyleDeclaration`, which
+   * is also the one place the double is stricter than the browser — under
+   * `style-src 'self'` a style *attribute* is dropped silently, so the page
+   * writes through the CSSOM and this double only implements the CSSOM.
+   */
+  readonly style: Record<string, string> = {};
+
+  offsetWidth = 0;
+
+  offsetHeight = 0;
+
+  readonly rect: FakeRect = { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
+
   constructor(tag: string) {
     this.tag = tag;
+  }
+
+  getBoundingClientRect(): FakeRect {
+    return this.rect;
   }
 
   readonly classList = {
@@ -103,17 +146,53 @@ export class FakeElement {
     return this.children[0] ?? null;
   }
 
+  /*
+   * N-WP21. The element half of the same three questions. A list that keeps one
+   * node per row and *moves* the ones that are out of place — which is what the
+   * Needs-you strip and the usage panel both do rather than rebuilding — needs
+   * exactly these: where the list starts, what comes after a node, and how to
+   * put a node in front of another one.
+   */
+  get firstElementChild(): FakeElement | null {
+    return this.children[0] ?? null;
+  }
+
+  get nextElementSibling(): FakeElement | null {
+    const siblings = this.parent?.children ?? [];
+    return siblings[siblings.indexOf(this) + 1] ?? null;
+  }
+
+  get parentElement(): FakeElement | null {
+    return this.parent ?? null;
+  }
+
   append(...nodes: FakeElement[]): void {
     for (const node of nodes) {
+      node.parent?.removeChild(node);
       node.parent = this;
       this.children.push(node);
     }
+  }
+
+  /** `before === null` appends, exactly as the DOM's own does. */
+  insertBefore(node: FakeElement, before: FakeElement | null): FakeElement {
+    node.parent?.removeChild(node);
+    const at = before === null ? -1 : this.children.indexOf(before);
+    if (at < 0) this.children.push(node);
+    else this.children.splice(at, 0, node);
+    node.parent = this;
+    return node;
   }
 
   removeChild(node: FakeElement): void {
     const at = this.children.indexOf(node);
     if (at >= 0) this.children.splice(at, 1);
     node.parent = undefined;
+  }
+
+  /** Take this node out of whatever holds it. A no-op on a detached node. */
+  remove(): void {
+    this.parent?.removeChild(this);
   }
 
   setAttribute(name: string, value: string): void {
@@ -179,13 +258,24 @@ export class FakeElement {
   }
 }
 
-/** Put a `document` on `globalThis`. Idempotent, so every suite may call it. */
+/**
+ * Put a `document` — and, since N-WP21, a `window` — on `globalThis`.
+ * Idempotent, so every suite may call it.
+ *
+ * The `window` carries one number: how wide the viewport is, which a popover
+ * reads to keep itself on screen. Nothing else, and deliberately no
+ * `setTimeout`/`requestAnimationFrame`: Node has its own timers and a page
+ * module that reached for a scheduler through `window` would be reaching for
+ * behaviour this double has not thought about.
+ */
 export function install(): void {
-  const existing = (globalThis as { document?: unknown }).document;
-  if (existing !== undefined) return;
-  (globalThis as { document?: unknown }).document = {
-    createElement: (tag: string): FakeElement => new FakeElement(tag),
-  };
+  const globals = globalThis as { document?: unknown; window?: unknown };
+  if (globals.document === undefined) {
+    globals.document = {
+      createElement: (tag: string): FakeElement => new FakeElement(tag),
+    };
+  }
+  if (globals.window === undefined) globals.window = { innerWidth: 1280, innerHeight: 800 };
 }
 
 install();

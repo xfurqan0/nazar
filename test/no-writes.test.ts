@@ -246,6 +246,53 @@ test('the project-settings reader is read-only and reads one key', () => {
   }
 });
 
+/**
+ * Every key the canvas is allowed to keep in a browser (N-WP21).
+ *
+ * The disk half of "Nazar writes nothing" has been a gate since v1; the browser
+ * half was a promise in a README. It is a shorter list than it looks and every
+ * entry is the same kind of thing — *the user's own arrangement of the picture*:
+ * where the cards are, which tabs exist, the names and notes and colours they
+ * typed, the language they picked, whether the usage panel is open, whether
+ * they want task text. Nothing derived from a session is in here, and nothing
+ * here is ever sent anywhere.
+ *
+ * The list is pinned rather than counted so that a diff has to say which key
+ * was added and why. N-WP21 in particular adds none: the Needs-you strip holds
+ * how long each session has been waiting **in memory**, and a reload starts
+ * those clocks again, which is honest about what a fresh page can know.
+ */
+const STORAGE_KEYS = [
+  'nazar.colours.v1',
+  'nazar.layout.v1',
+  'nazar.locale.v1',
+  'nazar.names.v1',
+  'nazar.notes.v1',
+  'nazar.palette',
+  'nazar.tabs.v1',
+  'nazar.taskText.v1',
+  'nazar.theme',
+  'nazar.usage.v1',
+];
+
+test('the browser keeps exactly the keys it is allowed to keep', () => {
+  const found = new Set<string>();
+  for (const file of files) {
+    if (!file.name.startsWith('packages/ui/')) continue;
+    for (const match of file.text.matchAll(/'(nazar\.[\w.]+)'/g)) {
+      const key = match[1]!;
+      // `nazar.mjs` is the launcher's own file name, not a storage key.
+      if (key.endsWith('.mjs')) continue;
+      found.add(key);
+    }
+  }
+  assert.deepEqual(
+    [...found].sort(),
+    STORAGE_KEYS,
+    'the canvas gained or lost a browser storage key — say which, and why, in the diff',
+  );
+});
+
 test('the gate bites', () => {
   assert.deepEqual(fsBindings("import { writeFile } from 'node:fs/promises';"), ['writeFile']);
   assert.equal(READ_ONLY_FS.has('writeFile'), false);

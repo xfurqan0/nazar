@@ -142,6 +142,7 @@ import {
 import { ColourSettings } from './colours.ts';
 import { html, setAttr, setClass, setText } from './dom.ts';
 import { HistoryPanel, httpTransport, type HistoryTransport } from './history.ts';
+import { NeedsYouStrip } from './needs-you.ts';
 import { NotesLayer } from './notes.ts';
 import { ProjectsPanel, SessionList, type ProjectView, type SessionRow } from './projects.ts';
 import { applyStatic, fillLanguagePicker } from './lang.ts';
@@ -676,6 +677,19 @@ function start(): void {
   const usageClose = element<HTMLButtonElement>('usage-close');
   const usageSourceNode = element<HTMLSpanElement>('usage-source');
   const quotaSource = element<HTMLSpanElement>('quota-source');
+  // N-WP21: the Needs-you badge, its live region, and the list behind it.
+  const needsYouButton = element<HTMLButtonElement>('needs-you');
+  const needsYouCount = element<HTMLSpanElement>('needs-you-count');
+  const needsYouLongest = element<HTMLSpanElement>('needs-you-longest');
+  const needsYouLive = element<HTMLParagraphElement>('needs-you-live');
+  const needsYouRoot = element<HTMLElement>('needs-you-panel');
+  const needsYouTitleNode = element<HTMLHeadingElement>('needs-you-title');
+  const needsYouList = element<HTMLElement>('needs-you-list');
+  const needsYouEmptyNode = element<HTMLParagraphElement>('needs-you-empty');
+  const needsYouClose = element<HTMLButtonElement>('needs-you-close');
+  const needsYouFinished = element<HTMLElement>('needs-you-finished');
+  const needsYouFinishedToggle = element<HTMLButtonElement>('needs-you-finished-toggle');
+  const needsYouFinishedList = element<HTMLElement>('needs-you-finished-list');
   const themeGroup = element<HTMLElement>('theme-toggle');
   const paletteRoot = element<HTMLElement>('palette');
   const coloursRoot = element<HTMLElement>('colours');
@@ -720,6 +734,24 @@ function start(): void {
   // greyed out, or drawn and then refused.
   const shell = Shell.detect();
 
+  /**
+   * N-WP21: whether this shell can jump at all.
+   *
+   * `ShellInfo.jumpSupported` has been on the wire since WP8 and nothing read
+   * it. That was harmless while Windows was the only bundle and became a bug
+   * the day N-WP19a shipped macOS and Linux ones: `apps/desktop/src/jump.rs` is
+   * `cfg!(windows)`, its own doc comment says *the canvas asks `supported()`
+   * before offering the entry*, and the canvas never asked — so a mac user got
+   * a **Jump to terminal** menu item whose only possible answer was "not available
+   * on this platform yet", plus a double-click gesture that did nothing visible.
+   *
+   * It starts `true` inside the shell and is corrected by the first
+   * `shell_info`. That direction on purpose: a shell that fails to answer keeps
+   * the behaviour every Windows machine has today, and the window in which a
+   * mac could be wrong is one round trip at start-up.
+   */
+  let jumpSupported = shell !== undefined;
+
   /** One line at the foot of the canvas, gone again a few seconds later. */
   let hintTimer = 0;
   const showHint = (text: string): void => {
@@ -749,6 +781,11 @@ function start(): void {
       showHint(`${jumpNeedsShell()} — ${t('hint.inABrowser')}`);
       return;
     }
+    // N-WP21. A shell that cannot jump does nothing, silently: the menu entry
+    // is not drawn either, and a double-click is the same gesture as a click as
+    // far as this machine is concerned. A hint would fire on every double-click
+    // of a card to repeat a fact about the platform that does not change.
+    if (!jumpSupported) return;
     void shell.jump(session.pid).then((outcome) => showHint(jumpHint(outcome)));
   };
 
@@ -956,7 +993,10 @@ function start(): void {
   if (shell !== undefined) {
     shellGroup.hidden = false;
     // The one sentence about double-clicking a card belongs with the shell too:
-    // in a browser there is no terminal to raise.
+    // in a browser there is no terminal to raise. N-WP21 gave it a second
+    // condition — a shell that cannot jump has no more use for the sentence
+    // than a browser does — and it is hidden again below if `shell_info` says
+    // so, which is a frame later than this line and invisible either way.
     shellAbout.hidden = false;
     const paintAutostart = (on: boolean, platform: string): void => {
       // The label names the machine, because "start with Windows" is a sentence
@@ -973,7 +1013,14 @@ function start(): void {
     let autostartOn = false;
     let platform = 'windows';
     void shell.info().then((info) => {
-      if (info !== undefined) platform = info.platform;
+      if (info !== undefined) {
+        platform = info.platform;
+        // N-WP21: the field WP8 put on the wire and nobody read. A shell that
+        // says it cannot jump loses the menu entry, the strip's jump and the
+        // sentence in About; the gesture itself becomes an ordinary click.
+        jumpSupported = info.jumpSupported;
+        shellAbout.hidden = !jumpSupported;
+      }
       return shell.autostart();
     }).then((enabled) => {
       autostartOn = enabled ?? false;
@@ -1057,6 +1104,38 @@ function start(): void {
   const usageWanted = params.get('usage') === '1' || readUsageOpen(storage);
   let usageRestored = false;
 
+  /*
+   * N-WP21: the Needs-you strip.
+   *
+   * Same shape as the usage popover and, unlike it, **nothing is remembered**:
+   * there is no `open` to restore because there is no key to restore it from.
+   * How long each session has been waiting lives in the strip's own memory for
+   * as long as the page is up, and a reload starts those clocks again — which
+   * is the honest answer, because the page genuinely does not know what
+   * happened before it was opened.
+   */
+  const needsYou = new NeedsYouStrip({
+    button: needsYouButton,
+    count: needsYouCount,
+    longest: needsYouLongest,
+    live: needsYouLive,
+    panel: needsYouRoot,
+    title: needsYouTitleNode,
+    list: needsYouList,
+    empty: needsYouEmptyNode,
+    finishedGroup: needsYouFinished,
+    finishedToggle: needsYouFinishedToggle,
+    finishedList: needsYouFinishedList,
+    names: () => names.names,
+    onGo: (sessionId) => focusSession(sessionId),
+    // The jump exists only where it can be answered, exactly as the card menu's
+    // own entry does — no shell, or a shell whose platform has no jump, and the
+    // row takes you to the card and stops there.
+    canJump: () => jumpSupported,
+    ...(shell === undefined ? {} : { onJump: (sessionId: string) => jumpToTerminal(sessionId) }),
+  });
+  needsYouClose.addEventListener('click', () => needsYou.set(false, true));
+
   let state: StateSnapshot = {
     generatedAt: Date.now(),
     sessions: [],
@@ -1071,6 +1150,19 @@ function start(): void {
   /** What the last frame measured and drew. Read by the resize gesture. */
   let drawnMetrics: ReadonlyMap<string, CardMetric> = new Map();
   let drawnCards: readonly SessionView[] = [];
+  /**
+   * N-WP21: where the last frame put each card, so a row of the Needs-you list
+   * can bring one into view. Held for the same reason the metrics are: it is
+   * already computed, and recomputing it would be recomputing the whole layout.
+   */
+  let drawnPlacements: ReadonlyMap<string, Placement> = new Map();
+  /**
+   * A session the canvas has been asked to bring into view, honoured at the end
+   * of the next frame. It is a *pending* thing and not a call because the card
+   * may not be on this tab yet: switching tabs is a redraw, and the placement to
+   * centre on only exists once that redraw has happened.
+   */
+  let pendingFocus: string | undefined;
 
   /**
    * The canvas draws one of two things. `live` is the SSE stream; `frozen` is
@@ -1561,8 +1653,13 @@ function start(): void {
           : t('hint.followsTab', { name: tab.name }),
       );
     },
-    // Only in the shell. In a browser the entry is not drawn, so the menu has no dead
-    // item in it and the double-click hint is the only place the feature is mentioned.
+    // Only in the shell, and — N-WP21 — only in a shell that can actually jump.
+    // In a browser the entry is not drawn, so the menu has no dead item in it
+    // and the double-click hint is the only place the feature is mentioned; on
+    // a mac or Linux bundle it is not drawn either, because `jump.rs` is
+    // Windows-only and an item whose one answer is "not on this platform" is
+    // exactly the dead item that rule exists to avoid.
+    canJump: () => jumpSupported,
     ...(shell === undefined ? {} : { onJump: (sessionId: string) => jumpToTerminal(sessionId) }),
   });
 
@@ -1743,6 +1840,7 @@ function start(): void {
     // recomputing under the pointer.
     drawnMetrics = metrics;
     drawnCards = sessions;
+    drawnPlacements = placements;
 
     // The banner is about the whole machine, not about the tab you happen to be
     // looking at: a session waiting for a permission prompt on another tab is
@@ -1770,6 +1868,16 @@ function start(): void {
       usageRestored = true;
       usage.set(usageWanted, false);
     }
+
+    /*
+     * N-WP21. The strip reads `state` and never `drawn()`, for the reason the
+     * usage bead does: a session waiting for a permission prompt is waiting for
+     * you whether you are looking at another tab or at a session that finished
+     * last Tuesday. It is also the only place on the page whose clocks have to
+     * keep running while a frozen tree is on screen — a wait that paused
+     * because you opened the history drawer would be a wait that lies.
+     */
+    needsYou.render(state.sessions, demo ? state.generatedAt : Date.now(), state.generatedAt);
 
     // WP4e. Notes belong to a tab of the live canvas. A frozen tree is a read of
     // the past and has no tab, so the layer goes away rather than showing the
@@ -1850,6 +1958,14 @@ function start(): void {
       view = { ...opening, x: opening.x + area.left };
     }
     applyView();
+
+    // N-WP21. After the view, because centring on a card is a view change and
+    // doing it before `applyView` would be a frame the eye sees flick.
+    if (pendingFocus !== undefined) {
+      const wanted = pendingFocus;
+      pendingFocus = undefined;
+      revealCard(wanted);
+    }
   };
 
   const schedule = (): void => {
@@ -1887,6 +2003,62 @@ function start(): void {
     const framed = fitToBox(content, area, CANVAS_MARGIN);
     view = { ...framed, x: framed.x + area.left };
     applyView();
+  };
+
+  /* ---- take me to that card (N-WP21) ------------------------------- */
+
+  /** The `<g>` a session is drawn as, if this frame drew one. */
+  const cardNode = (sessionId: string): SVGGElement | undefined => {
+    for (const node of viewportGroup.querySelectorAll<SVGGElement>('.nz-session')) {
+      if (node.dataset['sessionId'] === sessionId) return node;
+    }
+    return undefined;
+  };
+
+  /**
+   * Put a card in the middle of what is on screen, and give it the keyboard.
+   *
+   * The zoom is left exactly as the user set it: a row of a list is not a
+   * reason to reframe somebody's canvas, and *Fit* is one key away for anybody
+   * who wants that. A session with no placement this frame is one that is not
+   * on the visible tab, which `focusSession` has already dealt with — so
+   * silence here rather than a guess at where it might be.
+   */
+  const revealCard = (sessionId: string): void => {
+    const placement = drawnPlacements.get(sessionId);
+    if (placement === undefined) return;
+    const area = viewportBox();
+    view = {
+      ...view,
+      x: area.left + area.width / 2 - (placement.x + placement.width / 2) * view.scale,
+      y: area.height / 2 - (placement.y + placement.height / 2) * view.scale,
+    };
+    applyView();
+    // The card is `tabindex="0"`, so this is a real keyboard stop and Enter on
+    // it is already the jump. Focus is what makes the row a *navigation* rather
+    // than a scroll: whoever arrived by keyboard is now standing on the card.
+    cardNode(sessionId)?.focus();
+  };
+
+  /**
+   * Take me to a session: the whole gesture behind the `→` on a Needs-you row.
+   *
+   * Four steps, and each of them is a thing that would otherwise leave the user
+   * looking at the wrong screen. Leave a frozen tree, because a past session is
+   * not where a live one is waiting. Switch to the tab the card is on, because
+   * a session lives on exactly one and it need not be the one showing. Centre
+   * on it and focus it, once the frame that places it has run. The fourth step
+   * — raising the terminal — is the strip's own `onJump`, which exists only
+   * inside the desktop shell.
+   */
+  const focusSession = (sessionId: string): void => {
+    backToLive();
+    const session = state.sessions.find((one) => one.id === sessionId);
+    if (session === undefined) return;
+    const tab = tabOf(tabs, session);
+    if (tab !== tabs.active) goToTab(tab);
+    pendingFocus = sessionId;
+    schedule();
   };
 
   arrangeButton.addEventListener('click', arrange);
@@ -2259,6 +2431,9 @@ function start(): void {
       linkMenu.close();
     }
     if (usage.isOpen && node instanceof Node && !usage.contains(node)) usage.set(false, false);
+    if (needsYou.isOpen && node instanceof Node && !needsYou.contains(node)) {
+      needsYou.set(false, false);
+    }
     if (node instanceof Element && node.closest('.nz-note') === null) notesLayer.closeMenus();
     if (cardMenu.openFor === undefined) return;
     if (node instanceof Node && cardMenuRoot.contains(node)) return;
@@ -2674,6 +2849,7 @@ function start(): void {
     colours.retranslate();
     colours.refresh();
     usage.retranslate();
+    needsYou.retranslate();
     panel.retranslate();
     // Both keep an element per thing they draw; dropping the cache is how the
     // words inside them are rebuilt, and the next frame does the rebuilding.
@@ -2718,6 +2894,12 @@ function start(): void {
       }
       if (usage.isOpen) {
         usage.set(false, true);
+        return;
+      }
+      // N-WP21: the fifth thing Escape can close, and it takes its turn in the
+      // same order — a popover before a drawer, a drawer before the sidebar.
+      if (needsYou.isOpen) {
+        needsYou.set(false, true);
         return;
       }
       if (panel.isOpen) {

@@ -779,3 +779,88 @@ test('N-WP12: every class the drawer and the panel set has a rule', () => {
   assert.equal(/#[0-9a-f]{3,8}\b/i.test(switchRules), false, 'a switch colour is hard-coded');
   assert.equal(/\brgba?\(/.test(switchRules), false, 'a switch colour is hard-coded');
 });
+
+/* ------------------------------------------------------------------ *
+ * N-WP21: the Needs-you strip
+ * ------------------------------------------------------------------ */
+
+test('N-WP21: the badge, its live region and its panel are all in the page', () => {
+  for (const id of [
+    'needs-you',
+    'needs-you-count',
+    'needs-you-longest',
+    'needs-you-live',
+    'needs-you-panel',
+    'needs-you-title',
+    'needs-you-list',
+    'needs-you-empty',
+    'needs-you-close',
+    'needs-you-finished',
+    'needs-you-finished-toggle',
+    'needs-you-finished-list',
+  ]) {
+    assert.ok(html.includes(`id="${id}"`), `#${id} is missing from index.html`);
+    assert.ok(app.includes(`'${id}'`), `#${id} is in the page but nothing looks it up`);
+  }
+});
+
+test('N-WP21: the badge is in the top bar, hidden in markup, and announced', () => {
+  const bar = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
+  assert.ok(bar.includes('id="needs-you"'), 'the badge is not in the top bar');
+  // Hidden in markup rather than by a script that might not run: a canvas with
+  // nobody waiting must never flash `Needs you` on its way to the first frame.
+  assert.match(html, /id="needs-you"[\s\S]{0,200}hidden/);
+  assert.match(html, /id="needs-you"[\s\S]{0,200}aria-expanded="false"/);
+  assert.match(html, /id="needs-you"[\s\S]{0,200}aria-controls="needs-you-panel"/);
+  // The live region is never hidden — a hidden element announces nothing, and
+  // the sentence that matters most is the one that arrives as the badge goes.
+  assert.match(html, /id="needs-you-live"[\s\S]{0,120}aria-live="polite"/);
+  assert.equal(/id="needs-you-live"[^>]*hidden/.test(html), false);
+  assert.match(html, /id="needs-you-panel"[\s\S]{0,200}role="dialog"/);
+  assert.match(html, /id="needs-you-panel"[\s\S]{0,200}hidden/);
+});
+
+test('N-WP21: every class the strip sets has a rule', () => {
+  for (const marker of [
+    '.nz-needs__bead',
+    '.nz-needs__bead[hidden]',
+    '.nz-needs__bead.is-waiting',
+    '.nz-needs__count',
+    '.nz-needs__longest',
+    '.nz-offscreen',
+    '.nz-needs {',
+    '.nz-needs[hidden]',
+    '.nz-needs__head',
+    '.nz-needs__title',
+    '.nz-needs__list',
+    '.nz-needs__empty',
+    '.nz-needs__group',
+    '.nz-needs__heading',
+    '.nz-needs__row',
+    '.nz-needs__text',
+    '.nz-needs__name',
+    '.nz-needs__folder',
+    '.nz-needs__what',
+    '.nz-needs__since',
+    '.nz-needs__go',
+  ]) {
+    assert.ok(css.includes(marker), `${marker} is set somewhere but styled nowhere`);
+  }
+});
+
+test('N-WP21: the strip remembers nothing, and the canvas is left alone', () => {
+  const strip = readFileSync(path.join(webDir, 'needs-you.ts'), 'utf8');
+  // The whole persistence story, as a gate: no storage of any kind, and no key
+  // to invent one with. How long a session has been waiting is in memory.
+  assert.equal(strip.includes('localStorage'), false, 'the strip invented a storage key');
+  assert.equal(strip.includes('nazar.'), false);
+  assert.equal(strip.includes('Storage'), false);
+  // And the canvas card is untouched: the amber frame and the banner stay
+  // exactly as they were, and this list is their index rather than a rival.
+  assert.match(canvas, /export \{ isWaiting \} from '\.\.\/src\/activity\.ts';/);
+  assert.equal(
+    (app.match(/isWaiting\(/g) ?? []).length,
+    1,
+    'the page decides "waiting" in more than one place again',
+  );
+});

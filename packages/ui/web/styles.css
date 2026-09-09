@@ -1122,6 +1122,274 @@ body {
   font-size: var(--nz-size-xs);
 }
 
+/* ------------------------------------------------------ needs you (N-WP21) */
+
+/*
+ * The badge and the list behind it. Same shape as the usage bead — a control in
+ * the bar that is `display: none` when it has nothing to say, and a popover
+ * anchored under it — with one difference that matters: **this one is amber**,
+ * in the banner's own three colours, because it is about the same thing the
+ * banner is about and two different ambers for one state would read as two
+ * states.
+ *
+ * The badge carries a number as well as a colour, for the reason every severity
+ * on this page does: a colour on its own is lost on a greyscale screenshot and
+ * on a reader who cannot separate amber from red.
+ */
+.nz-needs__bead {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--nz-weight-medium);
+  cursor: pointer;
+}
+
+.nz-needs__bead[hidden] {
+  display: none;
+}
+
+.nz-needs__bead.is-waiting {
+  background: var(--nz-banner-bg);
+  border-color: var(--nz-banner-border);
+  color: var(--nz-banner-text);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-needs__bead:hover,
+.nz-needs__bead[aria-expanded='true'] {
+  border-color: var(--nz-banner-border);
+  color: var(--nz-banner-text);
+}
+
+/*
+ * `Needs you · 2`. It carries the number as well as the colour, because a
+ * severity that is only a colour is lost on a greyscale screenshot and on a
+ * reader who cannot separate amber from red — the same rule the usage bead's
+ * percentage follows.
+ */
+.nz-needs__count {
+  white-space: nowrap;
+}
+
+.nz-needs__longest {
+  color: inherit;
+  opacity: 0.85;
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-needs__longest:empty {
+  display: none;
+}
+
+/*
+ * The live region. Off screen rather than `hidden`: a hidden element is removed
+ * from the accessibility tree and announces nothing, and the announcement this
+ * page most needs is the one that arrives when the badge goes away.
+ */
+.nz-offscreen {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.nz-needs {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 24;
+  width: min(420px, calc(100vw - 16px));
+  max-height: min(70vh, 620px);
+  overflow-y: auto;
+  padding: 12px 14px 10px;
+  background: var(--nz-panel);
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 32px var(--nz-shadow);
+}
+
+.nz-needs[hidden] {
+  display: none;
+}
+
+.nz-needs__head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.nz-needs__title {
+  margin: 0;
+  font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+}
+
+.nz-needs__head .nz-button {
+  margin-left: auto;
+}
+
+.nz-needs__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.nz-needs__list[hidden] {
+  display: none;
+}
+
+.nz-needs__empty {
+  margin: 10px 0 4px;
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
+  line-height: 1.45;
+}
+
+.nz-needs__empty[hidden] {
+  display: none;
+}
+
+.nz-needs__group {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--nz-panel-border);
+}
+
+.nz-needs__group[hidden] {
+  display: none;
+}
+
+/*
+ * The second cluster's heading is a button, because it folds. The triangle is
+ * drawn from `aria-expanded` rather than from a class, so the state a screen
+ * reader is told and the state the eye is shown come from one attribute.
+ */
+.nz-needs__heading {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-medium);
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+}
+
+.nz-needs__heading::before {
+  content: '▾';
+  font-size: 10px;
+  line-height: 1;
+}
+
+.nz-needs__heading[aria-expanded='false']::before {
+  content: '▸';
+}
+
+/*
+ * A row is one button and not a row containing one: the whole area activates,
+ * which is the target size the pointer wants and the single tab stop the
+ * keyboard wants. The arrows walk between them; see `web/needs-you.ts`.
+ */
+.nz-needs__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--nz-text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.nz-needs__row:hover,
+.nz-needs__row:focus-visible {
+  border-color: var(--nz-panel-border);
+  background: var(--nz-node-header);
+}
+
+.nz-needs__text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.nz-needs__name {
+  font-weight: var(--nz-weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nz-needs__folder {
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nz-needs__what {
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-xs);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nz-needs__what:empty {
+  display: none;
+}
+
+/*
+ * How long, on the trailing edge and in tabular figures, so a column of them
+ * lines up and the longest wait is the one at the top of a column you can read
+ * down rather than a number you have to compare.
+ */
+.nz-needs__since {
+  flex: 0 0 auto;
+  color: var(--nz-banner-text);
+  font-size: var(--nz-size-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.nz-needs__group .nz-needs__since {
+  color: var(--nz-text-faint);
+}
+
+.nz-needs__go {
+  flex: 0 0 auto;
+  color: var(--nz-text-faint);
+}
+
 .nz-quota__item {
   display: flex;
   align-items: center;

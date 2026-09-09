@@ -32,6 +32,34 @@
       </button>
 
       <!--
+        N-WP21: the Needs-you badge. First control after the menu, because it is
+        the one thing on this page you can act on: `Needs you · 2`, with the
+        longest wait beside it. Hidden outright when nobody is waiting and
+        nothing has just finished — there is no `Needs you · 0`, for the same
+        reason there is no empty usage bead. `web/needs-you.ts` fills it.
+      -->
+      <button
+        id="needs-you"
+        type="button"
+        class="nz-needs__bead"
+        aria-expanded="false"
+        aria-controls="needs-you-panel"
+        aria-haspopup="dialog"
+        hidden
+      >
+        <span id="needs-you-count" class="nz-needs__count"></span>
+        <span id="needs-you-longest" class="nz-needs__longest"></span>
+      </button>
+
+      <!--
+        The count, for a screen reader. It is a region of its own and it is
+        never hidden, because the sentence somebody most wants is the one that
+        arrives when the badge goes away — and a hidden element announces
+        nothing.
+      -->
+      <p id="needs-you-live" class="nz-offscreen" role="status" aria-live="polite"></p>
+
+      <!--
         Usage limits, collapsed to one bead (WP4e). It sits at the leading edge
         of the bar, directly above the tab bar, and it is hidden outright on a
         machine with no source — there is no empty bead, and no window is ever
@@ -150,6 +178,41 @@
       <p class="nz-usage__foot" data-nz-rich="usage.source">
         <span data-nz-slot="source" id="usage-source"></span>
       </p>
+    </div>
+
+    <!--
+      N-WP21: the Needs-you list, behind the badge in the bar.
+
+      Two clusters and no third: who is waiting for you, longest first, and what
+      finished while you were away. Every row is a button whose whole area
+      activates, so the arrows walk the list and Enter takes you to the card.
+      The panel adds no `localStorage` key of any kind — how long a session has
+      been waiting is held in memory for as long as the page is open, and a
+      reload starts the clocks again, which is honest about what the page knows.
+    -->
+    <div
+      id="needs-you-panel"
+      class="nz-needs"
+      role="dialog"
+      aria-labelledby="needs-you-title"
+      hidden
+    >
+      <div class="nz-needs__head">
+        <h2 id="needs-you-title" class="nz-needs__title"></h2>
+        <button id="needs-you-close" type="button" class="nz-button" data-nz-t="usage.close"></button>
+      </div>
+      <div id="needs-you-list" class="nz-needs__list"></div>
+      <p id="needs-you-empty" class="nz-needs__empty" hidden></p>
+      <section id="needs-you-finished" class="nz-needs__group" hidden>
+        <button
+          id="needs-you-finished-toggle"
+          type="button"
+          class="nz-needs__heading"
+          aria-expanded="true"
+          aria-controls="needs-you-finished-list"
+        ></button>
+        <div id="needs-you-finished-list" class="nz-needs__list"></div>
+      </section>
     </div>
 
     <main class="nz-main">
