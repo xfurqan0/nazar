@@ -9,6 +9,83 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **What the canvas shows is true: pruning, dead sessions, history paging and
+  races, subagent totals, same-size rewrites** (N-WP20). An independent review
+  of `4827ca1` produced six reproducible findings, and they are one bug wearing
+  six coats: *the screen was confident about something it had not checked*.
+
+  - **A machine with more than 200 past sessions lost the customisations of
+    every session past the 200th.** On the first frame the canvas asks the
+    transcript store what it still has and forgets the rest — the card position,
+    the card size, the tab a session was moved to, and the name typed on it. It
+    asked with `history.list(200)`, and treated one page as the whole store. So
+    on a machine with 201 transcripts, the 201st was pruned as *gone* while
+    sitting openable in the drawer two clicks away. The question now goes to a
+    new unpaged route, **`GET /api/history/ids`**, which answers with session ids
+    and nothing else; and if that request fails, **nothing is pruned at all** and
+    the next frame tries again. Forgetting nothing is recoverable. Forgetting the
+    wrong thing is not.
+  - **A session that had ended came back, every few seconds, forever.** A crash
+    leaves `~/.claude/sessions/<pid>.json` behind. The registry probed the pid,
+    found nothing, held the session at `unknown` for one liveness gate and
+    dropped it — and dropped the record of *having* dropped it at the same
+    moment, so the next scan of the same untouched file added it straight back:
+    `1 → 0 → 1 → 0`, for as long as the file sat there. The verdict is now
+    remembered against the **identity of the file it was made about**, so a
+    leftover stays gone while a file that actually changes gets a fresh hearing
+    — which is what keeps a **reused pid** from being buried forever.
+  - **The history drawer could not reach past its own first page.** It asked for
+    200 rows and stopped, on a store the server was already reporting a
+    `nextOffset` for. It printed *200 of 1 340* and offered no route to the other
+    1 140. There is now a **load more** button under the list, in all six
+    languages and counting what is left, and reaching the end of the list loads
+    the next page on its own. Pages are appended, so a project split across a
+    page boundary is one heading and not two.
+  - **Clicking one past session and then another showed whichever finished
+    last.** A transcript can take a second to parse, so selecting A and then B
+    left two requests in flight and drew whichever the disk happened to return
+    second — with the *other* row marked as the selected one. Worse, an answer
+    arriving after the drawer was closed re-opened it onto a frozen tree whose
+    back button no longer led anywhere. Every selection now carries a sequence
+    number, closing the drawer invalidates whatever is in flight, and a stale
+    answer is dropped rather than drawn.
+  - **A session's token total ignored its subagents changing.** The headline
+    number on a past session is `treeTokens` — the session **plus** every
+    subagent under it — but the parse cache was keyed on the parent transcript
+    alone. Append one line to a child and the same scanner went on reporting the
+    total from before it, while a freshly built one over the same directory
+    reported the new one: 11 against 31, one question and two answers. The key
+    now includes the shape of the `subagents/` directory. Still a `readdir` and
+    a `stat` each; still never an `open`.
+  - **A transcript replaced by a file of exactly the same length was never
+    read.** The tailer's only rule for *this is not the file I had* was that it
+    had shrunk, so a rotation landing on the same byte count left it reading at
+    an offset into a file that no longer existed — silently, and for good. It now
+    tracks the file's identity as well (`ino` and `birthtimeMs`, falling back to
+    a hash of a fixed window at the head where the platform's inode cannot be
+    trusted), and appended bytes deliberately do not move it.
+
+- **An empty canvas says why it is empty, and what to do about it** (N-WP20).
+  The first five minutes of Nazar, on a machine that is not already running
+  Claude Code, were a blank rectangle and the words *no sessions found* — with
+  one piece of advice, *start `claude` in a terminal*, which is correct for
+  exactly one of the three ways the canvas can be empty. `nazar doctor` has
+  always been able to tell them apart, so the server now sends the same verdict
+  and the page shows it: **the sessions directory does not exist** (check
+  `CLAUDE_CONFIG_DIR`), **there is no live session right now** (start one), or
+  **the session files are all leftovers from runs that ended**. Two quieter notes
+  ride under it when they are true and never as the reason: `claude agents` not
+  answering, and the status-line wrapper not being installed — the second being
+  why cost and context stay unknown rather than why the canvas is empty.
+  All of it comes from the catalogues, so it is in all six languages.
+
+- **A disconnected canvas says how old what it is showing is.** When the event
+  stream drops, the canvas deliberately keeps the last snapshot on screen —
+  blanking it would throw away the only thing left that is true — but the top bar
+  said only *disconnected · retrying*, which left a stale reading looking exactly
+  like a live one. It now reads **disconnected · last data 12s ago**, and the
+  number keeps moving.
+
 - **`nazar doctor` names the shell instead of blaming a turn that has not
   happened** (T-WP8). On Windows Claude Code runs `statusLine.command` through
   Git Bash, where a backslash outside quotes is the escape character — so a

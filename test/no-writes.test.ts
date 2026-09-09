@@ -168,7 +168,19 @@ test('the one file handle Nazar opens is opened read-only', () => {
       );
     }
   }
-  assert.equal(opens, 1, `expected exactly one fs.open call, found ${opens}`);
+  /*
+   * The gate is the `'r'` asserted above: *every* call, wherever it is, opens
+   * read-only. This count is the second half of it — a number small enough that
+   * a new file handle has to be a deliberate edit to this line rather than
+   * something that slips in among two hundred.
+   *
+   * N-WP20 took it from one to two. `TranscriptTailer` now identifies a file by
+   * hashing a fixed window at its head when the platform gives no usable inode,
+   * and reading those bytes is a second `open(this.file, 'r')`. Both calls are
+   * in `transcript-tailer.ts` and both are read-only, which is the property
+   * this file exists to hold.
+   */
+  assert.equal(opens, 2, `expected exactly two fs.open calls, found ${opens}`);
 });
 
 /**

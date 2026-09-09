@@ -497,6 +497,23 @@
           <p id="empty-hint" class="nz-empty__hint" data-nz-rich="empty.hint">
             <code data-nz-slot="command">claude</code>
           </p>
+          <!--
+            N-WP20. Why the canvas is empty, and the one thing to do about it.
+            `nazar doctor` could always answer this; the page could not, so
+            somebody's first five minutes were a blank rectangle and the words
+            "no sessions found". Both lines are written by `app.ts` from the
+            catalogues and from `state.empty`, and both stay hidden whenever
+            there is something to draw — and in the demo, which has no
+            diagnosis to show.
+          -->
+          <p id="empty-why" class="nz-empty__hint" hidden></p>
+          <p id="empty-next" class="nz-empty__hint" hidden></p>
+          <!--
+            Two asides that are never themselves the reason: the second liveness
+            source did not answer, and the status-line wrapper is not installed
+            so cost and context will be missing once something does appear.
+          -->
+          <p id="empty-note" class="nz-empty__note" hidden></p>
           <!-- An empty tab is not an empty machine, so it says something else. -->
           <p id="empty-tab-hint" class="nz-empty__hint" data-nz-rich="empty.tabHint" hidden>
             <code data-nz-slot="menu">⋯</code>

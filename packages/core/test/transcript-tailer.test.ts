@@ -5,7 +5,7 @@
  * never opened here, and nothing under `~/.claude` is written at any point.
  */
 import assert from 'node:assert/strict';
-import { appendFile, mkdtemp, rm, truncate, writeFile } from 'node:fs/promises';
+import { appendFile, mkdtemp, rename, rm, truncate, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
@@ -164,4 +164,89 @@ test('a file that grows past one chunk is still read in a single pass', async (t
   assert.equal(result.lines.length, 500);
   assert.equal(result.bytesRead, Buffer.byteLength(body));
   assert.equal(result.lines[499], '{"n":499}');
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP20: a different file of the same size
+ * ------------------------------------------------------------------ */
+
+test('N-WP20: a same-size rename-and-replace is read, and reported as a restart', async (t) => {
+  /*
+   * The only rule was `size < offset`, so "the file did not grow" and "the file
+   * was replaced by another one exactly as long" were the same observation. A
+   * log rotation that lands on the same byte count — which is not exotic: these
+   * are fixed-shape JSONL records — left the tailer sitting at an offset into a
+   * file that no longer existed, reading nothing, reporting nothing, and
+   * silently never showing another line from that session again.
+   */
+  const dir = await tempDir();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'rotate.jsonl');
+
+  await writeFile(file, '{"n":1}\n', 'utf8');
+  const tailer = new TranscriptTailer(file);
+  const before = await tailer.read();
+  assert.deepEqual(before.lines, ['{"n":1}']);
+
+  // Rotate: the old file is moved aside and a new one of *exactly* the same
+  // length takes its name.
+  await rename(file, path.join(dir, 'rotate.1.jsonl'));
+  await writeFile(file, '{"n":2}\n', 'utf8');
+
+  const after = await tailer.read();
+  assert.equal(after.size, before.size, 'the two files really are the same length');
+  assert.equal(after.restarted, true, 'the caller is told to throw its derived state away');
+  assert.deepEqual(after.lines, ['{"n":2}'], 'and the new content is actually read');
+  assert.equal(tailer.restartCount, 1);
+});
+
+test('N-WP20: appending is never mistaken for a replacement', async (t) => {
+  /*
+   * The failure mode a file-identity check invites is the opposite one: a
+   * signature that moves when the file is merely written to would report a
+   * rotation on every poll and re-read the whole transcript each time — 9 MB
+   * every two seconds, for the one thing this file exists never to do.
+   */
+  const dir = await tempDir();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'grow.jsonl');
+
+  await writeFile(file, '{"n":1}\n', 'utf8');
+  const tailer = new TranscriptTailer(file);
+  await tailer.read();
+  const readAfterFirst = tailer.bytesRead;
+
+  for (let n = 2; n <= 6; n += 1) {
+    await appendFile(file, `{"n":${n}}\n`, 'utf8');
+    const result = await tailer.read();
+    assert.equal(result.restarted, false, `append ${n} was called a restart`);
+    assert.deepEqual(result.lines, [`{"n":${n}}`]);
+  }
+
+  assert.equal(tailer.restartCount, 0);
+  assert.equal(
+    tailer.bytesRead,
+    readAfterFirst + 5 * Buffer.byteLength('{"n":2}\n'),
+    'only the appended bytes were ever pulled off disk',
+  );
+});
+
+test('N-WP20: an empty file that gains its first line is not a restart', async (t) => {
+  // A transcript exists before Claude Code writes into it. The identity of a
+  // zero-byte file cannot be the identity it has once it has content, so this
+  // is the one place the check has to stay quiet.
+  const dir = await tempDir();
+  t.after(() => rm(dir, { recursive: true, force: true }));
+  const file = path.join(dir, 'fresh.jsonl');
+
+  await writeFile(file, '', 'utf8');
+  const tailer = new TranscriptTailer(file);
+  const empty = await tailer.read();
+  assert.deepEqual(empty.lines, []);
+  assert.equal(empty.restarted, false);
+
+  await appendFile(file, '{"n":1}\n', 'utf8');
+  const first = await tailer.read();
+  assert.equal(first.restarted, false, 'the first write is not a rotation');
+  assert.deepEqual(first.lines, ['{"n":1}']);
 });

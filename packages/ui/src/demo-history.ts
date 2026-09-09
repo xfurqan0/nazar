@@ -318,30 +318,42 @@ function summaryOf(seed: HistorySeed, hydrated: boolean): HistorySummary {
 export const DEMO_HISTORY_IDS: readonly string[] = SEEDS.map((seed) => seed.sessionId);
 
 export interface DemoHistorySource {
-  list(limit: number): Promise<HistoryListPage>;
+  list(limit: number, offset?: number): Promise<HistoryListPage>;
   open(sessionId: string): Promise<History | undefined>;
+  /** N-WP20: every id, unpaged, exactly as the real transport answers it. */
+  ids(): Promise<readonly string[]>;
 }
 
-/** The `?demo=1` history source: the same two calls the real scanner answers. */
+/** The `?demo=1` history source: the same three calls the real scanner answers. */
 export function makeDemoHistory(): DemoHistorySource {
   const opened = new Set<string>();
   return {
-    list: async (limit) => ({
-      generatedAt: DEMO_HISTORY_EPOCH,
-      total: SEEDS.length,
-      offset: 0,
-      sessions: SEEDS.slice(0, Math.max(1, limit)).map((seed) =>
-        summaryOf(seed, opened.has(seed.sessionId)),
-      ),
-      projects: [...new Set(SEEDS.map((seed) => seed.project))],
-      listMs: 18,
-      warnings: 0,
-    }),
+    // N-WP20: the demo pages the way the real listing does, `nextOffset` and
+    // all, so a screenshot of the drawer is a screenshot of the code path the
+    // drawer actually runs rather than of a shortcut taken for the demo.
+    list: async (limit, offset = 0) => {
+      const from = Math.max(0, Math.trunc(offset));
+      const page = SEEDS.slice(from, from + Math.max(1, limit));
+      const result: {
+        -readonly [K in keyof HistoryListPage]: HistoryListPage[K];
+      } = {
+        generatedAt: DEMO_HISTORY_EPOCH,
+        total: SEEDS.length,
+        offset: from,
+        sessions: page.map((seed) => summaryOf(seed, opened.has(seed.sessionId))),
+        projects: [...new Set(SEEDS.map((seed) => seed.project))],
+        listMs: 18,
+        warnings: 0,
+      };
+      if (from + page.length < SEEDS.length) result.nextOffset = from + page.length;
+      return result;
+    },
     open: async (sessionId) => {
       const seed = SEEDS.find((one) => one.sessionId === sessionId);
       if (seed === undefined) return undefined;
       opened.add(sessionId);
       return historyOf(seed);
     },
+    ids: async () => DEMO_HISTORY_IDS,
   };
 }

@@ -19,6 +19,10 @@ import { fileURLToPath } from 'node:url';
 
 import type { History, HistoryListPage } from '@nazar/core';
 import { HistoryScanner, projectSlugFor } from '@nazar/core';
+// N-WP20: the canvas's own prune, run against what this server actually
+// serves. Asserting the route's ids in isolation would prove the endpoint and
+// miss the thing that was broken, which was the join between the two.
+import { pruneNames } from '@nazar/ui';
 
 import { startNazarServer } from '../src/http.ts';
 
@@ -277,14 +281,133 @@ test('a transcript store that fails mid-request answers 503 rather than crashing
       open: async () => {
         throw new Error('the disk went away');
       },
+      ids: async () => {
+        throw new Error('the disk went away');
+      },
     },
     port: 0,
   });
   try {
     assert.equal((await fetch(`${server.url}api/history`)).status, 503);
     assert.equal((await fetch(`${server.url}api/history/${SESSION}`)).status, 503);
+    // N-WP20. The id sweep fails the same way, and failing is the *point*: the
+    // canvas prunes against this answer, so a 503 has to stay a 503 rather than
+    // degrade into an empty list — which would read as "every session you
+    // remember is gone" and take its layout, tab and name with it.
+    assert.equal((await fetch(`${server.url}api/history/ids`)).status, 503);
   } finally {
     await server.close();
     await rm(root, { recursive: true, force: true });
   }
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP20: pruning is decided against the whole store
+ * ------------------------------------------------------------------ */
+
+test('N-WP20: /api/history/ids sweeps past the page the drawer asks for', async () => {
+  /*
+   * The end of the chain that used to delete people's work, run for real: a
+   * transcript store of 201 sessions, the actual `HistoryScanner`, the actual
+   * request listener over an actual socket, and then the actual `pruneNames`
+   * the canvas calls with the answer.
+   *
+   * The old path asked `/api/history?limit=200`, took the ids off that page,
+   * and handed them to `pruneNames` as "everything the machine still has". The
+   * 201st session was not on the page, so its typed-in card name was deleted —
+   * while the session itself was two clicks away in the drawer, openable, with
+   * its transcript still on disk. This asserts the whole way through: the sweep
+   * carries the omitted id, and the name survives the prune.
+   */
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nazar-hroutes-many-'));
+  const uiDir = path.join(root, 'web');
+  await mkdir(uiDir, { recursive: true });
+  await writeFile(path.join(uiDir, 'index.html'), '<!doctype html><title>Nazar</title>', 'utf8');
+
+  const store = path.join(root, 'store');
+  const project = path.join(store, 'C--proj-many');
+  await mkdir(project, { recursive: true });
+  const line = `${JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-09-01T00:00:00Z',
+    requestId: 'req-parent',
+    message: { id: 'parent', model: 'test-model', usage: { input_tokens: 1, output_tokens: 1 } },
+  })}\n`;
+  for (let index = 0; index < 201; index += 1) {
+    const id = `session-${String(index).padStart(3, '0')}`;
+    await writeFile(path.join(project, `${id}.jsonl`), line, 'utf8');
+  }
+
+  const scanner = new HistoryScanner({ projectsDir: store, home: HOME, indexTtlMs: 0 });
+  const server = await startNazarServer({
+    state: {
+      snapshot: () => ({ generatedAt: 0, sessions: [], commandAvailable: false, warnings: 0 }),
+      on: () => undefined,
+      off: () => undefined,
+    },
+    uiDir,
+    history: scanner,
+    port: 0,
+  });
+
+  try {
+    // What the drawer asks for, and what it therefore does not see.
+    const listed = (await (await fetch(`${server.url}api/history?limit=200`)).json()) as {
+      total: number;
+      nextOffset?: number;
+      sessions: { sessionId: string }[];
+    };
+    assert.equal(listed.total, 201);
+    assert.equal(listed.sessions.length, 200);
+    assert.equal(listed.nextOffset, 200);
+
+    // What the prune is now decided from.
+    const response = await fetch(`${server.url}api/history/ids`);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'application/json; charset=utf-8');
+    const sweep = (await response.json()) as { total: number; sessionIds: string[] };
+    assert.equal(sweep.total, 201);
+    assert.equal(sweep.sessionIds.length, 201, 'the sweep is unpaged');
+
+    const onPage = new Set(listed.sessions.map((one) => one.sessionId));
+    const omitted = sweep.sessionIds.filter((id) => !onPage.has(id));
+    assert.equal(omitted.length, 1, 'exactly one session falls off the first page');
+    const beyond = omitted[0];
+    assert.ok(beyond !== undefined);
+
+    // The bug, and the fix, in the two calls the canvas actually makes.
+    const named = { names: { [beyond]: 'the one I care about' } };
+    const fromPage = pruneNames(named, new Set(onPage));
+    assert.equal(fromPage.names[beyond], undefined, 'pruning from a page loses the name');
+
+    const fromSweep = pruneNames(named, new Set(sweep.sessionIds));
+    assert.equal(
+      fromSweep.names[beyond],
+      'the one I care about',
+      'pruning from the sweep keeps it',
+    );
+
+    // And the session it names is not gone at all: it opens.
+    assert.equal((await fetch(`${server.url}api/history/${beyond}`)).status, 200);
+  } finally {
+    await server.close();
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('N-WP20: the sweep carries ids and nothing else', async () => {
+  // It is served to decide what to forget, so it has no business carrying a
+  // project label, a byte count or a timestamp — the listing's job, and the
+  // things the redaction rules exist for.
+  await withServer(async ({ url }) => {
+    const body = (await (await fetch(`${url}api/history/ids`)).json()) as Record<string, unknown>;
+    assert.deepEqual(
+      Object.keys(body).sort(),
+      ['generatedAt', 'listMs', 'sessionIds', 'total', 'warnings'].sort(),
+    );
+    const ids = body['sessionIds'];
+    assert.ok(Array.isArray(ids));
+    for (const id of ids) assert.equal(typeof id, 'string');
+    assert.equal(JSON.stringify(body).includes('somebody'), false, 'no account name on the wire');
+  });
 });

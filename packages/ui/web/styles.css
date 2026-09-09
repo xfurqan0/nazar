@@ -2260,6 +2260,20 @@ body {
   font-size: var(--nz-size-md);
 }
 
+/*
+ * N-WP20. The two asides under an explained empty canvas: the second liveness
+ * source not answering, and the status-line wrapper not being installed.
+ * Quieter and smaller than the reason and the next step above them, because
+ * neither is the answer to "why is this empty" and neither may read as one.
+ */
+.nz-empty__note {
+  margin: 0;
+  max-width: 46ch;
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  line-height: 1.5;
+}
+
 .nz-empty code {
   font-family: var(--nz-mono-family);
   background: var(--nz-node-header);
@@ -2401,6 +2415,34 @@ body {
   font-variant-numeric: tabular-nums;
   border-bottom: 1px solid var(--nz-panel-border);
   flex: 0 0 auto;
+}
+
+/*
+ * N-WP20: the way to the rest of the store.
+ *
+ * Below the scrolling list rather than inside it, so it does not move while the
+ * list does and a keyboard user reaches it straight after the last row. Hidden
+ * outright when the server reports no `nextOffset` — a disabled "load more" on
+ * a complete listing would be a control that lies about there being more.
+ */
+.nz-history__more {
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 10px 16px;
+  border: none;
+  border-top: 1px solid var(--nz-panel-border);
+  background: none;
+  color: var(--nz-text-muted);
+  font: inherit;
+  font-size: var(--nz-size-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  cursor: pointer;
+}
+
+.nz-history__more:hover {
+  background: var(--nz-node-header);
+  color: var(--nz-text);
 }
 
 .nz-history__list {

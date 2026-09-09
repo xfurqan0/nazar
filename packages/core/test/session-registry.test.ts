@@ -467,3 +467,129 @@ test('a missing sessions directory is not an error', async (t) => {
   assert.deepEqual(registry.snapshot(), []);
   assert.equal(registry.warnings, 0);
 });
+
+/* ------------------------------------------------------------------ *
+ * N-WP20: a session that died stays dead
+ * ------------------------------------------------------------------ */
+
+test('N-WP20: a dead pid is dropped once and does not come back on the next scan', async (t) => {
+  /*
+   * The bug was `1 → 0 → 1`, forever.
+   *
+   * A crash leaves `<pid>.json` on disk. The registry probes the pid, finds
+   * nothing, holds the session at `unknown` for one gate and then drops it —
+   * and dropped the *record of having dropped it* at the same moment. The next
+   * pass read the same untouched file, learned the same pid, had no memory of
+   * the verdict, and added the session back as `unknown`. A card for a session
+   * that ended hours ago flickered on and off the canvas every few seconds.
+   *
+   * Three passes, one file, nothing alive: 1, 0, and 0.
+   */
+  const dir = await tempDir();
+  const registry = new SessionRegistry({
+    sessionsDir: dir,
+    runAgents: null,
+    isAlive: () => false,
+    watch: false,
+    pollIntervalMs: 60_000,
+    gateIntervalMs: 60_000,
+  });
+  t.after(async () => {
+    registry.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  await writeFile(path.join(dir, '1001.json'), sessionFile({ pid: 1001 }), 'utf8');
+
+  await registry.gate();
+  const first = registry.snapshot().length;
+  assert.equal(first, 1, 'one gate of "we no longer know" before it goes');
+  assert.equal(registry.snapshot()[0]?.state, 'unknown');
+
+  await registry.gate();
+  assert.equal(registry.snapshot().length, 0, 'the second gate drops it');
+
+  // The file is still there, untouched. This is the pass that used to undo the
+  // drop, and a poll — not a gate — is what the canvas runs every two seconds.
+  await registry.refresh();
+  assert.equal(registry.snapshot().length, 0, 'a rescan of the same file adds nothing back');
+
+  await registry.gate();
+  await registry.refresh();
+  assert.equal(registry.snapshot().length, 0, 'and it stays gone across further passes');
+});
+
+test('N-WP20: a session file that changes is judged again, so a reused pid is not buried', async (t) => {
+  /*
+   * The other half, and the reason the verdict is keyed on the file's content
+   * rather than on the pid alone: operating systems reuse pids. If "1001 is
+   * dead" were remembered forever, a genuinely new session that happened to get
+   * pid 1001 would never be drawn at all — a fix that traded a flickering card
+   * for a missing one.
+   */
+  const dir = await tempDir();
+  let alive = false;
+  const registry = new SessionRegistry({
+    sessionsDir: dir,
+    runAgents: null,
+    isAlive: () => alive,
+    watch: false,
+    pollIntervalMs: 60_000,
+    gateIntervalMs: 60_000,
+  });
+  t.after(async () => {
+    registry.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  const file = path.join(dir, '1001.json');
+  await writeFile(file, sessionFile({ pid: 1001, sessionId: 'first-session' }), 'utf8');
+  await registry.gate();
+  await registry.gate();
+  assert.equal(registry.snapshot().length, 0, 'the first session is buried');
+
+  // A new session takes the same pid: same path, different bytes.
+  alive = true;
+  await writeFile(file, sessionFile({ pid: 1001, sessionId: 'second-session' }), 'utf8');
+
+  await registry.refresh();
+  assert.equal(registry.snapshot().length, 1, 'a changed file gets a fresh hearing');
+  assert.equal(registry.snapshot()[0]?.id, 'second-session');
+  assert.equal(registry.snapshot()[0]?.state, 'alive');
+});
+
+test('N-WP20: the registry reports what an empty canvas needs to explain itself', async (t) => {
+  // The three facts `NazarState` builds `empty` from, read off a real directory
+  // rather than asserted against a comment.
+  const absent = new SessionRegistry({
+    sessionsDir: path.join(os.tmpdir(), 'nazar-registry-none-4676'),
+    runAgents: null,
+    watch: false,
+    pollIntervalMs: 60_000,
+    gateIntervalMs: 60_000,
+  });
+  t.after(() => absent.stop());
+  await absent.gate();
+  assert.equal(absent.sessionsDirectoryMissing, true);
+  assert.equal(absent.sessionFiles, 0);
+
+  const dir = await tempDir();
+  const empty = new SessionRegistry({
+    sessionsDir: dir,
+    runAgents: null,
+    watch: false,
+    pollIntervalMs: 60_000,
+    gateIntervalMs: 60_000,
+  });
+  t.after(async () => {
+    empty.stop();
+    await rm(dir, { recursive: true, force: true });
+  });
+  await empty.gate();
+  assert.equal(empty.sessionsDirectoryMissing, false, 'the directory exists');
+  assert.equal(empty.sessionFiles, 0, 'and holds nothing');
+
+  await writeFile(path.join(dir, '1001.json'), sessionFile({ pid: 1001 }), 'utf8');
+  await empty.refresh();
+  assert.equal(empty.sessionFiles, 1, 'a leftover file counts, alive or not');
+});

@@ -1,0 +1,17 @@
+{
+  "//": "N-WP20: the interaction suites. They import the browser half (`web/*.ts`) so they need the DOM lib, and they are tests so they need Node's types — which is exactly the combination neither of the two existing configs has. `../../web/tsconfig.json` has the DOM and `types: []`; `tsconfig.typecheck.json` has Node and no DOM, and excludes this directory for that reason. Nothing here is emitted: `npm test` runs the files through tsx.",
+  "extends": "../../../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "declaration": false,
+    "declarationMap": false,
+    "sourceMap": false
+  },
+  "include": ["./*.ts"]
+}

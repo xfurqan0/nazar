@@ -104,6 +104,16 @@ const historySource: HistorySource = {
       warnings: 0,
     }),
   open: async () => Promise.resolve(history()),
+  // N-WP20: this suite is about task text and never asks for ids, but a
+  // `HistorySource` is a whole one or it is not one.
+  ids: async () =>
+    Promise.resolve({
+      generatedAt: 1_788_756_000_000,
+      sessionIds: [],
+      total: 0,
+      listMs: 0,
+      warnings: 0,
+    }),
 };
 
 async function withServer(

@@ -25,7 +25,13 @@ import type { IncomingMessage, Server, ServerResponse } from 'node:http';
 import { createServer } from 'node:http';
 import path from 'node:path';
 
-import type { History, HistoryListOptions, HistoryListPage, StateSnapshot } from '@nazar/core';
+import type {
+  History,
+  HistoryIdsResult,
+  HistoryListOptions,
+  HistoryListPage,
+  StateSnapshot,
+} from '@nazar/core';
 
 import type { RedactOptions } from './redact.js';
 import type { WireOptions } from './snapshot.js';
@@ -58,6 +64,12 @@ export interface StateSource {
 export interface HistorySource {
   list(options?: HistoryListOptions): Promise<HistoryListPage>;
   open(sessionId: string): Promise<History | undefined>;
+  /**
+   * N-WP20. Every session id in the store, unpaged. It has a route of its own
+   * because the canvas's "what may I forget" decision is only sound against the
+   * complete set, and a page of a listing is not one.
+   */
+  ids(): Promise<HistoryIdsResult>;
 }
 
 /**
@@ -329,9 +341,9 @@ export function createRequestListener(
   };
 
   /**
-   * WP4b. Two routes, both read-only and both lazy: the listing opens no
-   * transcript at all, and a session is parsed only when this route is asked
-   * for it by id.
+   * WP4b. Three routes now, all read-only and all lazy: neither the listing nor
+   * the id sweep opens a transcript at all, and a session is parsed only when
+   * this route is asked for it by id.
    */
   const serveHistory = (
     req: IncomingMessage,
@@ -364,6 +376,34 @@ export function createRequestListener(
       void source.list(listOptions).then(
         (page) =>
           sendJson(req, res, 200, JSON.stringify(toWireHistoryPage(page, wireOptionsFor(query)))),
+        failed,
+      );
+      return;
+    }
+
+    /*
+     * N-WP20. `/api/history/ids`: the whole store as identifiers, no paging.
+     *
+     * It is matched before the by-id route on purpose. A session id is a uuid,
+     * so `ids` can never be one — but "can never be" is worth one comparison
+     * rather than an assumption, and the order also means a store that somehow
+     * held a session called `ids` could not shadow this route.
+     */
+    if (rest === '/ids') {
+      void source.ids().then(
+        (result) =>
+          sendJson(
+            req,
+            res,
+            200,
+            JSON.stringify({
+              generatedAt: result.generatedAt,
+              sessionIds: result.sessionIds,
+              total: result.total,
+              listMs: result.listMs,
+              warnings: result.warnings,
+            }),
+          ),
         failed,
       );
       return;

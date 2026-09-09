@@ -23,6 +23,11 @@
  * A session whose process is gone goes to `state: 'unknown'` and is removed at
  * the next gate: one gate interval of "we no longer know", then gone. A session
  * file left behind by a crash never keeps a node on the canvas.
+ *
+ * N-WP20: and it stays gone. The verdict is remembered against the identity of
+ * the file it was made about (`buried` below), because the file that made a
+ * session appear is still on disk after the session is dropped — so dropping it
+ * without remembering why meant the next `readdir` put it straight back.
  */
 import { EventEmitter } from 'node:events';
 
@@ -108,6 +113,17 @@ function sourceOf(draft: Draft): SessionSource {
   return draft.file !== undefined ? 'files' : 'command';
 }
 
+/**
+ * What a "this pid is dead" verdict was made about, so it can be remembered
+ * without ever becoming permanent. The session file's own content identity when
+ * there is one; the command's view of the session when there is not.
+ */
+function identityOf(draft: Draft): string {
+  if (draft.file !== undefined) return `file:${draft.file.identity}`;
+  const agent = draft.agent;
+  return `command:${agent?.sessionId ?? ''}:${agent?.status ?? ''}:${agent?.startedAt ?? ''}`;
+}
+
 export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
   readonly sessionsDir: string;
 
@@ -130,6 +146,17 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
   /** Gate number at which a pid first failed its liveness probe. */
   private readonly unknownAtGate = new Map<number, number>();
 
+  /**
+   * N-WP20. Pids already judged dead and dropped, against the identity of the
+   * file that was judged. A session file left behind by a crash is still there
+   * on the next `readdir`, and until this map existed the drop was undone by
+   * the very next scan: the pid came back as `unknown`, aged out again, came
+   * back again — `1 → 0 → 1 → 0` for as long as the file sat on disk. The
+   * verdict now outlives the removal. A file whose bytes change gets a fresh
+   * hearing; one that does not is not reconsidered.
+   */
+  private readonly buried = new Map<number, string>();
+
   private lastAgents: readonly AgentsEntry[] = [];
 
   private agentsOk = false;
@@ -137,6 +164,10 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
   private warningCount = 0;
 
   private lastGateDurationMs: number | undefined;
+
+  private sessionFileCount = 0;
+
+  private sessionsDirMissing = false;
 
   private started = false;
 
@@ -185,6 +216,21 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
   /** Whether the last gate reached `claude agents --json` successfully. */
   get commandAvailable(): boolean {
     return this.agentsOk;
+  }
+
+  /**
+   * Session files the last scan found, alive or not. N-WP20: this is what
+   * separates "Claude Code has never written here" from "it wrote, and every
+   * process behind those files is gone", which are two different things to say
+   * to somebody looking at an empty canvas.
+   */
+  get sessionFiles(): number {
+    return this.sessionFileCount;
+  }
+
+  /** True when the sessions directory itself does not exist. */
+  get sessionsDirectoryMissing(): boolean {
+    return this.sessionsDirMissing;
   }
 
   /**
@@ -285,6 +331,8 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
   private async reconcile(isGate: boolean): Promise<void> {
     const scan = await readSessionsDir(this.sessionsDir);
     this.warningCount += scan.warnings;
+    this.sessionFileCount = scan.entries.length;
+    this.sessionsDirMissing = scan.missingDirectory;
 
     if (isGate) {
       this.gateCount += 1;
@@ -312,6 +360,15 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
     const next = new Map<number, Session>();
 
     for (const draft of drafts.values()) {
+      const identity = identityOf(draft);
+      const grave = this.buried.get(draft.pid);
+      if (grave !== undefined) {
+        // Already judged dead, and nothing about the evidence has moved since.
+        // Reading the same leftover file again is not new information.
+        if (grave === identity) continue;
+        this.buried.delete(draft.pid);
+      }
+
       const alive = this.isAlive(draft.pid);
       if (alive) {
         this.unknownAtGate.delete(draft.pid);
@@ -320,16 +377,24 @@ export class SessionRegistry extends EventEmitter<SessionRegistryEvents> {
         if (since === undefined) {
           this.unknownAtGate.set(draft.pid, this.gateCount);
         } else if (this.gateCount > since) {
-          // It has survived a full gate interval as `unknown`. Drop it.
+          // It has survived a full gate interval as `unknown`. Drop it, and
+          // remember which file the verdict was about so the next scan does not
+          // hand it straight back.
           this.unknownAtGate.delete(draft.pid);
+          this.buried.set(draft.pid, identity);
           continue;
         }
       }
       next.set(draft.pid, this.toSession(draft, alive, now));
     }
 
-    for (const pid of this.unknownAtGate.keys()) {
+    for (const pid of [...this.unknownAtGate.keys()]) {
       if (!next.has(pid)) this.unknownAtGate.delete(pid);
+    }
+    // A grave with no file left behind it is nothing to remember: the leftover
+    // was cleaned up, and a pid that comes back after that is a new session.
+    for (const pid of [...this.buried.keys()]) {
+      if (!drafts.has(pid)) this.buried.delete(pid);
     }
 
     this.publish(next);

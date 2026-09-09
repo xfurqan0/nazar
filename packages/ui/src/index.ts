@@ -62,6 +62,19 @@ export type {
 export { finishedAgentIds, hiddenLabel, hideAgents } from './hidden.js';
 export type { HiddenResult } from './hidden.js';
 
+/* N-WP20: the two lines an empty canvas shows instead of "no sessions found". */
+export { emptyStateLines } from './empty.js';
+export type { EmptyStateLines } from './empty.js';
+
+/*
+ * WP4g: the name a card carries. N-WP20 puts `pruneNames` on the public surface
+ * beside `pruneLayout` and `pruneTabs`, which were always here — the three are
+ * pruned by one rule from one set of ids, and leaving one of them off meant the
+ * test that checks that rule end to end could not reach it.
+ */
+export { MAX_NAME_LENGTH, NAMES_KEY, cleanName, nameOf, pruneNames, readNames, withName, writeNames } from './names.js';
+export type { NamesState } from './names.js';
+
 export { boundsOfPlacements, firstFreeSlot, overlaps, packShelves, shelfWidth } from './pack.js';
 export type { PackResult, PackSpec, Placement, SizedBox } from './pack.js';
 

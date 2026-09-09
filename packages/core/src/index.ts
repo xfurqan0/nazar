@@ -220,6 +220,7 @@ export {
   MAX_PAGE_SIZE,
 } from './history.js';
 export type {
+  HistoryIdsResult,
   HistoryListOptions,
   HistoryListPage,
   HistoryScannerOptions,
@@ -235,6 +236,8 @@ export type {
 
 export { DEFAULT_COALESCE_MS, NazarState } from './state.js';
 export type {
+  EmptyDiagnosis,
+  EmptyReason,
   NazarStateEvents,
   NazarStateOptions,
   SessionView,

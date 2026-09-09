@@ -12,5 +12,7 @@
     "packages/*/test/**/*.ts",
     "test/**/*.ts",
     "scripts/**/*.ts"
-  ]
+  ],
+  "//": "N-WP20: `packages/ui/test/dom` is checked by its own config instead. The suites there import the browser half, which needs the DOM lib this config deliberately does not have — a Node-typed check of `web/*.ts` would report hundreds of errors about a `document` that is not missing, it is simply not this config's business.",
+  "exclude": ["packages/ui/test/dom/**/*.ts"]
 }

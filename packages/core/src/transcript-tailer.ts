@@ -15,6 +15,14 @@
  * - **Truncation and rotation.** If the file is shorter than our offset it is
  *   not the file we were reading. The offset restarts at zero and the caller is
  *   told, so it can throw its derived state away rather than double-count.
+ *   N-WP20: size is not the only way a file can stop being the file we had. A
+ *   rename-and-replace leaves the same path holding *different bytes of the
+ *   same length*, and "same size" then read as "nothing was appended" — the new
+ *   content was never read and no restart was reported. So the file's identity
+ *   is tracked too: `ino` and `birthtimeMs` where the platform gives a usable
+ *   inode, and a hash of the first {@link HEAD_SIGNATURE_BYTES} bytes where it
+ *   does not. Neither is a checksum of the file and neither is meant to be:
+ *   appended bytes must *not* move it, or every poll would re-read 9 MB.
  * - **CRLF.** A trailing `\r` is stripped. Real files on this machine use LF
  *   even on Windows (346 of 346 checked), but the copy in a bug report may not.
  * - **BOM.** Stripped once, and only at offset zero.
@@ -26,9 +34,30 @@ import { open, stat } from 'node:fs/promises';
 /** Bytes pulled from disk in one `read()` syscall. Bounds the allocation. */
 const DEFAULT_CHUNK_BYTES = 1 << 20;
 
+/**
+ * Bytes hashed to identify a file when the platform's inode cannot be trusted.
+ * A transcript's first line carries its session id and its first timestamp, so
+ * the head of two different files effectively never matches.
+ */
+export const HEAD_SIGNATURE_BYTES = 512;
+
 const LF = 0x0a;
 const CR = 0x0d;
 const BOM = Buffer.from([0xef, 0xbb, 0xbf]);
+
+/**
+ * The file's identity from its `stat`, or `undefined` when this platform did
+ * not give a usable inode and the head has to be hashed instead.
+ *
+ * `ctimeMs` is deliberately *not* in here: on Windows it moves on every append,
+ * which would make every poll of a live transcript look like a rotation and
+ * re-read the whole file.
+ */
+function statIdentity(info: { ino: number; birthtimeMs: number }): string | undefined {
+  if (!Number.isFinite(info.ino) || info.ino === 0) return undefined;
+  const birth = Number.isFinite(info.birthtimeMs) ? Math.trunc(info.birthtimeMs) : 0;
+  return `i${info.ino}:${birth}`;
+}
 
 export interface TailerReadResult {
   /** Complete lines appended since the last read, in file order. Never empty strings. */
@@ -91,6 +120,12 @@ export class TranscriptTailer {
 
   private opened = false;
 
+  /** Identity of the file the current offset belongs to. */
+  private identity: string | undefined;
+
+  /** Width of the pinned head window, when the identity is hashed from one. */
+  private headBytes = 0;
+
   private totalBytes = 0;
 
   private passes = 0;
@@ -136,27 +171,40 @@ export class TranscriptTailer {
   async read(): Promise<TailerReadResult> {
     let size: number;
     let mtimeMs: number | undefined;
+    let identity: string | undefined;
     try {
       const info = await stat(this.file);
       size = info.size;
       mtimeMs = info.mtimeMs;
+      identity = statIdentity(info);
     } catch (error) {
       const code = (error as NodeJS.ErrnoException).code;
       if (code === 'ENOENT' || code === 'ENOTDIR') {
+        this.identity = undefined;
         return { lines: [], bytesRead: 0, restarted: false, missing: true, size: 0 };
       }
       return { lines: [], bytesRead: 0, restarted: false, missing: false, size: 0 };
     }
 
+    // No usable inode on this platform or filesystem: hash the head instead.
+    // Only when the inode failed, so the common path costs one `stat`.
+    identity ??= await this.headSignature(size);
+
     let restarted = false;
-    if (size < this.offset) {
-      // Truncated or rotated: this is not the file we had an offset into.
+    // Two ways the path can stop holding the file we had an offset into: it
+    // shrank, or it is a different file of the same size. The second is what a
+    // rename-and-replace looks like, and it used to be invisible.
+    if (
+      size < this.offset ||
+      (this.opened && this.identity !== undefined && identity !== this.identity)
+    ) {
       this.offset = 0;
       this.pending = EMPTY;
       this.opened = false;
       this.restarts += 1;
       restarted = true;
     }
+    this.identity = identity;
 
     if (!this.opened && this.fromEnd) {
       this.offset = size;
@@ -221,10 +269,49 @@ export class TranscriptTailer {
     return { lines, bytesRead, restarted, missing: false, size, mtimeMs };
   }
 
+  /**
+   * The file's identity when `stat` could not supply one: a hash of a fixed
+   * window at the head of the file.
+   *
+   * The window is pinned the first time it is measured and never widened, which
+   * is what makes this safe on an append-only file: bytes are only ever added
+   * *after* the window, so the signature of a file being written to does not
+   * move. Widening it with the file — the obvious version — would report a
+   * rotation on every append and re-read the whole transcript each time.
+   */
+  private async headSignature(size: number): Promise<string> {
+    const want = Math.min(this.headBytes > 0 ? this.headBytes : HEAD_SIGNATURE_BYTES, size);
+    if (want <= 0) return 'h:0';
+    let handle;
+    try {
+      handle = await open(this.file, 'r');
+    } catch {
+      // Unreadable for a moment is not "a different file": keep what we had.
+      return this.identity ?? 'h:0';
+    }
+    try {
+      const buffer = Buffer.allocUnsafe(want);
+      const result = await handle.read(buffer, 0, want, 0);
+      const got = result.bytesRead;
+      if (got <= 0) return 'h:0';
+      if (this.headBytes === 0) this.headBytes = got;
+      let hash = 0x811c9dc5;
+      for (let i = 0; i < got; i += 1) {
+        hash ^= buffer[i] as number;
+        hash = Math.imul(hash, 0x01000193);
+      }
+      return `h${got}:${(hash >>> 0).toString(36)}`;
+    } finally {
+      await handle.close();
+    }
+  }
+
   /** Forget the offset and the partial line. The next read starts over. */
   reset(): void {
     this.offset = 0;
     this.pending = EMPTY;
     this.opened = false;
+    this.identity = undefined;
+    this.headBytes = 0;
   }
 }

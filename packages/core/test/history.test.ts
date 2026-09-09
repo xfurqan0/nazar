@@ -37,6 +37,9 @@ const SESSIONS = [
 /** A day before the tests run: these sessions are history, not live. */
 const YESTERDAY = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
+/** N-WP20: the home the scanner collapses to `~`. The same one every suite here uses. */
+const HOME = 'C:\\Users\\nobody';
+
 /**
  * Three sessions across two projects. The first has a `subagents/` directory
  * with three meta files and one agent transcript; the other two are bare.
@@ -393,4 +396,157 @@ test('a listing is reused inside its TTL and rebuilt after it', async (t) => {
   clock += 3000;
   await scan.list();
   assert.equal(scan.stats.walks, 2);
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP20: the totals a session's subagents own
+ * ------------------------------------------------------------------ */
+
+/** One assistant line worth exactly `out` output tokens. */
+function usageLine(id: string, out: number): string {
+  return `${JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-09-01T00:00:00Z',
+    requestId: `req-${id}`,
+    message: { id, model: 'test-model', usage: { input_tokens: 1, output_tokens: out } },
+  })}\n`;
+}
+
+/** A store with one session whose subagent transcript the test can grow. */
+async function treeStore(): Promise<{ root: string; agentFile: string; sessionId: string }> {
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nazar-history-tree-'));
+  const project = path.join(root, 'C--proj-tree');
+  const sessionId = SESSIONS[0];
+  const subagents = path.join(project, sessionId, 'subagents');
+  await mkdir(subagents, { recursive: true });
+
+  await writeFile(path.join(project, `${sessionId}.jsonl`), usageLine('parent', 1), 'utf8');
+  await writeFile(
+    path.join(subagents, 'agent-child.meta.json'),
+    JSON.stringify({ agentType: 'general-purpose', model: 'opus', spawnDepth: 1 }),
+    'utf8',
+  );
+  const agentFile = path.join(subagents, 'agent-child.jsonl');
+  await writeFile(agentFile, usageLine('child-1', 10), 'utf8');
+  return { root, agentFile, sessionId };
+}
+
+test('N-WP20: a subagent gaining a line invalidates the cached tree total', async (t) => {
+  /*
+   * The headline number on a history row is `treeTokens` — the session *plus*
+   * every subagent under it. The parse cache was keyed on the parent
+   * transcript's path, size and mtime alone, so a tree whose subagents grew
+   * went on answering with the total from before they did. Appending one line
+   * worth 20 output tokens to a child moves the true total from 11 to 31; the
+   * scanner kept saying 11, while a fresh scanner over the same directory said
+   * 31 — one question, two answers, which is the whole of the bug.
+   */
+  const { appendFile } = await import('node:fs/promises');
+  const { root, agentFile, sessionId } = await treeStore();
+  t.after(async () => rm(root, { recursive: true, force: true }));
+
+  const scan = new HistoryScanner({ projectsDir: root, home: HOME, indexTtlMs: 0 });
+
+  const before = await scan.open(sessionId);
+  assert.equal(before?.treeTokens?.out, 11, '1 from the session, 10 from its subagent');
+  const parsesBefore = scan.stats.parses;
+
+  await appendFile(agentFile, usageLine('child-2', 20), 'utf8');
+
+  const after = await scan.open(sessionId);
+  assert.equal(after?.treeTokens?.out, 31, 'the appended subagent line is counted');
+  assert.equal(scan.stats.parses, parsesBefore + 1, 'the tree really was read again');
+
+  // And this scanner now agrees with a brand new one, which is the property
+  // that failed: two readers of one directory must not disagree.
+  const fresh = new HistoryScanner({ projectsDir: root, home: HOME, indexTtlMs: 0 });
+  assert.equal((await fresh.open(sessionId))?.treeTokens?.out, 31);
+});
+
+test('N-WP20: an unchanged tree is still answered from the cache', async (t) => {
+  // The laziness contract has to survive the fix: a key that moved when nothing
+  // did would re-read every subagent on every open.
+  const { root, sessionId } = await treeStore();
+  t.after(async () => rm(root, { recursive: true, force: true }));
+
+  const scan = new HistoryScanner({ projectsDir: root, home: HOME, indexTtlMs: 0 });
+  await scan.open(sessionId);
+  const parses = scan.stats.parses;
+  const reads = scan.stats.fileReads;
+
+  await scan.open(sessionId);
+  await scan.open(sessionId);
+
+  assert.equal(scan.stats.parses, parses, 'nothing was parsed twice');
+  assert.equal(scan.stats.fileReads, reads, 'and no file was opened again');
+  assert.equal(scan.stats.cacheHits, 2);
+});
+
+test('N-WP20: a new subagent appearing also invalidates the total', async (t) => {
+  // Not only a longer file: a *second* child is the other way a tree grows,
+  // and it moves the file count rather than the byte count.
+  const { root, agentFile, sessionId } = await treeStore();
+  t.after(async () => rm(root, { recursive: true, force: true }));
+
+  const scan = new HistoryScanner({ projectsDir: root, home: HOME, indexTtlMs: 0 });
+  assert.equal((await scan.open(sessionId))?.treeTokens?.out, 11);
+
+  const subagents = path.dirname(agentFile);
+  await writeFile(
+    path.join(subagents, 'agent-second.meta.json'),
+    JSON.stringify({ agentType: 'general-purpose', model: 'opus', spawnDepth: 1 }),
+    'utf8',
+  );
+  await writeFile(path.join(subagents, 'agent-second.jsonl'), usageLine('second-1', 5), 'utf8');
+
+  const after = await scan.open(sessionId);
+  assert.equal(after?.treeTokens?.out, 16, 'the new subagent is in the total');
+  assert.equal(after?.agentCount, 2);
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP20: every id, unpaged
+ * ------------------------------------------------------------------ */
+
+test('N-WP20: ids() answers for the whole store, past any page boundary', async (t) => {
+  /*
+   * The canvas prunes card positions, tab membership and typed names against
+   * "what the machine still has". Deciding that from the first page of the
+   * listing meant everything past the 200th session counted as gone. 201 is
+   * the smallest store that shows it.
+   */
+  const root = await mkdtemp(path.join(os.tmpdir(), 'nazar-history-ids-'));
+  t.after(async () => rm(root, { recursive: true, force: true }));
+  const project = path.join(root, 'C--proj-many');
+  await mkdir(project, { recursive: true });
+  for (let index = 0; index < 201; index += 1) {
+    const id = `session-${String(index).padStart(3, '0')}`;
+    await writeFile(path.join(project, `${id}.jsonl`), usageLine('parent', 1), 'utf8');
+  }
+
+  const scan = new HistoryScanner({ projectsDir: root, home: HOME, indexTtlMs: 0 });
+
+  const page = await scan.list({ limit: 200 });
+  assert.equal(page.total, 201);
+  assert.equal(page.sessions.length, 200, 'a page is still a page');
+  assert.equal(page.nextOffset, 200);
+
+  const ids = await scan.ids();
+  assert.equal(ids.total, 201);
+  assert.equal(ids.sessionIds.length, 201, 'the sweep is not paged');
+  assert.equal(new Set(ids.sessionIds).size, 201, 'and carries no duplicates');
+
+  // The session the first page omits is the one whose customisations used to be
+  // deleted. It is in this answer, and it is genuinely still openable.
+  const shown = new Set(page.sessions.map((one) => one.sessionId));
+  const omitted = ids.sessionIds.filter((id) => !shown.has(id));
+  assert.equal(omitted.length, 1);
+  const missing = omitted[0];
+  assert.ok(missing !== undefined);
+  assert.ok(await scan.open(missing), 'the session the old prune forgot is still on disk');
+
+  // A listing opens no transcript, and neither does the sweep.
+  const reads = scan.stats.fileReads;
+  await scan.ids();
+  assert.equal(scan.stats.fileReads, reads, 'the sweep opens nothing');
 });

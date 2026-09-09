@@ -66,6 +66,40 @@ export interface SessionView extends Session {
   readonly treeRead: boolean;
 }
 
+/**
+ * N-WP20. Why the canvas has nothing to draw, in the terms `nazar doctor`
+ * already uses — the same three branches decided from the same two facts, so
+ * the page and the command line cannot disagree about a machine.
+ *
+ * - `noConfigDir` — the sessions directory does not exist, so Claude Code has
+ *   never run under this configuration directory.
+ * - `noSessions` — the directory is there and holds no session file. Nothing is
+ *   running, and that is the whole of what it means.
+ * - `staleSessions` — session files exist and no process behind them is alive.
+ *   Leftovers from sessions that ended, which Nazar refuses to draw as running.
+ */
+export type EmptyReason = 'noConfigDir' | 'noSessions' | 'staleSessions';
+
+/**
+ * What an empty canvas is allowed to say for itself. Present **only** when
+ * there is nothing to draw: a canvas with a session on it has no empty state
+ * to explain, and an `emptyReason` sitting next to three running sessions would
+ * be a field that lies.
+ */
+export interface EmptyDiagnosis {
+  readonly reason: EmptyReason;
+  /** Whether the last liveness gate reached `claude agents --json`. */
+  readonly agentsOk: boolean;
+  /** Session files on disk right now, alive or not. */
+  readonly sessionFiles: number;
+  /**
+   * Whether the status-line wrapper is installed. Never a reason the canvas is
+   * empty — it is why cost and context would be missing once something *is*
+   * drawn, which is a different sentence and is shown as one.
+   */
+  readonly wrapper: boolean;
+}
+
 /** Everything one `GET /api/state` or one SSE frame carries. */
 export interface StateSnapshot {
   /** Epoch ms this snapshot was built. The canvas ages everything from it. */
@@ -81,6 +115,13 @@ export interface StateSnapshot {
    * no window drawn at `0 %` for want of a reading.
    */
   readonly quota?: Quota;
+  /**
+   * N-WP20. Why there is nothing on the canvas, or **absent** when there is
+   * something on it. The first five minutes of Nazar are an empty rectangle for
+   * anybody whose machine is not already running Claude Code, and "no sessions
+   * found" is not an answer anyone can act on.
+   */
+  readonly empty?: EmptyDiagnosis;
 }
 
 export interface NazarStateEvents {
@@ -394,6 +435,21 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
     // Absent, not empty: no source means no strip, and an empty `quota` object
     // would be a third state the canvas would have to learn to hide.
     if (quota !== undefined) next.quota = quota;
+
+    // N-WP20. Only when there is nothing to draw, and built from what the
+    // registry already read on this pass: no extra syscall on the hot path.
+    if (sessions.length === 0) {
+      next.empty = {
+        reason: this.registry.sessionsDirectoryMissing
+          ? 'noConfigDir'
+          : this.registry.sessionFiles > 0
+            ? 'staleSessions'
+            : 'noSessions',
+        agentsOk: this.registry.commandAvailable,
+        sessionFiles: this.registry.sessionFiles,
+        wrapper: sources.captures.configured,
+      };
+    }
 
     this.current = next;
     this.emit('change', this.current);

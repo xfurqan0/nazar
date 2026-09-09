@@ -28,9 +28,10 @@
  * filter to strip it. `test/history-leak.test.ts` is the gate.
  *
  * Three limits keep an open bounded: at most {@link DEFAULT_CONCURRENCY} files
- * are read at once, parsed sessions are cached by `(path, size, mtime)` so an
- * unchanged file is never read twice, and the cache drops its least recently
- * used entry past {@link DEFAULT_CACHE_LIMIT} sessions.
+ * are read at once, parsed sessions are cached by `(path, size, mtime, the
+ * shape of `subagents/`)` so an unchanged *tree* is never read twice, and the
+ * cache drops its least recently used entry past {@link DEFAULT_CACHE_LIMIT}
+ * sessions.
  *
  * Nothing here writes, moves, copies or deletes anything under `~/.claude`.
  * Retention is Claude Code's, and Nazar does not extend it.
@@ -96,6 +97,27 @@ export interface HistoryListPage {
   readonly warnings: number;
 }
 
+/**
+ * The whole store reduced to identifiers, with no paging at all.
+ *
+ * N-WP20. The canvas forgets the layout, the tab membership and the card name
+ * of a session the machine no longer has, and "no longer has" can only be
+ * decided against the *whole* store. Deciding it against the first page threw
+ * away the customisations of every session past it — on a machine with 201
+ * transcripts, everything from the 201st down. This is what that decision is
+ * allowed to be made from: ids, and nothing else, so it stays as cheap as a
+ * listing and carries nothing a listing would not.
+ */
+export interface HistoryIdsResult {
+  readonly generatedAt: number;
+  /** Every session id in the store, newest write first. Never a page of them. */
+  readonly sessionIds: readonly string[];
+  readonly total: number;
+  /** Milliseconds the directory walk took. Zero on a cached index. */
+  readonly listMs: number;
+  readonly warnings: number;
+}
+
 /** Counters the laziness tests assert against. Diagnostics only. */
 export interface HistoryScannerStats {
   /** Directory walks that actually hit the filesystem. */
@@ -145,6 +167,18 @@ interface IndexEntry {
   readonly transcriptBytes: number;
   readonly lastWriteAt: number;
   readonly agentCount?: number;
+  /**
+   * N-WP20. How many subagent files this session has, how many bytes they hold
+   * and when the newest of them was written — the half of a session's token
+   * total that does not live in its own transcript.
+   *
+   * The parse cache was keyed on the parent transcript alone, so a session
+   * whose *subagents* grew kept answering with the totals from before they
+   * did: 11 output tokens on a tree that had 31. Building it here is still a
+   * directory listing plus one `stat` per file and never an `open`, and only
+   * for the sessions that have a `subagents/` directory at all.
+   */
+  readonly agentsSignature?: string;
 }
 
 interface Index {
@@ -319,9 +353,29 @@ export class HistoryScanner {
   }
 
   /**
+   * Every session id in the store, in one answer and in listing order.
+   *
+   * N-WP20. Deliberately not a page: the one caller is the canvas deciding what
+   * to forget, and a partial answer to that question is worse than no answer at
+   * all — it deletes the customisations of the sessions it did not mention. An
+   * id is a uuid, so 10 000 of them is under half a megabyte, and this walks
+   * the same cached index `list()` does.
+   */
+  async ids(): Promise<HistoryIdsResult> {
+    const index = await this.ensureIndex();
+    return {
+      generatedAt: this.now(),
+      sessionIds: index.entries.map((entry) => entry.sessionId),
+      total: index.entries.length,
+      listMs: index.listMs,
+      warnings: index.warnings,
+    };
+  }
+
+  /**
    * One past session as a frozen tree. Parses on the first call and on any call
-   * where the file has changed size or mtime since; otherwise the cache
-   * answers and nothing is opened.
+   * where the transcript **or any of its subagent files** has changed size or
+   * mtime since; otherwise the cache answers and nothing is opened.
    */
   async open(sessionId: string): Promise<History | undefined> {
     const index = await this.ensureIndex();
@@ -349,9 +403,18 @@ export class HistoryScanner {
     return history;
   }
 
-  /** Path, size and mtime: a file that changed any of the three is re-parsed. */
+  /**
+   * Path, size and mtime of the transcript, plus the shape of the `subagents/`
+   * directory beside it: a session that changed any of them is re-parsed.
+   *
+   * The subagent half is N-WP20. A session's headline number is `treeTokens`,
+   * which is the parent transcript **plus every subagent under it**, so a key
+   * that only watched the parent answered a question it had not checked. The
+   * reproduction was one appended subagent line: 11 tokens cached against a
+   * tree that had 31.
+   */
   private cacheKey(entry: IndexEntry): string {
-    return `${entry.transcript}|${entry.transcriptBytes}|${entry.lastWriteAt}`;
+    return `${entry.transcript}|${entry.transcriptBytes}|${entry.lastWriteAt}|${entry.agentsSignature ?? '-'}`;
   }
 
   private remember(key: string, history: History): void {
@@ -510,14 +573,17 @@ export class HistoryScanner {
         lastWriteAt: mtimeMs,
       };
 
-      // Only a directory listing, never a file read: `agent-*.meta.json` names
-      // are enough to count the subagents.
+      // Only a directory listing and a `stat` each, never a file read:
+      // `agent-*.meta.json` names are enough to count the subagents, and their
+      // sizes and mtimes are enough to know whether any of them moved.
       if (sessionDirs.has(sessionId)) {
         try {
           const files = await readdir(paths.subagentsDir);
           row.agentCount = files.filter(
             (name) => name.startsWith('agent-') && name.endsWith('.meta.json'),
           ).length;
+          const signature = await this.agentsSignature(paths.subagentsDir, files);
+          if (signature !== undefined) row.agentsSignature = signature;
         } catch {
           // A session directory with no `subagents/` is the normal case.
         }
@@ -529,6 +595,42 @@ export class HistoryScanner {
       entries: rows.filter((row): row is IndexEntry => row !== undefined),
       warnings: 0,
     };
+  }
+
+  /**
+   * N-WP20. What the `subagents/` directory looks like right now: how many
+   * files the tree is built from, how many bytes they hold together, and the
+   * newest write among them. Any of the three moving means the tree changed,
+   * which is exactly when the cached parse of it stops being true.
+   *
+   * Count and bytes together rather than either alone: a file replaced by
+   * another of the same size keeps the total, and the mtime catches that.
+   */
+  private async agentsSignature(
+    subagentsDir: string,
+    names: readonly string[],
+  ): Promise<string | undefined> {
+    const tracked = names
+      .filter(
+        (name) =>
+          name.startsWith('agent-') && (name.endsWith('.jsonl') || name.endsWith('.meta.json')),
+      )
+      .sort();
+    if (tracked.length === 0) return undefined;
+
+    let bytes = 0;
+    let newest = 0;
+    for (const name of tracked) {
+      try {
+        this.counters.stats += 1;
+        const info = await stat(path.join(subagentsDir, name));
+        bytes += info.size;
+        if (info.mtimeMs > newest) newest = info.mtimeMs;
+      } catch {
+        // Removed between the listing and the stat: Claude Code's own cleanup.
+      }
+    }
+    return `${tracked.length}:${bytes}:${newest}`;
   }
 
   /* ---------------------------------------------------------------- *

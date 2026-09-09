@@ -413,3 +413,117 @@ test('a SessionView is usable anywhere a Session is', async () => {
     }
   });
 });
+
+/* ------------------------------------------------------------------ *
+ * N-WP20: why the canvas is empty
+ * ------------------------------------------------------------------ */
+
+/** A join over one sessions directory, with neither optional source read. */
+function emptyState(dir: string, alive: boolean, agents: boolean): NazarState {
+  return new NazarState({
+    captures: null,
+    limits: null,
+    registry: new SessionRegistry({
+      sessionsDir: dir,
+      watch: false,
+      isAlive: () => alive,
+      runAgents: agents
+        ? async () => ({ ok: true, entries: [], durationMs: 1 })
+        : null,
+    }),
+    coalesceMs: 5,
+    now: () => NOW,
+    createTree: () => undefined,
+  });
+}
+
+test('N-WP20: an empty canvas says which of the three empties it is', async () => {
+  /*
+   * `nazar doctor` has always separated these three; the page could not, so it
+   * told everybody the same thing — *start `claude` in a terminal* — including
+   * the person whose `CLAUDE_CONFIG_DIR` had moved, for whom opening another
+   * terminal does nothing at all. Same two facts, same three branches, decided
+   * here against a real directory.
+   */
+
+  // (1) No sessions directory: Claude Code has never run under this config dir.
+  const absent = emptyState(path.join(tmpdir(), 'nazar-state-absent-4676'), false, true);
+  try {
+    await absent.start();
+    const snapshot = absent.snapshot();
+    assert.equal(snapshot.sessions.length, 0);
+    assert.equal(snapshot.empty?.reason, 'noConfigDir');
+    assert.equal(snapshot.empty?.sessionFiles, 0);
+  } finally {
+    absent.stop();
+  }
+
+  // (2) The directory exists and holds nothing. Nothing is running; that is all.
+  await withSessionsDir(async (dir) => {
+    const state = emptyState(dir, false, true);
+    try {
+      await state.start();
+      assert.equal(state.snapshot().empty?.reason, 'noSessions');
+      assert.equal(state.snapshot().empty?.agentsOk, true);
+    } finally {
+      state.stop();
+    }
+  });
+
+  // (3) Session files, none of them alive: leftovers Nazar refuses to draw.
+  await withSessionsDir(async (dir, write) => {
+    await write(4242, sessionFile(4242, 'sess-dead'));
+    const state = emptyState(dir, false, true);
+    try {
+      await state.start();
+      // One gate of "we no longer know" comes first: an `unknown` session is
+      // still a session and still drawn, so the canvas is not empty yet and
+      // there is nothing to explain.
+      assert.equal(state.snapshot().sessions.length, 1);
+      assert.equal(state.snapshot().empty, undefined);
+
+      await state.registry.gate();
+      state.publish();
+      const snapshot = state.snapshot();
+      assert.equal(snapshot.sessions.length, 0, 'the second gate drops it');
+      assert.equal(snapshot.empty?.reason, 'staleSessions');
+      assert.equal(snapshot.empty?.sessionFiles, 1, 'and the leftover file is why');
+    } finally {
+      state.stop();
+    }
+  });
+});
+
+test('N-WP20: the two asides are reported, and neither is ever the reason', async () => {
+  await withSessionsDir(async (dir) => {
+    // `claude agents --json` unavailable, and no status-line wrapper: both
+    // true, both worth saying, neither of them why the canvas is empty.
+    const state = emptyState(dir, false, false);
+    try {
+      await state.start();
+      const diagnosis = state.snapshot().empty;
+      assert.equal(diagnosis?.reason, 'noSessions', 'the reason comes from the files alone');
+      assert.equal(diagnosis?.agentsOk, false);
+      assert.equal(diagnosis?.wrapper, false);
+    } finally {
+      state.stop();
+    }
+  });
+});
+
+test('N-WP20: a canvas with something on it carries no diagnosis at all', async () => {
+  // Absent rather than a fourth reason code. An `empty` object sitting next to
+  // a running session would be a field that lies, and every consumer would
+  // have to learn to ignore it.
+  await withSessionsDir(async (dir, write) => {
+    await write(4242, sessionFile(4242, 'sess-a'));
+    const state = emptyState(dir, true, true);
+    try {
+      await state.start();
+      assert.equal(state.snapshot().sessions.length, 1);
+      assert.equal(state.snapshot().empty, undefined);
+    } finally {
+      state.stop();
+    }
+  });
+});

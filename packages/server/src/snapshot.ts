@@ -308,6 +308,17 @@ export function toWireState(snapshot: StateSnapshot, options?: WireOptions): Sta
   };
   // Absent when neither source exists, which is how the strip stays hidden.
   if (snapshot.quota !== undefined) out.quota = toWireQuota(snapshot.quota);
+  // N-WP20. An enum, a count and two booleans, all of them about how this
+  // machine is configured rather than about what is on it: nothing here is a
+  // path, a name or a measurement, so there is nothing to redact or to clip.
+  if (snapshot.empty !== undefined) {
+    out.empty = {
+      reason: snapshot.empty.reason,
+      agentsOk: snapshot.empty.agentsOk,
+      sessionFiles: snapshot.empty.sessionFiles,
+      wrapper: snapshot.empty.wrapper,
+    };
+  }
   return out;
 }
 

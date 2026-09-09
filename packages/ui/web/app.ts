@@ -26,6 +26,7 @@ import { readColours, writeColours } from '../src/colours.ts';
 import { contextActionOf } from '../src/contextmenu.ts';
 import { DEMO_HISTORY_IDS, makeDemoHistory } from '../src/demo-history.ts';
 import { DEMO_NOTES, DEMO_PROJECT_ROOTS, DEMO_CARD_NAMES, makeDemoState } from '../src/demo.ts';
+import { emptyStateLines } from '../src/empty.ts';
 import {
   basename,
   cacheReadNote,
@@ -652,6 +653,11 @@ function start(): void {
   const emptyTitle = element<HTMLParagraphElement>('empty-title');
   const emptyHint = element<HTMLParagraphElement>('empty-hint');
   const emptyTabHint = element<HTMLParagraphElement>('empty-tab-hint');
+  // N-WP20: why the canvas is empty, what to do about it, and what is merely
+  // worth knowing while it is.
+  const emptyWhy = element<HTMLParagraphElement>('empty-why');
+  const emptyNext = element<HTMLParagraphElement>('empty-next');
+  const emptyNote = element<HTMLParagraphElement>('empty-note');
   const conn = element<HTMLDivElement>('conn');
   const counts = element<HTMLDivElement>('counts');
   const cardRoot = element<HTMLDivElement>('card');
@@ -1784,8 +1790,36 @@ function start(): void {
           ? t('empty.title')
           : t('empty.tabTitle', { name: tab?.name ?? t('empty.thisTab') }),
       );
-      emptyHint.hidden = elsewhere > 0;
       emptyTabHint.hidden = elsewhere === 0;
+
+      /*
+       * N-WP20: the first five minutes.
+       *
+       * The old empty state said "no sessions found" and told everybody to
+       * start `claude`, which is the right answer to exactly one of the three
+       * ways a canvas can be empty and nonsense for the other two — a moved
+       * `CLAUDE_CONFIG_DIR` is not fixed by opening another terminal. The
+       * server now sends the same verdict `nazar doctor` prints, so the page
+       * can say which of the three it is and what to do about it.
+       *
+       * The generic hint is what shows when there is no diagnosis: an empty
+       * *tab* on a busy machine, and the demo, which has nothing to diagnose.
+       */
+      const diagnosis = frozen ? undefined : state.empty;
+      const explained = elsewhere === 0 && diagnosis !== undefined;
+      emptyHint.hidden = elsewhere > 0 || explained;
+      emptyWhy.hidden = !explained;
+      emptyNext.hidden = !explained;
+      emptyNote.hidden = true;
+      if (explained && diagnosis !== undefined) {
+        const lines = emptyStateLines(diagnosis);
+        setText(emptyWhy, lines.why);
+        setText(emptyNext, lines.next);
+        // Neither note is why the canvas is empty, so neither may be read as
+        // the reason: they are a quieter second line, and only when true.
+        emptyNote.hidden = lines.notes.length === 0;
+        if (lines.notes.length > 0) setText(emptyNote, lines.notes.join(' · '));
+      }
     }
     const agentCount = sessions.reduce((sum, session) => sum + session.agents.length, 0);
     setText(
@@ -2571,6 +2605,16 @@ function start(): void {
    * days). A session that ended this morning keeps its tab and its place; one
    * whose transcript has expired takes its entries with it instead of leaving
    * them to pile up for the life of the browser profile.
+   *
+   * N-WP20: **the whole store, or nothing.** This used to be decided from the
+   * first page of the listing — 200 rows — so on a machine with more than 200
+   * transcripts every session past the 200th counted as "no longer has", and
+   * its card position, its size, its tab membership and the name typed on it
+   * were deleted while the session itself sat openable in the drawer two clicks
+   * away. The decision now comes from `/api/history/ids`, which is unpaged, and
+   * it is not made at all if that request fails: `prune` is never called,
+   * `pruned` stays false, and the next frame tries again. Forgetting nothing is
+   * always recoverable; forgetting the wrong thing is not.
    */
   let pruned = false;
   const prune = (historyIds: readonly string[]): void => {
@@ -2727,8 +2771,31 @@ function start(): void {
 
   /* ---- data ------------------------------------------------------- */
 
+  /**
+   * N-WP20: when the last frame arrived, so a disconnected canvas can say how
+   * old what it is showing is.
+   *
+   * The canvas deliberately keeps the last snapshot on screen when the stream
+   * drops — blanking it would throw away the only thing left that is true — but
+   * that makes a stale reading indistinguishable from a live one, which is the
+   * whole class of bug this package is about. `0` means no frame has ever
+   * arrived, and the age is then not written at all rather than shown as a
+   * lifetime measured from the epoch.
+   */
+  let lastStateAt = 0;
+
+  let connection: 'live' | 'connecting' | 'lost' | 'demo' = 'connecting';
+
   const setConnection = (status: 'live' | 'connecting' | 'lost' | 'demo'): void => {
+    connection = status;
     conn.dataset['status'] = status;
+    // N-WP20. Disconnected is the one state with something more to say: the
+    // last data is still on screen and the only honest label for it is its age.
+    // Re-read on every frame — the 1 s tick calls this — so the number moves.
+    if (status === 'lost' && lastStateAt > 0) {
+      setText(conn, t('bar.disconnectedAge', { age: formatAge(Date.now() - lastStateAt) }));
+      return;
+    }
     setText(
       conn,
       t(
@@ -2856,15 +2923,18 @@ function start(): void {
         return;
       }
       everConnected = true;
+      // N-WP20: stamped from the browser's clock, not the snapshot's. The age
+      // shown is "how long since this page last heard anything", which is what
+      // a reader of a stale canvas is actually asking.
+      lastStateAt = Date.now();
       setConnection('live');
       schedule();
-      // One listing, once, and only to decide what to forget. It opens no
-      // transcript: the scanner lists by `readdir` and `stat` alone.
+      // One sweep, once, and only to decide what to forget. It opens no
+      // transcript: the scanner answers this from `readdir` and `stat` alone.
+      // N-WP20: ids rather than a page of the listing, and a failure prunes
+      // nothing at all — `pruned` stays false so the next frame retries.
       if (!pruned) {
-        void transport
-          .list(200)
-          .then((page) => prune(page.sessions.map((one) => one.sessionId)))
-          .catch(() => undefined);
+        void transport.ids().then(prune, () => undefined);
       }
     });
     channel.addEventListener('open', () => {
@@ -2896,8 +2966,13 @@ function start(): void {
     listen(source);
   };
 
-  // Elapsed times and write ages keep moving between snapshots.
-  window.setInterval(schedule, 1000);
+  // Elapsed times and write ages keep moving between snapshots. N-WP20: so does
+  // the age of the last frame, and it moves fastest exactly when nothing else
+  // on the canvas is moving at all.
+  window.setInterval(() => {
+    schedule();
+    if (connection === 'lost') setConnection('lost');
+  }, 1000);
 }
 
 /* ------------------------------------------------------------------ *
