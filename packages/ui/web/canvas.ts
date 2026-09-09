@@ -37,6 +37,8 @@ import {
   formatDuration,
   formatElapsed,
   formatTotal,
+  hostLabel,
+  hostTitle,
   modelChip,
   orUnknown,
   pidLabel,
@@ -639,6 +641,13 @@ interface SessionEls {
   readonly ring: SVGCircleElement;
   readonly ringPulse: SVGCircleElement;
   readonly title: SVGTextElement;
+  /**
+   * N-WP17a: the `@alias` beside the title. `display: none` on a local card,
+   * which is every card on a machine started without `--remote`.
+   */
+  readonly host: SVGTextElement;
+  /** The sentence behind it: which machine, and how long since it last spoke. */
+  readonly hostNote: SVGTitleElement;
   readonly path: SVGTextElement;
   /** N-WP15a: the task line. `display: none` unless the browser asked for it. */
   readonly task: SVGTextElement;
@@ -884,8 +893,47 @@ export class CanvasRenderer {
      * a renamed card loses nothing and gains the only thing a directory cannot
      * say: *which* of these you are looking at.
      */
+    /*
+     * N-WP17a: the `@alias`, on the title's own line and taking its room from
+     * the title rather than from the card.
+     *
+     * A remote card is otherwise indistinguishable from a local one — same
+     * folder name, same model, same tree — and "which machine is this" is the
+     * first question anybody looking at a mixed canvas has. The label is
+     * measured before the title is cut, so a long folder name gives up
+     * characters to it instead of running underneath it; the alias itself is
+     * never cut to make room for a folder, because a truncated hostname is a
+     * different hostname.
+     */
+    const host = hostLabel(session.host);
+    const hostWidth = host === undefined ? 0 : Math.round(textWidth(host, 11) + 8);
     const named = label.name !== undefined && label.name.length > 0;
-    setText(els.title, fitText(named ? (label.name as string) : basename(session.cwd), titleRoom, 15));
+    const titleText = fitText(
+      named ? (label.name as string) : basename(session.cwd),
+      Math.max(24, titleRoom - hostWidth),
+      15,
+    );
+    setText(els.title, titleText);
+    setAttr(els.host, 'display', host === undefined ? 'none' : 'inline');
+    if (host !== undefined) {
+      setAttr(els.host, 'x', CARD.pad + BADGE + 12 + Math.round(textWidth(titleText, 15)) + 6);
+      setText(els.host, host);
+      /*
+       * A remote card whose connection has dropped keeps its cards and goes
+       * quiet — `state: 'unknown'`, exactly what a local session whose process
+       * stopped answering gets — so the hover has to say the one thing that
+       * distinguishes the two: this is not a session that ended, it is a
+       * session this machine has stopped hearing about, and here is how long
+       * ago it last did.
+       */
+      setText(
+        els.hostNote,
+        hostTitle(
+          session.host as string,
+          session.state === 'unknown' ? Math.max(0, now - session.lastSeenAt) : undefined,
+        ),
+      );
+    }
     setClass(els.g, 'is-named', named);
     setText(els.path, fitText(orUnknown(session.cwd), inner - BADGE - 16, 11.5));
     // The click target for renaming, over the title text and above the drag
@@ -1365,6 +1413,21 @@ export class CanvasRenderer {
     setAttr(title, 'y', HEADER.title);
 
     /*
+     * N-WP17a: `@alias`, beside the title.
+     *
+     * Its `<title>` lives on a wrapping group rather than inside the `<text>`,
+     * for the reason the cache-read note already documents: `setText` writes
+     * `textContent` and would erase a child `<title>` on the first tick. `x` is
+     * set on every draw from the width the title actually used.
+     */
+    const host = svg('text', 'nz-session__host');
+    setAttr(host, 'y', CARD.pad + 14);
+    setAttr(host, 'display', 'none');
+    const hostNote = svg('title');
+    const hostGroup = svg('g');
+    hostGroup.append(hostNote, host);
+
+    /*
      * WP4g: the rename target.
      *
      * A transparent rectangle over the title rather than a click handler on the
@@ -1577,6 +1640,7 @@ export class CanvasRenderer {
       ringPulse,
       ring,
       title,
+      hostGroup,
       path,
       task,
       identity,
@@ -1609,6 +1673,8 @@ export class CanvasRenderer {
       ring,
       ringPulse,
       title,
+      host,
+      hostNote,
       path,
       task,
       identity,

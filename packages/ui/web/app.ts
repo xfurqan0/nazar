@@ -42,6 +42,7 @@ import {
   formatCount,
   formatDuration,
   formatElapsed,
+  hostLabel,
   orUnknown,
   pidLabel,
 } from '../src/format.ts';
@@ -512,7 +513,22 @@ class HoverCard {
             pid: pidLabel(session.pid),
             status: session.status,
             state: session.state,
-          }),
+          }) +
+          /*
+           * N-WP17a. Two sentences a remote or a Hermes card owes the reader.
+           *
+           * Which machine, because the line above it is a working directory
+           * and a working directory on another machine looks exactly like one
+           * on this machine. And, for Hermes, that **waiting is not a state it
+           * can be in here** — Hermes keeps a pending permission in the
+           * gateway's memory and writes it to no file, so a Hermes card that
+           * never says "waiting" is not a card whose session is never waiting.
+           * Saying so is the difference between an absent field and a lie.
+           */
+          (session.host === undefined ? '' : ` · ${hostLabel(session.host) as string}`) +
+          (session.provider === 'hermes'
+            ? ` · ${t('hover.waitingUnavailable', { provider: session.provider })}`
+            : ''),
     );
     // N-WP15a. `session.task` is present only when this browser asked for it
     // and the server agreed, so there is nothing more to decide here.
@@ -731,6 +747,8 @@ function start(): void {
   // always there; the second is the machine's and only the shell can answer it.
   const taskTextButton = element<HTMLButtonElement>('task-text-toggle');
   const recordingButton = element<HTMLButtonElement>('recording-toggle');
+  // N-WP17a: the one line of ssh aliases the shell hands to the child server.
+  const remotesField = element<HTMLInputElement>('remotes-field');
   const linkMenuRoot = element<HTMLDivElement>('linkmenu');
   // N-WP12: the drawer's two views, the gear that swaps them, and the slot the
   // folder-tab rule sits in now that it is a setting rather than a list row.
@@ -803,9 +821,20 @@ function start(): void {
     }
     const session = drawn().sessions.find((one) => one.id === sessionId);
     if (session === undefined) return;
-    // N-WP18: a Codex session names no process, so there is nothing to raise.
-    // Refused before the shell is consulted, and refused with a sentence: the
-    // jump is *absent* on such a card rather than offered and then failed.
+    /*
+     * A card with no process behind it cannot be jumped to.
+     *
+     * Three kinds of card arrive that way: a Codex thread, whose rollout names
+     * no process anywhere (N-WP18); a Hermes session, which is served by one
+     * gateway per profile rather than by a process of its own; and any session
+     * read off another machine, whose pid is a number on *that* machine
+     * (N-WP17a). All three carry `pid: 0`, and raising whatever local window
+     * happens to be wearing that pid today would be the worst answer available
+     * — confident, and wrong.
+     *
+     * Refused before the shell is consulted, and refused with a sentence: the
+     * jump is *absent* on such a card rather than offered and then failed.
+     */
     if (session.pid <= 0) {
       showHint(t('hint.noPidNoTerminal'));
       return;
@@ -1206,6 +1235,55 @@ function start(): void {
         schedule();
       });
     });
+
+    /*
+     * N-WP17a: the remote hosts.
+     *
+     * The same shape as recording mode above and the same mechanism underneath —
+     * the list is a flag on the child server's command line, so committing it is
+     * a server restart — with one difference that is worth the extra lines: the
+     * field is *repainted from the machine's answer*, not from what was typed.
+     * The shell validates and de-duplicates, so `box, box,` comes back as `box`
+     * and a person can see what is actually being read.
+     *
+     * Committed on Enter and on blur, and never on every keystroke: each commit
+     * restarts a server, and restarting one per character typed would be absurd.
+     */
+    const paintRemotes = (aliases: readonly string[]): void => {
+      remotesField.value = aliases.join(', ');
+    };
+    void shell.remotes().then((aliases) => paintRemotes(aliases ?? []));
+
+    let committing = false;
+    const commitRemotes = (): void => {
+      if (committing) return;
+      const typed = remotesField.value
+        .split(',')
+        .map((alias) => alias.trim())
+        .filter((alias) => alias.length > 0);
+      committing = true;
+      void shell.setRemotes(typed).then((now) => {
+        committing = false;
+        if (now === undefined) {
+          // A rejected alias, or a restart that failed. Say so and put the field
+          // back to what the machine is really reading, rather than leaving a
+          // control that shows something nothing is doing.
+          showHint(t('hint.remotesFailed'));
+          void shell.remotes().then((aliases) => paintRemotes(aliases ?? []));
+          return;
+        }
+        paintRemotes(now);
+        restartStream();
+        schedule();
+      });
+    };
+
+    remotesField.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      commitRemotes();
+    });
+    remotesField.addEventListener('blur', commitRemotes);
   }
 
   const card = new HoverCard(cardRoot);

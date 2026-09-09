@@ -392,6 +392,28 @@
                   <span class="nz-switch__track" aria-hidden="true"></span>
                 </button>
                 <p class="nz-about__line" data-nz-t="settings.recordingNote"></p>
+                <!--
+                  N-WP17a: the machines this canvas also reads.
+
+                  One line, comma separated, and the values are `~/.ssh/config`
+                  aliases and nothing else — no user, no port, no key path — so
+                  it is one field rather than a form. Committing it restarts the
+                  child server with `--remote`, which is why it is the shell's
+                  to offer: in a browser the same thing is a flag on a command
+                  line the person is already standing at.
+                -->
+                <label class="nz-field">
+                  <span class="nz-field__label" data-nz-t="settings.remotes"></span>
+                  <input
+                    id="remotes-field"
+                    class="nz-field__input"
+                    type="text"
+                    autocomplete="off"
+                    spellcheck="false"
+                    maxlength="200"
+                  />
+                </label>
+                <p class="nz-about__line" data-nz-t="settings.remotesNote"></p>
               </div>
               <!-- `web/projects.ts` puts the auto-create switch here: the list it
                    belongs to is in the drawer, but the rule is a setting. -->

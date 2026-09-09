@@ -158,6 +158,17 @@ export interface SessionEnded {
   readonly cwd?: string;
   /** Epoch ms at which the registry stopped holding it. */
   readonly at: number;
+  /**
+   * N-WP17a: the ssh alias the session was read through, or absent when it
+   * ended on this machine.
+   *
+   * Never set by this class — a `NazarState` only ever watches the machine it
+   * is on. It is filled in by `RemoteHosts` when an ending arrives off another
+   * machine's stream, and it is here rather than on a second event type so the
+   * sound rules do not have to learn that endings come in two kinds. `id` is
+   * already re-keyed by alias when this is set, so it matches the card.
+   */
+  readonly host?: string;
 }
 
 export interface NazarStateEvents {

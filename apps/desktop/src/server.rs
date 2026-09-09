@@ -277,7 +277,12 @@ pub fn plan_port(stored: Option<u16>, version: &str) -> Option<Plan> {
 ///
 /// `stored` is the port from `desktop.json`, and the returned handle's `port` is the one
 /// the caller should store back. A launch that reuses its port writes nothing.
-pub fn start(entry: &Path, stored: Option<u16>, task_text: bool) -> Result<ServerHandle, String> {
+pub fn start(
+    entry: &Path,
+    stored: Option<u16>,
+    task_text: bool,
+    remotes: &[String],
+) -> Result<ServerHandle, String> {
     let entry = simplify(entry);
     // The plan is used once. If the stored port fails to start a server, every later
     // attempt asks the operating system for a number nobody has, because retrying a port
@@ -297,7 +302,10 @@ pub fn start(entry: &Path, stored: Option<u16>, task_text: bool) -> Result<Serve
             // ephemeral port and therefore, once, the browser-stored
             // arrangement — which is the right way round, because the mode
             // exists for the moment a screen is being shared.
-            Some(Plan::Adopt(port)) if task_text => match adopt(port) {
+            // N-WP17a joins the same clause. A server this shell did not start was not
+            // started with this shell's `--remote` list either, so adopting one would
+            // mean a settings panel that lists three hosts over a canvas reading none.
+            Some(Plan::Adopt(port)) if task_text && remotes.is_empty() => match adopt(port) {
                 Ok(handle) => return Ok(handle),
                 Err(error) => {
                     // It answered a moment ago and does not now. Fall through to starting
@@ -323,7 +331,7 @@ pub fn start(entry: &Path, stored: Option<u16>, task_text: bool) -> Result<Serve
             },
         };
 
-        match attempt_start(&entry, port, task_text) {
+        match attempt_start(&entry, port, task_text, remotes) {
             Ok(handle) => return Ok(handle),
             Err(error) => {
                 // The path is in every failure line, because a server that will not start
@@ -354,7 +362,12 @@ fn adopt(port: u16) -> Result<ServerHandle, String> {
     })
 }
 
-fn attempt_start(entry: &Path, port: u16, task_text: bool) -> Result<ServerHandle, String> {
+fn attempt_start(
+    entry: &Path,
+    port: u16,
+    task_text: bool,
+    remotes: &[String],
+) -> Result<ServerHandle, String> {
     let mut command = node::command("node");
     command
         .arg(entry)
@@ -370,6 +383,12 @@ fn attempt_start(entry: &Path, port: u16, task_text: bool) -> Result<ServerHandl
     // come back up unable to take text out of a transcript at all.
     if !task_text {
         command.arg("--no-task-text");
+    }
+    // N-WP17a. The same shape and for the same reason: the remote hosts are a flag on
+    // the child's command line rather than a file the server reads for itself, so what
+    // the canvas is reading is visible in Task Manager and changing it is a restart.
+    if !remotes.is_empty() {
+        command.arg("--remote").arg(remotes.join(","));
     }
     let mut child = command
         .stdin(Stdio::null())

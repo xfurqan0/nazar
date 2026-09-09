@@ -1,10 +1,15 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "canvas",
-  "description": "The canvas, served by the child server on the loopback address. THIS IS THE UNUSUAL CAPABILITY AND THE REASON IS ARCHITECTURAL: the canvas is not embedded in the application, it is the same page `npx @xfurqan0/nazar` serves, because browser mode is first-class and one canvas is better than two builds of one page. That makes it a REMOTE origin as far as Tauri is concerned, and without an entry here it could not call a single command — no jump to a terminal, no autostart switch. The pattern is narrowed to 127.0.0.1 and localhost on any port, which is where this application's own child server is and where, by the server's own Host check (`isLocalHost` in packages/server/src/http.ts), nothing else can answer. SIX COMMANDS, AND THEY ARE THE SIX THE CANVAS ACTUALLY CALLS: shell_info to decide whether to offer the jump at all, jump_to_session for the double-click and the card menu, get_autostart / set_autostart for the startup switch in the sidebar, and get_task_text_off / set_task_text_off for N-WP15a's recording mode. The last one is the only command on this list that restarts the child server, and it is granted here for the same reason as the rest — the settings panel that offers it is served over the loopback address like every other part of the canvas — but it is worth naming the blast radius: a page on this origin can make the canvas server restart. That is a denial of service against a local monitoring tool by a page that could already read everything the tool shows, and the Host check in packages/server/src/http.ts is what keeps anything but this machine off the origin in the first place. They are named one at a time rather than granted as a group, so a command added later is not reachable from a web page by accident — that is what declaring them in build.rs buys. Deliberately absent: boot_state and open_download_page, which belong to the boot page; every plugin; and every dialog, filesystem and shell permission. The canvas can ask this application to do four things and cannot ask the operating system for anything.",
-  "windows": ["main"],
+  "description": "The canvas, served by the child server on the loopback address. THIS IS THE UNUSUAL CAPABILITY AND THE REASON IS ARCHITECTURAL: the canvas is not embedded in the application, it is the same page `npx @xfurqan0/nazar` serves, because browser mode is first-class and one canvas is better than two builds of one page. That makes it a REMOTE origin as far as Tauri is concerned, and without an entry here it could not call a single command — no jump to a terminal, no autostart switch. The pattern is narrowed to 127.0.0.1 and localhost on any port, which is where this application's own child server is and where, by the server's own Host check (`isLocalHost` in packages/server/src/http.ts), nothing else can answer. EIGHT COMMANDS, AND THEY ARE THE EIGHT THE CANVAS ACTUALLY CALLS: shell_info to decide whether to offer the jump at all, jump_to_session for the double-click and the card menu, get_autostart / set_autostart for the startup switch in the sidebar, get_task_text_off / set_task_text_off for N-WP15a's recording mode, and get_remotes / set_remotes for N-WP17a's list of ssh aliases. The last two pairs are the only commands on this list that restart the child server, and they are granted here for the same reason as the rest — the settings panel that offers it is served over the loopback address like every other part of the canvas — but it is worth naming the blast radius: a page on this origin can make the canvas server restart. That is a denial of service against a local monitoring tool by a page that could already read everything the tool shows, and the Host check in packages/server/src/http.ts is what keeps anything but this machine off the origin in the first place. They are named one at a time rather than granted as a group, so a command added later is not reachable from a web page by accident — that is what declaring them in build.rs buys. Deliberately absent: boot_state and open_download_page, which belong to the boot page; every plugin; and every dialog, filesystem and shell permission. The canvas can ask this application to do six things and cannot ask the operating system for anything.",
+  "windows": [
+    "main"
+  ],
   "remote": {
-    "urls": ["http://127.0.0.1:*", "http://localhost:*"]
+    "urls": [
+      "http://127.0.0.1:*",
+      "http://localhost:*"
+    ]
   },
   "permissions": [
     "core:default",
@@ -13,6 +18,8 @@
     "allow-get-autostart",
     "allow-set-autostart",
     "allow-get-task-text-off",
-    "allow-set-task-text-off"
+    "allow-set-task-text-off",
+    "allow-get-remotes",
+    "allow-set-remotes"
   ]
 }

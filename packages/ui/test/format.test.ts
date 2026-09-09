@@ -14,6 +14,9 @@ import {
   formatElapsed,
   formatTokens,
   formatTotal,
+  hostLabel,
+  hostTitle,
+  MAX_HOST_LABEL,
   modelChip,
   orUnknown,
   summarize,
@@ -200,4 +203,39 @@ test('the context window shows the counts and the payload’s own percentage', (
 
 test('the context percentage is floored, like every other percentage', () => {
   assert.equal(formatContextWindow({ percent: 99.9 }), '99%');
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP17a: which machine a card is describing
+ * ------------------------------------------------------------------ */
+
+test('a host becomes @alias, and no host becomes no label at all', () => {
+  assert.equal(hostLabel('box'), '@box');
+  assert.equal(hostLabel(' build-box '), '@build-box');
+  // Three ways of saying "this machine", and all three draw nothing rather
+  // than an empty label.
+  assert.equal(hostLabel(undefined), undefined);
+  assert.equal(hostLabel(''), undefined);
+  assert.equal(hostLabel('   '), undefined);
+});
+
+test('a long alias is cut, and the cut is visible', () => {
+  const long = 'a'.repeat(MAX_HOST_LABEL + 10);
+  const label = hostLabel(long) as string;
+  assert.equal(label.length, MAX_HOST_LABEL + 1, 'the @ plus the cap');
+  assert.ok(label.endsWith('…'));
+  // Exactly at the cap is not cut: a truncated hostname is a different
+  // hostname, so the ellipsis only appears when something was actually lost.
+  const exact = 'a'.repeat(MAX_HOST_LABEL);
+  assert.equal(hostLabel(exact), `@${exact}`);
+});
+
+test('the hover behind the label says which machine, and how long since it spoke', () => {
+  assert.equal(hostTitle('box'), 'on box');
+  // A remote card that goes quiet is not a session that ended, and the
+  // difference is exactly the age of the last frame that arrived.
+  assert.equal(hostTitle('box', 90_000), 'on box · last seen 1m 30s ago');
+  // `formatAge` carries the locale's own word for "ago", so the sentence around
+  // it must not add a second one.
+  assert.equal((hostTitle('box', 90_000).match(/ago/g) ?? []).length, 1);
 });

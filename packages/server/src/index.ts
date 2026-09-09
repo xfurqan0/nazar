@@ -11,12 +11,57 @@ export {
   main,
   parseOpen,
   parsePort,
+  parseRemotes,
   parseTaskText,
+  parseValue,
   serve,
   unknownFlag,
   unknownFlagMessage,
 } from './cli.js';
 export type { OutputStream, ServeHandle, ServeOptions } from './cli.js';
+
+/* N-WP17a: the two ends of a remote canvas. */
+
+export { DEFAULT_AGENT_THROTTLE_MS, encodeLine, mergeSnapshot, runAgent } from './agent.js';
+export type {
+  AgentCapabilities,
+  AgentHandle,
+  AgentHello,
+  AgentLine,
+  AgentLineType,
+  AgentOptions,
+  AgentSource,
+  AgentState,
+} from './agent.js';
+
+export {
+  ALIAS_PATTERN,
+  CompositeState,
+  DEFAULT_REMOTE_COMMAND,
+  HELLO_TIMEOUT_MS,
+  LineReader,
+  MAX_BACKOFF_MS,
+  MAX_LINE_BYTES,
+  MIN_BACKOFF_MS,
+  RemoteHosts,
+  SSH_ARGS,
+  faded,
+  isAlias,
+  mergeRemote,
+  parseAliases,
+  remoteId,
+  sshSpawn,
+  withHost,
+} from './remote.js';
+export type {
+  LocalState,
+  RemoteHostsEvents,
+  RemoteHostsOptions,
+  RemoteSource,
+  RemoteSpawn,
+  RemoteState,
+  RemoteStatus,
+} from './remote.js';
 
 export { VERSION_HEADER } from './version.js';
 

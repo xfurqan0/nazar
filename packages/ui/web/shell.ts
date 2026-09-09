@@ -141,6 +141,31 @@ export class Shell {
   setTaskTextOff(off: boolean): Promise<boolean | undefined> {
     return this.call<boolean>('set_task_text_off', { off });
   }
+
+  /**
+   * N-WP17a: which `~/.ssh/config` aliases this machine is also reading.
+   *
+   * `undefined` from a browser, and from a shell too old to answer — both of which the
+   * canvas paints as "none", because a machine that cannot say what it is reading is not
+   * a machine to claim things about.
+   */
+  remotes(): Promise<readonly string[] | undefined> {
+    return this.call<string[]>('get_remotes');
+  }
+
+  /**
+   * Replace the list; resolves with the list the machine actually reached.
+   *
+   * Like {@link setTaskTextOff}, and underneath it is the same mechanism: the hosts are
+   * a flag on the child server's command line, so this restarts it and takes about as
+   * long as a server start. The answer is validated and de-duplicated, so a field typed
+   * loosely — a trailing comma, a repeated host — is repainted with what is actually
+   * running rather than with what was typed. A rejected alias resolves `undefined`,
+   * which the canvas shows as a hint rather than as a silent revert.
+   */
+  setRemotes(aliases: readonly string[]): Promise<readonly string[] | undefined> {
+    return this.call<string[]>('set_remotes', { aliases: [...aliases] });
+  }
 }
 
 /** What a browser is told when it double-clicks a card. */

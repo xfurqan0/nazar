@@ -19,6 +19,7 @@ import test from 'node:test';
 
 import '../catalogs.ts';
 import { FakeElement, root } from './double.ts';
+import { MAX_HOST_LABEL } from '../../src/format.ts';
 import type { NeedsYouSession } from '../../src/needs-you.ts';
 import { NeedsYouStrip } from '../../web/needs-you.ts';
 
@@ -32,6 +33,11 @@ function session(seed: Seed): NeedsYouSession {
 
 function waiting(id: string, waitingFor: string): NeedsYouSession {
   return session({ id, status: 'waiting', waitingFor });
+}
+
+/** The same session, read off another machine through an ssh alias (N-WP17a). */
+function remote(one: NeedsYouSession, host: string): NeedsYouSession {
+  return { ...one, host };
 }
 
 function busy(id: string): NeedsYouSession {
@@ -109,6 +115,13 @@ function mount(options: { shell?: boolean; names?: Record<string, string> } = {}
 /** The rows in the order the DOM holds them, which is the order the eye reads. */
 function rowsOf(list: FakeElement): FakeElement[] {
   return list.children;
+}
+
+/** The one `@alias` node of a row. Present on every row, drawn on some. */
+function hostOf(row: FakeElement): FakeElement {
+  const nodes = row.byClass('nz-needs__host');
+  assert.equal(nodes.length, 1, 'a row has exactly one host node');
+  return nodes[0] as FakeElement;
 }
 
 /** The text a row shows, column by column. */
@@ -402,4 +415,66 @@ test('opening from the keyboard lands on the longest wait', () => {
   assert.equal(ui.button.getAttribute('aria-expanded'), 'true');
   assert.equal(rowsOf(ui.list)[0]?.focusCount, 1, 'the keyboard did not land on the top row');
   assert.equal(rowsOf(ui.list)[1]?.focusCount, 0, 'focus went somewhere other than the top row');
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP17a: the machine a row is about
+ * ------------------------------------------------------------------ */
+
+test('a row for another machine carries the @alias; a local row carries nothing at all', () => {
+  const ui = mount();
+  // Both start waiting on the same frame, so the tie is broken by id and the
+  // order is `a` then `b` — which is what makes the two rows comparable.
+  ui.strip.render(
+    [waiting('a', 'permission prompt'), remote(waiting('b', 'input needed'), 'build-box')],
+    NOW,
+    NOW,
+  );
+
+  const rows = rowsOf(ui.list);
+  assert.deepEqual(
+    rows.map((row) => row.dataset['sessionId']),
+    ['a', 'b'],
+  );
+
+  // One node per row either way: the local row has the element and does not
+  // draw it, rather than the two rows having different shapes.
+  assert.equal(rows[0]?.byClass('nz-needs__host').length, 1);
+  assert.equal(rows[1]?.byClass('nz-needs__host').length, 1);
+  assert.equal(hostOf(rows[0]!).hidden, true, 'a local row drew a host label');
+  assert.equal(hostOf(rows[0]!).textContent, '');
+  assert.equal(hostOf(rows[1]!).hidden, false, 'a remote row drew no host label');
+  // The card's notation, from the card's own `hostLabel`, so the same machine
+  // cannot be `@build-box` on a card and `build-box` here.
+  assert.equal(hostOf(rows[1]!).textContent, '@build-box');
+
+  // And the rest of the row is unchanged: the alias is an addition, not a
+  // column that took another one's room.
+  assert.deepEqual(columns(rows[1]!), ['b', 'C:\\proj\\b', 'input needed', '0s']);
+});
+
+test('the alias follows a session into the finished cluster, and off it again', () => {
+  const ui = mount();
+  ui.strip.render([remote(busy('a'), 'build-box')], NOW, NOW);
+  assert.equal(ui.finishedGroup.hidden, true);
+
+  ui.strip.render([remote(session({ id: 'a' }), 'build-box')], NOW + 1_000, NOW + 1_000);
+  const finished = rowsOf(ui.finishedList);
+  assert.equal(finished.length, 1);
+  assert.equal(hostOf(finished[0]!).hidden, false);
+  assert.equal(hostOf(finished[0]!).textContent, '@build-box');
+});
+
+test('a label longer than the cap is cut once, in the pure half, and never here', () => {
+  const ui = mount();
+  ui.strip.render(
+    [remote(waiting('a', 'permission prompt'), 'a-very-long-machine-name-indeed')],
+    NOW,
+    NOW,
+  );
+  const label = hostOf(rowsOf(ui.list)[0]!).textContent;
+  // `hostLabel`'s cap: `MAX_HOST_LABEL` characters of alias, the last of them
+  // the ellipsis, plus the `@`.
+  assert.equal(label, '@a-very-long-machine…');
+  assert.equal(label.length, MAX_HOST_LABEL + 1);
 });

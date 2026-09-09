@@ -408,6 +408,82 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reader off entirely — with no reader constructed, no rollout is opened on
   that run. The format is pinned, with its own inventory and its own not-read
   table, in `docs/pinned-internal-formats.md`.
+- **Another machine's agents, and Hermes, on the same canvas** (N-WP17a). Nazar
+  read the machine it was running on, and the agents nobody is sitting in front
+  of — a build server, a VPS, a spare laptop under the desk — were exactly the
+  ones it could not see.
+
+  **`nazar --remote build-box`** starts one child process per host,
+  `ssh -T -o BatchMode=yes -o ConnectTimeout=10 <alias> -- nazar --agent
+  --hermes`, and draws what comes back beside the local cards with a small
+  `@build-box` beside the name. **There is no port, no token and no daemon:**
+  the transport is your own ssh, to a host already in your own `~/.ssh/config` —
+  which Nazar never reads, it hands `ssh` a name and lets ssh be the thing that
+  knows what names mean — and when Nazar exits the connection closes, the remote
+  process sees its pipe close, and nothing is left behind. `--remote` takes an
+  *alias* and refuses `user@host`, a path, anything with a space in it and
+  anything beginning with `-`; there is no password, key or port flag, and there
+  will not be one.
+
+  **`nazar --agent`** is the far end: it writes the canvas to stdout as
+  newline-delimited JSON and nothing else — the banner goes to stderr, because
+  one stray line on stdout is a parse error on the other machine. The first line
+  is a `hello` naming the build, the machine and its sources; every line after it
+  is **the payload the local SSE stream already carries, byte for byte**, so the
+  near end learns no second schema and a field added to a card reaches a remote
+  card on the same commit. Task text there is **off by default**, which is the
+  opposite of the local default and deliberate: over a network it is text leaving
+  one machine for a screen that may be shared, so `--task-text` has to be typed,
+  and without it no prose is read on the far end at all.
+
+  A dropped connection **fades** its cards and keeps them — a closing laptop lid
+  is not every remote agent finishing at once — with a hover that says how long
+  ago the last frame arrived; reconnection backs off from one second to a minute
+  and never gives up. Remote cards carry `pid: 0` and cannot be jumped to: the
+  process they name is on the other machine, and raising a local window wearing
+  the same number would be confidently wrong.
+
+  **A session that ends on the far end makes the same sound one here does.** The
+  agent writes N-WP16's own `session-ended` frame — `toWireSessionEnded`'s
+  output, the shape the browser already parses — and the near end re-keys it by
+  alias, tags it with the host and hands it to the same `EndingsSource` the local
+  state is. It is a frame rather than something inferred from two snapshots on
+  purpose: a card leaving the far end's last snapshot is not evidence it
+  finished, because a dropped connection empties every host at once and none of
+  those sessions ended. Only the machine the session was on knows, and this is it
+  saying so. The Needs-you strip carries the `@alias` too, in the card's own
+  notation, so a row that will take you to another machine says which one before
+  you press it. The far end reads Codex where a machine has it, and `--no-codex`
+  works there exactly as it does here.
+
+  **`--hermes` reads Hermes sessions read-only**, and Hermes is the first
+  provider on this canvas that is not Claude Code. It writes no transcript —
+  every session it has ever run is a row in one SQLite file per profile — so the
+  reader opens `~/.hermes/state.db` as `file:<path>?mode=ro` **and** with
+  `readOnly: true`, reads a fixed list of columns from three tables, and closes
+  it. A Hermes plugin was designed and then dropped: everything a card needs was
+  already on disk, and installing something on a machine to learn what it had
+  already written down is the wrong trade. Two gaps are stated rather than
+  papered over. A Hermes card **never says *waiting***, because Hermes holds a
+  pending permission in its gateway's memory and writes it to no file — the
+  hover says so in those words. And whether its `input_tokens` already contains
+  `cache_read_tokens` is **not determinable from the schema**, so the four
+  counters Nazar has a field for are copied one-for-one by name, the fifth is not
+  folded into any of them, and no total is computed that would depend on the
+  answer. The message and system-prompt tables live in that same file and are
+  never opened; `test/hermes-columns.test.ts` is the static gate — no `SELECT *`,
+  every `FROM` on a three-table allow-list, and every column read present in
+  `docs/pinned-internal-formats.md`.
+
+  `nazar doctor` gained two sections: one attempt per `--remote` alias, with the
+  ssh output, whether a `hello` arrived and the source counts behind it, and a
+  Hermes section reporting the profiles found and whether this Node has
+  `node:sqlite` at all. The desktop application gained a **Remote hosts** field
+  in its settings panel, written to `desktop.json` and handed to the child server
+  as a flag, so changing it restarts that server — the same mechanism recording
+  mode uses, and for the same reason: what the canvas is reading should be
+  visible on a command line rather than hidden in a file. New page:
+  [docs/REMOTE.md](docs/REMOTE.md).
 
 ## [0.1.0] — unreleased
 

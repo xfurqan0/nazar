@@ -311,6 +311,50 @@ export function basename(value: string | undefined): string {
   return name.length === 0 ? trimmed : name;
 }
 
+/* ------------------------------------------------------------------ *
+ * N-WP17a: which machine a card is describing
+ * ------------------------------------------------------------------ */
+
+/** Longest alias the label will show before it cuts. Aliases are short. */
+export const MAX_HOST_LABEL = 20;
+
+/**
+ * The `@alias` a card carries when it is not describing this machine.
+ *
+ * One function rather than a template written at each drawing site, because
+ * there are two of them — the card's title line and the Needs-you strip — and a
+ * canvas where the same host is `@box` in one place and `box` in another looks
+ * like it is talking about two things. `@` is the whole of the notation: short
+ * enough to sit beside a title at 15 px, it reads as *at* without a word, and
+ * it is what an ssh alias looks like to the person who put it in their own
+ * configuration.
+ *
+ * An absent host, an empty one and whitespace all answer `undefined`, which is
+ * how a local card gets no label at all rather than an empty one.
+ */
+export function hostLabel(host: string | undefined): string | undefined {
+  if (host === undefined) return undefined;
+  const trimmed = host.trim();
+  if (trimmed.length === 0) return undefined;
+  const cut =
+    trimmed.length <= MAX_HOST_LABEL ? trimmed : `${trimmed.slice(0, MAX_HOST_LABEL - 1)}…`;
+  return `@${cut}`;
+}
+
+/**
+ * The sentence behind that label: which machine, and — when this machine has
+ * stopped hearing from it — how long ago the last frame arrived.
+ *
+ * The second half is the honest part of a faded card. A remote card that goes
+ * quiet is not a session that ended; it is a session Nazar has stopped hearing
+ * about, and the difference is exactly the age of that last frame.
+ */
+export function hostTitle(host: string, lastSeenMs?: number): string {
+  return lastSeenMs === undefined
+    ? t('card.host', { host })
+    : t('card.hostLastSeen', { host, age: formatAge(lastSeenMs) });
+}
+
 /**
  * The chip label for a model. `claude-opus-5[1m]` becomes `opus-5[1m]`: the
  * provider is already on the badge, so repeating it costs a chip's width for

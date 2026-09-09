@@ -153,6 +153,8 @@ fn main() {
             set_autostart,
             get_task_text_off,
             set_task_text_off,
+            get_remotes,
+            set_remotes,
             open_download_page
         ])
         .setup(move |app| {
@@ -317,7 +319,14 @@ fn boot_up(app: &AppHandle) {
         })
         .unwrap_or(true);
 
-    match server::start(&entry, stored, task_text) {
+    // N-WP17a: the ssh aliases, from the same file and passed as `--remote a,b`. Empty
+    // on every machine that has not typed one, and an empty list spawns nothing.
+    let remotes = app
+        .try_state::<Shell>()
+        .and_then(|shell| shell.config.lock().ok().map(|config| config.remotes()))
+        .unwrap_or_default();
+
+    match server::start(&entry, stored, task_text, &remotes) {
         Ok(handle) => {
             let url = handle.url.clone();
             let port = handle.port;
@@ -482,15 +491,15 @@ fn restart_server(app: &AppHandle) -> Result<(), String> {
     let Some(shell) = app.try_state::<Shell>() else {
         return Err("the shell is not ready".to_owned());
     };
-    let (stored, task_text) = {
+    let (stored, task_text, remotes) = {
         let config = shell
             .config
             .lock()
             .map_err(|_| "the settings are locked".to_owned())?;
-        (config.port, config.task_text_allowed())
+        (config.port, config.task_text_allowed(), config.remotes())
     };
 
-    let handle = server::start(&entry, stored, task_text)?;
+    let handle = server::start(&entry, stored, task_text, &remotes)?;
     let url = handle.url.clone();
     let port = handle.port;
     if let Ok(mut slot) = shell.server.lock() {
@@ -637,6 +646,57 @@ fn set_task_text_off(app: AppHandle, off: bool) -> Result<bool, String> {
             // Put the file back, so the switch and the running server agree again.
             if let Ok(mut config) = shell.config.lock() {
                 let _ = config.set_task_text_allowed(off);
+            }
+            Err(error)
+        }
+    }
+}
+
+/// N-WP17a: the ssh aliases this machine is reading, in the order they were typed.
+///
+/// Asked once, when the settings panel is built, so the field is filled from the file
+/// rather than from anything the page remembered.
+#[tauri::command]
+fn get_remotes(shell: tauri::State<'_, Shell>) -> Vec<String> {
+    shell
+        .config
+        .lock()
+        .map(|config| config.remotes())
+        .unwrap_or_default()
+}
+
+/// Replace the list and restart the canvas server so it takes effect.
+///
+/// The same contract as [`set_task_text_off`], and it is the same feature underneath:
+/// the hosts are a flag on the child's command line, so changing them is a restart, and
+/// a restart that fails puts the file back before answering. It returns the list it
+/// actually reached — validated and de-duplicated — so a field that was typed loosely is
+/// repainted with what the machine is really doing.
+#[tauri::command]
+fn set_remotes(app: AppHandle, aliases: Vec<String>) -> Result<Vec<String>, String> {
+    let Some(shell) = app.try_state::<Shell>() else {
+        return Err("the shell is not ready".to_owned());
+    };
+
+    let before = {
+        let mut config = shell
+            .config
+            .lock()
+            .map_err(|_| "the settings are locked".to_owned())?;
+        let before = config.remotes();
+        config.set_remotes(&aliases)?;
+        before
+    };
+
+    match restart_server(&app) {
+        Ok(()) => Ok(shell
+            .config
+            .lock()
+            .map(|config| config.remotes())
+            .unwrap_or_default()),
+        Err(error) => {
+            if let Ok(mut config) = shell.config.lock() {
+                let _ = config.set_remotes(&before);
             }
             Err(error)
         }

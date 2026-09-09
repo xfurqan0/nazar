@@ -84,9 +84,29 @@ export interface NeedsYouOptions {
 interface RowEls {
   readonly root: HTMLButtonElement;
   readonly name: HTMLSpanElement;
+  /**
+   * N-WP17a: the `@alias`, in the card's own notation. `hidden` on a local row,
+   * which is every row on a machine started without `--remote`.
+   */
+  readonly host: HTMLSpanElement;
   readonly folder: HTMLSpanElement;
   readonly what: HTMLSpanElement;
   readonly since: HTMLSpanElement;
+}
+
+/**
+ * Write one row's host label, or take it off the line.
+ *
+ * The string is `hostLabel`'s, built in the pure half beside the row it belongs
+ * to, for the reason that function exists at all: the card's title line and
+ * this row are the two places an alias is drawn, and a canvas calling the same
+ * machine `@box` in one and `box` in the other looks like it is talking about
+ * two of them. The row's `aria-label` is left alone — it is the sentence the
+ * pure module built, and the alias is already in the id the row goes to.
+ */
+function setHost(els: RowEls, host: string | undefined): void {
+  els.host.hidden = host === undefined;
+  setText(els.host, host ?? '');
 }
 
 export class NeedsYouStrip {
@@ -264,6 +284,7 @@ export class NeedsYouStrip {
       live.add(row.id);
       const els = this.waitingEls.get(row.id) ?? this.create(this.options.list, this.waitingEls, row.id);
       setText(els.name, row.label);
+      setHost(els, row.host);
       setText(els.folder, row.folder);
       setText(els.what, row.what);
       setText(els.since, row.waited);
@@ -291,6 +312,7 @@ export class NeedsYouStrip {
         this.finishedEls.get(row.id) ??
         this.create(this.options.finishedList, this.finishedEls, row.id);
       setText(els.name, row.label);
+      setHost(els, row.host);
       setText(els.folder, row.folder);
       // A finished row has no question outstanding, so the middle column
       // carries what the run cost instead: duration, totals, money — each of
@@ -334,9 +356,14 @@ export class NeedsYouStrip {
 
     const text = html('span', 'nz-needs__text');
     const name = html('span', 'nz-needs__name');
+    // Beside the name and before the folder, which is where the card puts it:
+    // the alias qualifies *which* session this is, and the folder is the same
+    // word on both machines.
+    const host = html('span', 'nz-needs__host');
+    host.hidden = true;
     const folder = html('span', 'nz-needs__folder');
     const what = html('span', 'nz-needs__what');
-    text.append(name, folder, what);
+    text.append(name, host, folder, what);
 
     const since = html('span', 'nz-needs__since');
     const arrow = html('span', 'nz-needs__go');
@@ -353,7 +380,7 @@ export class NeedsYouStrip {
     });
     parent.append(root);
 
-    const els: RowEls = { root, name, folder, what, since };
+    const els: RowEls = { root, name, host, folder, what, since };
     cache.set(id, els);
     return els;
   }

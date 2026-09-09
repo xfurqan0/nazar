@@ -6,7 +6,9 @@
  * real session, no real transcript and no real `claude` binary is involved.
  */
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { cp, mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises';
+import { PassThrough } from 'node:stream';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -1071,6 +1073,7 @@ test('doctor says Codex is not installed rather than saying nothing', async () =
       home: dir,
       agents: agentsMissing,
       isAlive: () => false,
+      hermes: null,
     });
     const text = report.lines.join('\n');
     assert.equal(report.codexSessions, 0);
@@ -1084,6 +1087,46 @@ test('doctor says Codex is not installed rather than saying nothing', async () =
   }
 });
 
+/* ------------------------------------------------------------------ *
+ * N-WP17a: the two sections this package added
+ * ------------------------------------------------------------------ */
+
+/** A child-process double, so no ssh is ever spawned by a test. */
+class FakeChild extends EventEmitter {
+  readonly stdout = new PassThrough();
+
+  readonly stderr = new PassThrough();
+
+  killed = false;
+
+  kill(): boolean {
+    this.killed = true;
+    return true;
+  }
+}
+
+test('with no remote host configured, doctor says so and prints the command', async () => {
+  const { dir, cleanup } = await makeConfigDir();
+  try {
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+      hermes: null,
+    });
+    const text = report.lines.join('\n');
+    assert.match(text, /Remote hosts \(ssh\)/);
+    // "none configured" rather than a missing section: a report has to let a
+    // person tell nothing-configured from the check not having run.
+    assert.match(text, /none configured/);
+    assert.match(text, /nazar --agent --hermes/);
+    assert.match(text, /No port is opened, no token is stored/);
+  } finally {
+    await cleanup();
+  }
+});
+
 test('doctor counts the Codex threads the canvas would draw', async () => {
   const { dir, cleanup } = await makeConfigDir({ codex: true, codexLock: true });
   try {
@@ -1092,6 +1135,7 @@ test('doctor counts the Codex threads the canvas would draw', async () => {
       home: dir,
       agents: agentsMissing,
       isAlive: () => false,
+      hermes: null,
     });
     const text = report.lines.join('\n');
     assert.equal(report.codexSessions, 1);
@@ -1106,6 +1150,46 @@ test('doctor counts the Codex threads the canvas would draw', async () => {
   }
 });
 
+test('a remote that answers is reported with its build, machine and sources', async () => {
+  const { dir, cleanup } = await makeConfigDir();
+  const child = new FakeChild();
+  try {
+    const pending = runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+      hermes: null,
+      remotes: ['box'],
+      spawn: () => child as never,
+      remoteTimeoutMs: 3000,
+    });
+    child.stdout.write(
+      `${JSON.stringify({
+        type: 'hello',
+        version: '0.1.0',
+        host: 'buildbox',
+        sources: [{ name: 'hermes:default', state: 'ok', detail: '4 sessions, 1 running' }],
+        capabilities: { claude: true, hermes: true, taskText: false, jump: false },
+      })}\n`,
+    );
+    child.stdout.write(
+      `${JSON.stringify({
+        type: 'state',
+        state: { generatedAt: 1, sessions: [], commandAvailable: true, warnings: 0 },
+      })}\n`,
+    );
+
+    const text = (await pending).lines.join('\n');
+    assert.match(text, /ok {2}box {14}nazar 0\.1\.0 on buildbox/);
+    assert.match(text, /hermes:default ok \(4 sessions, 1 running\)/);
+    // Doctor starts nothing that outlives it.
+    assert.equal(child.killed, true);
+  } finally {
+    await cleanup();
+  }
+});
+
 test('a Codex store with no lock still draws a thread that is being written to', async () => {
   const { dir, cleanup } = await makeConfigDir({ codex: true });
   try {
@@ -1114,6 +1198,7 @@ test('a Codex store with no lock still draws a thread that is being written to',
       home: dir,
       agents: agentsMissing,
       isAlive: () => false,
+      hermes: null,
     });
     const text = report.lines.join('\n');
     // The fixture's own mtime is *now*, so the thread is inside the silence
@@ -1121,6 +1206,34 @@ test('a Codex store with no lock still draws a thread that is being written to',
     assert.equal(report.codexSessions, 1);
     assert.match(text, /0 locks held right now/);
     assert.match(text, /1 Codex thread, 0 with a writer still holding the lock/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test("a remote that fails is reported with ssh's own sentence and what to check", async () => {
+  const { dir, cleanup } = await makeConfigDir();
+  const child = new FakeChild();
+  try {
+    const pending = runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+      hermes: null,
+      remotes: ['box'],
+      spawn: () => child as never,
+      remoteTimeoutMs: 3000,
+    });
+    child.stderr.write('box: Permission denied (publickey).\n');
+    // Let the stderr chunk land before the close that ends the probe.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    child.emit('close', 255, null);
+
+    const text = (await pending).lines.join('\n');
+    assert.match(text, /-- {2}box/);
+    assert.match(text, /Permission denied \(publickey\)/);
+    assert.match(text, /works without a password/);
   } finally {
     await cleanup();
   }
@@ -1135,6 +1248,7 @@ test('--no-codex means doctor opens no rollout at all', async () => {
       agents: agentsMissing,
       isAlive: () => false,
       codex: false,
+      hermes: null,
     });
     const text = report.lines.join('\n');
     assert.equal(report.codexSessions, 0);
@@ -1142,6 +1256,45 @@ test('--no-codex means doctor opens no rollout at all', async () => {
     // And the two pinned-format rows are gone with it: a row that says "not
     // validated" would claim the store was looked at and found wanting.
     assert.equal(/rollout in the last/.test(text), false);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('the Hermes section reports the runtime and the machine separately', async () => {
+  const { dir, cleanup } = await makeConfigDir();
+  try {
+    // A home with no Hermes in it: the normal answer for most machines, and it
+    // is not printed as a failure.
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude'), HERMES_HOME: path.join(dir, '.hermes') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+    });
+    const text = report.lines.join('\n');
+    assert.match(text, /Hermes sessions \(read-only\)/);
+    assert.match(text, /HERMES_HOME overrides it/);
+    assert.match(text, /profiles {7}none found \(normal on a machine that does not run Hermes\)/);
+    // The runtime question is answered whether or not there is a database.
+    assert.match(text, /node:sqlite {4}(available|not available)/);
+  } finally {
+    await cleanup();
+  }
+});
+
+test('doctor still prints no path under the home without --verbose', async () => {
+  const { dir, cleanup } = await makeConfigDir();
+  try {
+    const report = await runDoctor({
+      env: { CLAUDE_CONFIG_DIR: path.join(dir, '.claude'), HERMES_HOME: path.join(dir, '.hermes') },
+      home: dir,
+      agents: agentsMissing,
+      isAlive: () => false,
+    });
+    // The Hermes home is under the injected home, so it must be collapsed like
+    // every other path in the report.
+    assert.ok(!report.lines.join('\n').includes(dir), 'a home path leaked into the report');
   } finally {
     await cleanup();
   }

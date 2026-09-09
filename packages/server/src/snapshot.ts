@@ -192,6 +192,19 @@ export function toWireSession(session: SessionView, options?: WireOptions): Sess
   if (session.cwd !== undefined) out.cwd = redact(session.cwd, options);
   if (session.name !== undefined) out.name = redact(session.name, options);
 
+  /*
+   * N-WP17a. The ssh alias this session was read through.
+   *
+   * Clipped rather than redacted, and deliberately: an alias is a short name
+   * the user typed into their own `~/.ssh/config`, the card is useless without
+   * it — a canvas whose remote cards all said "somewhere else" would be worse
+   * than one with no remote cards — and it is the one string on this wire that
+   * did not come out of anybody's file. `remote.ts` sets it from Nazar's own
+   * command line, and `isAlias` has already refused anything that is not a bare
+   * name.
+   */
+  if (session.host !== undefined) out.host = clip(session.host);
+
   if (session.kind !== undefined) out.kind = clip(session.kind);
   if (session.waitingFor !== undefined) out.waitingFor = clip(session.waitingFor);
   if (session.model !== undefined) out.model = clip(session.model);
@@ -342,6 +355,10 @@ export function toWireSessionEnded(
   } & { type: 'session-ended' } = { type: 'session-ended', id: ended.id, at: ended.at };
   if (ended.name !== undefined) out.name = redact(ended.name, options);
   if (ended.cwd !== undefined) out.cwd = redact(ended.cwd, options);
+  // N-WP17a. Not redacted, for the reason `Session.host` is not: an alias is a
+  // name the user typed into their own ssh configuration, never a path this
+  // program resolved and never an address.
+  if (ended.host !== undefined) out.host = ended.host;
   return out;
 }
 

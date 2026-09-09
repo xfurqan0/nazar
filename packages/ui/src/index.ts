@@ -188,7 +188,16 @@ export type {
   WaitingRow,
 } from './needs-you.js';
 
+/*
+ * N-WP17a. `hostLabel` is on this list for one reason: **two** places draw it —
+ * the card's title line and the Needs-you strip — and the label has to be the
+ * same characters in both, or the canvas looks like it is describing two
+ * different machines. It is the same argument `isWaiting` won in N-WP21.
+ */
 export {
+  MAX_HOST_LABEL,
+  hostLabel,
+  hostTitle,
   unknownWord,
   basename,
   cardContextLabel,

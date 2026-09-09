@@ -209,6 +209,15 @@ export class FakeElement {
       return;
     }
     this.attrs.set(name, value);
+    /*
+     * N-WP17a. `class` is a real attribute in SVG and the only way to set one
+     * there — `svg()` in `web/dom.ts` writes `setAttribute('class', …)` because
+     * `className` on an `SVGElement` is a read-only `SVGAnimatedString`. Without
+     * this line the class list and the attribute would be two separate stores
+     * and `byClass` would find nothing on the canvas, which is a property of
+     * the double rather than of the page.
+     */
+    if (name === 'class') this.className = value;
   }
 
   getAttribute(name: string): string | null {

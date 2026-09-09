@@ -580,6 +580,44 @@ body {
   white-space: nowrap;
 }
 
+/*
+ * N-WP17a: a labelled one-line field, in a panel that is otherwise all
+ * switches.
+ *
+ * It takes the switch's padding and radius so a row of settings still reads as
+ * one column, and it stacks rather than sitting side by side: an ssh alias list
+ * is longer than a switch's label and squeezing it into the track's leftovers
+ * would make the one setting you have to *read* the hardest one to.
+ */
+.nz-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+  padding: 7px 10px;
+}
+
+.nz-field__label {
+  color: var(--nz-text);
+  font-size: var(--nz-size-md);
+}
+
+.nz-field__input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 8px;
+  background: var(--nz-canvas);
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-md);
+}
+
+.nz-field__input:focus-visible {
+  outline: 2px solid var(--nz-accent);
+  outline-offset: 1px;
+}
+
 .nz-switch__track {
   position: relative;
   flex: 0 0 auto;
@@ -1415,6 +1453,21 @@ body {
   white-space: nowrap;
 }
 
+/*
+ * N-WP17a: the `@alias` on a row that is not about this machine.
+ *
+ * `--nz-text-muted` and the strong weight are the card's own, so the same fact
+ * looks the same in the two places it is drawn. Nothing truncates it: a cut
+ * hostname is a different hostname, and `hostLabel` has already capped the
+ * alias at 20 characters before it reaches here.
+ */
+.nz-needs__host {
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-xs);
+  font-weight: var(--nz-weight-strong);
+  white-space: nowrap;
+}
+
 .nz-needs__folder {
   color: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
@@ -1978,6 +2031,20 @@ body {
 .nz-session__title {
   fill: var(--nz-text);
   font-size: var(--nz-size-lg);
+  font-weight: var(--nz-weight-strong);
+}
+
+/*
+ * N-WP17a: the `@alias` beside a remote card's title.
+ *
+ * Muted and small, on the title's own baseline. Deliberately *not* a chip: the
+ * chip row is where a card says what it is doing, and which machine it is on is
+ * part of the card's name rather than part of its state. It takes the path's
+ * colour because the two are the same kind of fact — where this is.
+ */
+.nz-session__host {
+  fill: var(--nz-text-muted);
+  font-size: var(--nz-size-sm);
   font-weight: var(--nz-weight-strong);
 }
 

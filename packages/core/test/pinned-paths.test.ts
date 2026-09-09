@@ -66,6 +66,20 @@ function projectPathLiterals(source: string): string[] {
   return found.map((literal) => literal.replace(/\.+$/, ''));
 }
 
+/**
+ * The same again, for `~/.hermes` (N-WP17a).
+ *
+ * A fourth root, and the first that belongs to a *different agent runtime*
+ * rather than to Claude Code or to nazar-tray. Its file is one SQLite database
+ * holding metadata and every message of every conversation side by side, which
+ * makes an unlisted path there the most dangerous of the four — so it gets the
+ * same gate, and `test/hermes-columns.test.ts` gates the columns on top of it.
+ */
+function hermesPathLiterals(source: string): string[] {
+  const found = source.match(/~\/\.hermes(?:\/[A-Za-z0-9._<>*/-]*)?/g) ?? [];
+  return found.map((literal) => literal.replace(/\.+$/, ''));
+}
+
 /** Every backticked span in the pinned document. */
 function pinnedSpans(doc: string): string[] {
   return [...doc.matchAll(/`([^`\n]+)`/g)].map((match) => match[1] ?? '');
@@ -253,4 +267,38 @@ test('the credential files stay in the "not read" table', () => {
   const doc = readFileSync(pinnedDoc, 'utf8');
   const notRead = doc.slice(doc.indexOf('## Not read, on purpose'));
   assert.ok(notRead.includes('~/.claude/sessions/<pid>.<hash>.key'));
+});
+
+test('the three Hermes paths the core reads each have their own row', () => {
+  for (const literal of [
+    '~/.hermes',
+    '~/.hermes/state.db',
+    '~/.hermes/profiles/<profile>/state.db',
+  ]) {
+    assert.ok(isPinned(literal), `${literal} is not pinned`);
+  }
+});
+
+test('every ~/.hermes path the core reads is listed in docs/pinned-internal-formats.md', () => {
+  const files = sourceFiles(srcDir);
+  const seen = new Map<string, string>();
+  for (const file of files) {
+    for (const literal of hermesPathLiterals(readFileSync(file, 'utf8'))) {
+      if (!seen.has(literal)) seen.set(literal, path.relative(srcDir, file));
+    }
+  }
+
+  assert.ok(seen.size > 0, 'the core names nothing under ~/.hermes, which cannot be right');
+  for (const [literal, file] of seen) {
+    assert.ok(
+      isPinned(literal),
+      `${file} names ${literal}, which is not in docs/pinned-internal-formats.md`,
+    );
+  }
+});
+
+test('the Hermes gate bites too', () => {
+  const hermes = hermesPathLiterals('const logs = "~/.hermes/logs/agent.log";');
+  assert.deepEqual(hermes, ['~/.hermes/logs/agent.log']);
+  assert.equal(isPinned('~/.hermes/logs/agent.log'), false);
 });

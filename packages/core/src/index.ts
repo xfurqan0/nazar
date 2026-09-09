@@ -276,6 +276,42 @@ export type {
   SessionTreeSnapshot,
 } from './session-tree.js';
 
+/* N-WP17a: Hermes sessions, read-only, from somebody else's SQLite file. */
+
+export {
+  DEFAULT_BUSY_TIMEOUT_MS,
+  DEFAULT_ENDED_WINDOW_MS,
+  DEFAULT_HERMES_POLL_MS,
+  HERMES_DELEGATION_COLUMNS,
+  HERMES_HOME_DIR,
+  HERMES_LEASE_EXPIRY,
+  HERMES_LEASE_KEYS,
+  HERMES_PROFILES_DIR,
+  HERMES_PROFILE_STATE_DB,
+  HERMES_SESSION_COLUMNS,
+  HERMES_STATE_DB,
+  HERMES_TABLES_READ,
+  HermesReader,
+  MAX_HERMES_DEPTH,
+  buildHermesSessions,
+  discoverHermesSources,
+  hermesHomeDir,
+  hermesSessionId,
+  loadSqlite,
+  readOnlyUri,
+  resetSqliteCache,
+  toEpochMs,
+} from './hermes-state.js';
+export type {
+  HermesBuildOptions,
+  HermesRead,
+  HermesReaderEvents,
+  HermesReaderOptions,
+  HermesScan,
+  HermesSourceRef,
+  HermesSourceScan,
+} from './hermes-state.js';
+
 export { DEFAULT_COALESCE_MS, NazarState } from './state.js';
 export type {
   EmptyDiagnosis,

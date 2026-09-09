@@ -28,6 +28,11 @@ fn main() {
             // N-WP15a: recording mode, which the settings panel reads and writes.
             "get_task_text_off",
             "set_task_text_off",
+            // N-WP17a: the ssh aliases the canvas is also reading. Same panel,
+            // same shape, and the same blast radius as recording mode — writing
+            // either one restarts the child server.
+            "get_remotes",
+            "set_remotes",
         ]),
     ))
     .expect("failed to build the Tauri context");

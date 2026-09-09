@@ -11,7 +11,9 @@ import {
   main,
   parseOpen,
   parsePort,
+  parseRemotes,
   parseTaskText,
+  parseValue,
   serve,
   unknownFlag,
   unknownFlagMessage,
@@ -283,4 +285,86 @@ test('the usage line names both the serve form and the subcommand', () => {
   assert.match(USAGE, /nazar doctor/);
   assert.equal(USAGE.split('\n').length, 1, 'one line, as the message promises');
   assert.equal(unknownFlagMessage('--nope'), `nazar: unknown option "--nope"\n${USAGE}\n`);
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP17a: the two new modes
+ * ------------------------------------------------------------------ */
+
+test('--remote takes ssh aliases and refuses anything that is not one', async () => {
+  assert.deepEqual(parseRemotes(['--remote', 'box']), ['box']);
+  assert.deepEqual(parseRemotes(['--remote', 'a,b']), ['a', 'b']);
+  assert.deepEqual(parseRemotes(['--remote=a,b']), ['a', 'b']);
+  assert.deepEqual(parseRemotes([]), [], 'no flag is no hosts, and costs nothing');
+
+  // A login, a path and anything with a space in it fail with a sentence naming
+  // the value, rather than being handed to ssh to be read as who knows what.
+  for (const bad of ['root@box', '../etc/hosts', 'box host', 'box;rm -rf /']) {
+    assert.throws(() => parseRemotes(['--remote', bad]), /is not an ssh alias/, bad);
+  }
+  // An ssh *option* never reaches that check: a value beginning with `-` is not
+  // a value, so `--remote -oProxyCommand=…` is a flag with nothing after it.
+  // Two refusals, and the outer one is the stronger.
+  assert.throws(() => parseRemotes(['--remote', '-oProxyCommand=x']), /needs a value/);
+  assert.throws(() => parseRemotes(['--remote']), /needs a value/);
+});
+
+test('parseValue reads both spellings and the last one wins', () => {
+  assert.equal(parseValue(['--remote-cmd', 'nazar --agent'], '--remote-cmd'), 'nazar --agent');
+  assert.equal(parseValue(['--remote-cmd=x'], '--remote-cmd'), 'x');
+  assert.equal(parseValue(['--remote-cmd=x', '--remote-cmd=y'], '--remote-cmd'), 'y');
+  assert.equal(parseValue([], '--remote-cmd'), undefined);
+});
+
+test("a remote command full of flags is a value, not this program's arguments", () => {
+  // The failure this prevents: `--remote-cmd "nazar --agent --hermes"` reporting
+  // `--agent` as an unknown option, when it is a word inside a string that
+  // belongs to another machine's shell.
+  const serve = ['--port', '--remote', '--remote-cmd', '--no-open'];
+  assert.equal(unknownFlag(['--remote-cmd', 'nazar --agent --hermes'], serve), undefined);
+  assert.equal(unknownFlag(['--remote', 'a,b', '--no-open'], serve), undefined);
+  assert.equal(unknownFlag(['--remote', 'a', '--nope'], serve), '--nope');
+});
+
+test('--remote-cmd with no host to run it on is refused', async () => {
+  const out = new Capture();
+  const err = new Capture();
+  assert.equal(await main(['--remote-cmd', 'nazar --agent'], out, err), 2);
+  assert.match(err.text, /--remote-cmd has nothing to run/);
+});
+
+test('--agent owns its own flags, and the serve path does not own them', async () => {
+  // `--port` next to `--agent` is a misunderstanding — an agent binds nothing —
+  // and it is answered as one rather than silently ignored.
+  const err = new Capture();
+  assert.equal(await main(['--agent', '--port', '4676'], new Capture(), err), 2);
+  assert.match(err.text, /unknown option "--port"/);
+
+  // And the reverse: `--hermes` is the agent's, not the serve path's.
+  const err2 = new Capture();
+  assert.equal(await main(['--hermes'], new Capture(), err2), 2);
+  assert.match(err2.text, /unknown option "--hermes"/);
+});
+
+test('--agent --help prints help and starts nothing', async () => {
+  const out = new Capture();
+  assert.equal(await main(['--agent', '--help'], out, new Capture()), 0);
+  assert.match(out.text, /nazar - keep a watchful eye/);
+  assert.match(out.text, /--agent {10}Write the canvas to stdout/);
+});
+
+test('the help names both new modes and the ssh command it will run', async () => {
+  const out = new Capture();
+  await main(['--help'], out, new Capture());
+  assert.match(out.text, /nazar --agent \[--hermes\]/);
+  assert.match(out.text, /--remote <list>/);
+  assert.match(out.text, /nazar --agent --hermes/, 'the default remote command is printed');
+  assert.match(out.text, /docs\/REMOTE\.md/);
+  assert.match(USAGE, /--remote <alias,\.\.\.>/);
+});
+
+test('doctor takes --remote too, and refuses a bad alias before connecting', async () => {
+  const err = new Capture();
+  assert.equal(await main(['doctor', '--remote', 'root@box'], new Capture(), err), 2);
+  assert.match(err.text, /is not an ssh alias/);
 });

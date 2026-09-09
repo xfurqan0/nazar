@@ -274,3 +274,69 @@ this is the row to change.
 | `payload.rate_limits` on `token_count` | Codex's own usage windows. They reach the canvas already, through `~/.nazar/limits.json`, which nazar-tray builds from Codex's API — one reader per fact, and it is not this one. |
 | `world_state`, `realtime_item`, `inter_agent_communication_metadata`, `payload.item.questions` | Whole record types Nazar has no use for. Only the eleven `payload.type` values in the table above are read at all. |
 | `~/.codex/sessions/**` for **writing**, and `~/.codex/thread-writer-locks/*.lock` for **opening** | Nazar writes nothing here and takes no lock. `test/no-writes.test.ts` is the static gate; the lock is decided by the directory listing precisely so that no handle is ever taken on a file another process owns. |
+
+## Hermes (N-WP17a)
+
+Hermes is a second agent runtime with its own tool-calling loop and several model
+providers behind it. It writes **no per-session transcript**: every session it has ever
+run is a row in one SQLite file, one file per profile, written continuously by a gateway
+process. Nazar opens that file read-only and never writes to it, never copies it and
+never installs anything on the machine it is on.
+
+Everything below was read on a live installation on 2026-09-09 — **Hermes Agent v0.20.5
+(2026.8.19)**, two profiles, 129 sessions between them — with a read-only connection and
+no mutation of any kind.
+
+| Path / source | Fields used | Version observed | Fixture | Notes |
+|---|---|---|---|---|
+| `~/.hermes` | — | 0.20.5 | none | Root of the installation. `HERMES_HOME` overrides it, exactly as `CLAUDE_CONFIG_DIR` overrides Claude Code's. The directory is **listed**, never written. |
+| `~/.hermes/state.db` | the three tables below | 0.20.5 | built in the test, never committed | The default profile's session store. 39 MB with a 3 MB write-ahead log on the machine surveyed, and live: its mtime moved with the last message written. Opened as `file:<path>?mode=ro` **and** with `readOnly: true`, with `PRAGMA busy_timeout = 250` so a reader never sits on a database a writer wants. |
+| `~/.hermes/profiles/<profile>/state.db` | the same | 0.20.5 | the same | One store per named profile, and **each is a source of its own**: a session id is unique within a profile and not across them, so a card's id is `hermes:<profile>:<id>`. |
+| `sessions` | `id`, `title`, `model`, `source`, `parent_session_id`, `cwd`, `git_branch`, `message_count`, `tool_call_count`, `input_tokens`, `output_tokens`, `cache_read_tokens`, `cache_write_tokens`, `reasoning_tokens`, `started_at`, `ended_at`, `last_activity_at` | 0.20.5 | `packages/core/test/hermes-state.test.ts` | 17 columns of the 50-odd the table declares. `title` is Hermes's own summary of the conversation, so it is **prose** and crosses only under the N-WP15a task-text gate. `source` was observed as `cli`, `cron`, `desktop`, `discord`, `whatsapp`, `tool` and `subagent`; only the last one changes the node model. Timestamps were observed as whole seconds, and the reader accepts seconds, milliseconds or an RFC 3339 string — SQLite's column affinity is a hint, so a value can come back as a string and is parsed as a number when it is all digits. |
+| `session_turn_leases` | `conversation_id` (or `session_id`), `expires_at` | 0.20.5 | the same | The **only** live signal in the file: a lease that has not expired means Hermes is processing that session's turn right now. TTL is 300 s. **The table is never swept** — all three rows on the machine surveyed had expired three weeks earlier — so `expires_at > now` is not a nicety; without it a session that stopped in August is drawn as working. The session column was observed as `conversation_id`; the reader takes it from `PRAGMA table_info` out of those two known names rather than assuming either. |
+| `async_delegations` | `delegation_id`, `origin_session`, `parent_session_id` | 0.20.5 | the same | **Edges only.** `task_json`, `result_json` and `event_json` are on the same row and every one of them is model or user text, so the read stops at the three identifiers the tree needs. Whether a delegation finished is answered where it is answered for every other node: a live lease, or an `ended_at`. |
+
+### Hermes `state.db` — what is not read, and why it matters here more than anywhere else
+
+`messages` and `system_prompts` are in the **same file**, reachable by the **same
+connection**, as the metadata above. That is the whole risk of this reader and the reason
+it has a gate of its own:
+
+| Table / column | Why not |
+|---|---|
+| `messages` | Every message of every conversation, `content` and `reasoning` included. Nothing in Nazar opens it. The last tool name and the moment of the last turn *are* in this table and would be useful on a card; they are not worth a reader that has the prompt column in scope, and the same facts are approximated from `tool_call_count` and `last_activity_at`. |
+| `system_prompts`, `sessions.system_prompt`, `sessions.system_prompt_hash` | System prompts. Never opened, never joined. |
+| `sessions.origin_json`, `last_activity_description`, `model_config` | Free-form or user-derived. `origin_json` carries chat names, user names and guild ids. |
+| `async_delegations.task_json`, `result_json`, `event_json` | The delegated brief and its result. |
+| `~/.hermes/sessions/sessions.json` | A gateway index that is **stale**: the copy on the machine surveyed was eight days behind `state.db`, because it is written at session creation and not per turn. `state.db` is the truth. |
+| `~/.hermes/logs/*`, `~/.hermes/cron/*`, `~/.hermes/desktop-ssh/*` | Prose logs, scheduled-job definitions, connection state. None of it is a card. |
+| anything at all, for **writing** | `test/hermes-columns.test.ts` is the static gate: no `SELECT *` in the reader, every `FROM` and `JOIN` on a three-table allow-list, every statement's column list built from the exported constants rather than written inline, and every one of those columns present in the table above. `test/no-writes.test.ts` still covers the filesystem half. |
+
+### Two things Hermes does not write down, and what Nazar says instead
+
+- **Waiting.** A pending permission or clarification lives in the gateway's memory
+  (`_pending_approvals`) and reaches no file. A Hermes card therefore **never** shows
+  `waiting`, and the hover card says so in those words rather than leaving an absence to
+  be read as "nothing is waiting". This is rule 3 of this page applied to the loudest
+  field on the canvas.
+- **Whether `input_tokens` includes `cache_read_tokens`.** Not determinable from the
+  schema, and not guessed. The four columns Nazar has a field for are copied
+  one-for-one by name, `reasoning_tokens` is read but deliberately **not** folded into
+  "out", and no total is computed that would depend on the answer. The card shows the
+  four numbers Hermes wrote; if the columns overlap, they overlap in Hermes's own
+  reporting too. Resolving this needs a statement from Hermes, not an inference from a
+  sample.
+
+### The remote wire (N-WP17a)
+
+`nazar --agent` writes newline-delimited JSON to stdout and nothing else. The first line
+is `{"type":"hello","version","host","sources","capabilities"}`; every line after it is
+`{"type":"state","state":<payload>}` where the payload is **`toWireState`'s output, byte
+for byte** — the same function the local SSE stream uses. That is deliberate and is the
+reason this format needs no row of its own: there is no second schema to pin, and a field
+added to a card reaches a remote card on the same commit.
+
+The transport is `ssh -T -o BatchMode=yes -o ConnectTimeout=10 <alias> -- <command>`.
+No port is opened, no token is stored, no daemon is installed, and `~/.ssh/config` is
+**not read by Nazar** — an alias is handed to `ssh`, and what a name means is ssh's
+business. See docs/REMOTE.md.

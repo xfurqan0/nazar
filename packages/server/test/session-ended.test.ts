@@ -13,15 +13,18 @@
  * leak nobody would find by looking at the canvas.
  */
 import assert from 'node:assert/strict';
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { PassThrough } from 'node:stream';
 import test from 'node:test';
 
 import type { SessionEnded, StateSnapshot } from '@nazar/core';
 
 import type { EndingsSource, StateSource } from '../src/http.ts';
 import { startNazarServer } from '../src/http.ts';
+import { CompositeState, RemoteHosts } from '../src/remote.ts';
 
 const EMPTY: StateSnapshot = {
   generatedAt: 1_788_756_000_000,
@@ -216,4 +219,87 @@ test('the tick is served with an audio type rather than as an unknown blob', asy
     assert.equal(response.headers.get('content-type'), 'audio/wav');
     await response.body?.cancel().catch(() => undefined);
   });
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP17a: an ending that happened on another machine
+ * ------------------------------------------------------------------ */
+
+/** A child process double, so no ssh is ever spawned by a test. */
+class FakeChild extends EventEmitter {
+  readonly stdout = new PassThrough();
+
+  readonly stderr = new PassThrough();
+
+  kill(): boolean {
+    return true;
+  }
+
+  say(line: unknown): void {
+    this.stdout.write(`${JSON.stringify(line)}\n`);
+  }
+}
+
+test('a session ending on a remote machine reaches the browser, once', async () => {
+  const uiDir = await mkdtemp(path.join(tmpdir(), 'nazar-ended-remote-'));
+  await writeFile(path.join(uiDir, 'index.html'), '<!doctype html><title>Nazar</title>', 'utf8');
+  const child = new FakeChild();
+  const hosts = new RemoteHosts({ aliases: ['box'], spawn: () => child as never });
+  /*
+   * The whole seam under test, wired the way `serve()` wires it: one composite
+   * handed in as *both* the state source and the endings source, so a remote
+   * ending comes out of the same route a local one does and the canvas has one
+   * kind of event to know about rather than two.
+   */
+  const composite = new CompositeState(
+    { snapshot: () => EMPTY, on: () => undefined, off: () => undefined } as never,
+    hosts,
+  );
+  const server = await startNazarServer({
+    state: composite,
+    endings: composite,
+    uiDir,
+    port: 0,
+    heartbeatMs: 50,
+  });
+  hosts.start();
+
+  const controller = new AbortController();
+  try {
+    const response = await fetch(`${server.url}api/events`, { signal: controller.signal });
+    const stream = reading(response);
+    await stream.readUntil('event: state');
+    stream.reset();
+
+    child.say({
+      type: 'hello',
+      version: '0.1.0',
+      host: 'buildbox',
+      sources: [],
+      capabilities: { claude: true, codex: false, hermes: true, taskText: false, jump: false },
+    });
+    child.say({ type: 'session-ended', id: 'abc', at: 1_788_756_009_000 });
+
+    // A `hello` moves the composite, so a state frame lands between the reset
+    // and the ending: the buffer is cut at the event name rather than searched
+    // from the top for a `data:` line.
+    const buffer = await stream.readUntil('event: session-ended');
+    const frame = buffer.slice(buffer.indexOf('event: session-ended'));
+    const payload = payloadOf(frame);
+    assert.equal(payload['type'], 'session-ended');
+    // Re-keyed on the way in, so it names the card this canvas actually drew.
+    assert.equal(payload['id'], 'box:abc');
+    assert.equal(payload['host'], 'box');
+    assert.equal(payload['at'], 1_788_756_009_000);
+    // Once. One ending on the far end is one frame here — not one per
+    // reconnection, and not one per snapshot that no longer holds the card.
+    assert.equal(buffer.split('event: session-ended').length - 1, 1);
+
+    controller.abort();
+    await response.body?.cancel().catch(() => undefined);
+  } finally {
+    hosts.stop();
+    await server.close();
+    await rm(uiDir, { recursive: true, force: true });
+  }
 });

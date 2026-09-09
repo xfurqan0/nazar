@@ -93,8 +93,171 @@ import {
   TranscriptTailer,
 } from '@nazar/core';
 
+import {
+  DEFAULT_HERMES_POLL_MS,
+  HERMES_HOME_DIR,
+  HermesReader,
+  discoverHermesSources,
+  hermesHomeDir,
+  loadSqlite,
+} from '@nazar/core';
+
 import { OPEN_HINT, browserOpenChain, describeOpenAttempt } from './open.js';
 import { collapseHome } from './redact.js';
+import type { RemoteSpawn } from './remote.js';
+import { DEFAULT_REMOTE_COMMAND, LineReader, SSH_ARGS, sshSpawn } from './remote.js';
+
+/* ------------------------------------------------------------------ *
+ * N-WP17a: Hermes, and the remote hosts
+ * ------------------------------------------------------------------ */
+
+/**
+ * How long doctor gives one alias before it gives up on it.
+ *
+ * `ConnectTimeout=10` plus the far end starting Node and reading a database.
+ * Twenty-five seconds is long enough that a slow machine answers and short
+ * enough that three dead hosts do not turn `nazar doctor` into a minute of
+ * nothing. It is a *probe*: the canvas keeps retrying for as long as it runs,
+ * and this is one attempt reported honestly.
+ */
+export const REMOTE_PROBE_MS = 25_000;
+
+/** What one probe of one alias found. */
+export interface RemoteProbe {
+  readonly alias: string;
+  /** `hello` arrived, ssh answered but said nothing we know, or it failed. */
+  readonly state: 'ok' | 'no hello' | 'failed';
+  readonly version?: string;
+  readonly hostname?: string;
+  /** `<name> <state> (<detail>)` per source the far end reported. */
+  readonly sources: readonly string[];
+  /** Sessions in the first snapshot, when one arrived. */
+  readonly sessions?: number;
+  /** The last line the far end (or ssh) wrote to stderr. */
+  readonly error?: string;
+  readonly durationMs: number;
+}
+
+/**
+ * Run one alias once and report what came back.
+ *
+ * It uses the same spawn and the same parser the canvas uses, so a probe that
+ * succeeds is evidence about the thing that will actually run — a doctor that
+ * tested a different code path would be testing itself. The child is killed
+ * either way: doctor starts nothing that outlives it.
+ */
+export async function probeRemote(
+  alias: string,
+  command: string,
+  spawn: RemoteSpawn = sshSpawn,
+  timeoutMs: number = REMOTE_PROBE_MS,
+): Promise<RemoteProbe> {
+  const started = Date.now();
+  return await new Promise<RemoteProbe>((resolve) => {
+    let settled = false;
+    let stderr: string | undefined;
+    let version: string | undefined;
+    let hostname: string | undefined;
+    let sources: string[] = [];
+    let sessions: number | undefined;
+    let sawHello = false;
+    const reader = new LineReader();
+
+    let child: ReturnType<RemoteSpawn>;
+    const finish = (state: RemoteProbe['state']): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.kill();
+      } catch {
+        // Already gone. There is nothing a report can do about that.
+      }
+      resolve({
+        alias,
+        state,
+        ...(version === undefined ? {} : { version }),
+        ...(hostname === undefined ? {} : { hostname }),
+        sources,
+        ...(sessions === undefined ? {} : { sessions }),
+        ...(stderr === undefined ? {} : { error: stderr }),
+        durationMs: Date.now() - started,
+      });
+    };
+
+    const timer = setTimeout(() => finish(sawHello ? 'ok' : 'no hello'), timeoutMs);
+    timer.unref?.();
+
+    try {
+      child = spawn(alias, command);
+    } catch (error) {
+      clearTimeout(timer);
+      resolve({
+        alias,
+        state: 'failed',
+        sources: [],
+        error: error instanceof Error ? error.message : String(error),
+        durationMs: Date.now() - started,
+      });
+      return;
+    }
+
+    child.stdout.setEncoding('utf8');
+    child.stdout.on('data', (chunk: string) => {
+      for (const line of reader.push(chunk)) {
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(line) as unknown;
+        } catch {
+          continue;
+        }
+        if (typeof parsed !== 'object' || parsed === null) continue;
+        const message = parsed as Record<string, unknown>;
+        if (message['type'] === 'hello') {
+          sawHello = true;
+          if (typeof message['version'] === 'string') version = message['version'].slice(0, 40);
+          if (typeof message['host'] === 'string') hostname = message['host'].slice(0, 80);
+          sources = Array.isArray(message['sources'])
+            ? (message['sources'] as unknown[]).flatMap((entry) => {
+                if (typeof entry !== 'object' || entry === null) return [];
+                const source = entry as Record<string, unknown>;
+                const name = source['name'];
+                if (typeof name !== 'string') return [];
+                const detail = source['detail'];
+                return [
+                  `${name} ${source['state'] === 'unknown' ? '--' : 'ok'}${
+                    typeof detail === 'string' ? ` (${detail})` : ''
+                  }`,
+                ];
+              })
+            : [];
+          continue;
+        }
+        if (message['type'] === 'state' && sessions === undefined) {
+          const state = message['state'];
+          if (typeof state === 'object' && state !== null) {
+            const list = (state as { sessions?: unknown }).sessions;
+            if (Array.isArray(list)) sessions = list.length;
+          }
+          // A `hello` and one snapshot is the whole of what a probe needs.
+          finish('ok');
+        }
+      }
+    });
+
+    child.stderr.setEncoding('utf8');
+    child.stderr.on('data', (chunk: string) => {
+      const line = String(chunk).trim().split('\n').pop();
+      if (line !== undefined && line.length > 0) stderr = line.slice(0, 200);
+    });
+
+    child.on('error', (error: Error) => {
+      stderr = error.message.slice(0, 200);
+      finish('failed');
+    });
+    child.on('close', () => finish(sawHello ? 'ok' : 'failed'));
+  });
+}
 
 /** Bytes of a transcript doctor samples to check the pinned line shape. */
 export const DOCTOR_SAMPLE_BYTES = 512 * 1024;
@@ -121,6 +284,23 @@ export interface DoctorOptions {
    * user-level status line is judged as a shell command on. Injected by tests.
    */
   readonly platform?: NodeJS.Platform;
+  /**
+   * N-WP17a: aliases to probe. Empty is the normal case and prints one line
+   * saying so — a report that silently omitted a section would be a report a
+   * person could not tell "nothing configured" from "nothing checked".
+   */
+  readonly remotes?: readonly string[];
+  /** What each probe runs on the far end. Defaults to the canvas's own. */
+  readonly remoteCommand?: string;
+  /** Injected by tests so `nazar doctor` never spawns a real ssh. */
+  readonly spawn?: RemoteSpawn;
+  /** How long one probe may take. Injected by tests. */
+  readonly remoteTimeoutMs?: number;
+  /**
+   * The Hermes reader doctor reports on. `null` runs the report without one,
+   * which is what a test that has no `~/.hermes` to point at does.
+   */
+  readonly hermes?: HermesReader | null;
 }
 
 export interface DoctorReport {
@@ -1079,6 +1259,118 @@ function codexSection(
 }
 
 /**
+ * N-WP17a. What Hermes there is on this machine, and whether Node can read it.
+ *
+ * Two questions, and they fail in opposite directions, so they get separate
+ * sentences. `node:sqlite` missing is a fact about the *runtime* — an old Node,
+ * or a build with it compiled out — and no amount of Hermes on the disk will
+ * change it. No `state.db` is a fact about the *machine*, and it is the normal
+ * answer for everybody who does not run Hermes; it is not a failure and is not
+ * printed as one.
+ *
+ * The reader is started, read once and stopped. Nothing here outlives the
+ * report, and every read is the read-only connection the canvas would make.
+ */
+async function hermesSection(
+  options: DoctorOptions,
+  home: string,
+  verbose: boolean,
+  show: (target: string) => string,
+): Promise<string[]> {
+  const lines: string[] = [];
+  const homeDir = hermesHomeDir(options.env ?? process.env, home);
+  lines.push(`  home           ${show(homeDir)}   (${HERMES_HOME_DIR}; HERMES_HOME overrides it)`);
+
+  const sqlite = await loadSqlite();
+  lines.push(
+    sqlite === undefined
+      ? `  node:sqlite    not available on ${process.version} — Hermes needs Node 22.5 or newer. Nothing else about Nazar is affected.`
+      : `  node:sqlite    available on ${process.version}; connections are opened file:<path>?mode=ro and readOnly`,
+  );
+
+  const refs = await discoverHermesSources(homeDir);
+  if (refs.length === 0) {
+    lines.push('  profiles       none found (normal on a machine that does not run Hermes)');
+    return lines;
+  }
+  lines.push(
+    `  profiles       ${plural(refs.length, 'state.db')}: ${refs.map((ref) => ref.profile).join(', ')}`,
+  );
+  if (sqlite === undefined) return lines;
+
+  const reader =
+    options.hermes === null
+      ? undefined
+      : (options.hermes ??
+        new HermesReader({ homeDir, pollIntervalMs: DEFAULT_HERMES_POLL_MS, taskText: false }));
+  if (reader === undefined) return lines;
+  const scan = await reader.scan();
+  reader.stop();
+  for (const source of scan.sources) {
+    lines.push(
+      `  ${source.state === 'ok' ? 'ok' : '--'}  ${source.profile.padEnd(12)} ${
+        source.state === 'ok'
+          ? `${plural(source.sessions, 'session')}, ${source.running} holding a live turn lease`
+          : (source.error ?? 'unreadable')
+      }`,
+    );
+    if (verbose) lines.push(`      ${show(source.file)}`);
+  }
+  lines.push(
+    `  ${plural(scan.sessions.length, 'card')} would be drawn: open sessions, plus what ended in the last ten minutes.`,
+  );
+  lines.push(
+    '  waiting is never shown for Hermes: it is held in the gateway\'s memory and written to no file.',
+  );
+  return lines;
+}
+
+/**
+ * N-WP17a. One line per alias, and the alias is only ever a name.
+ *
+ * With none configured this is one sentence rather than a missing section: a
+ * report that printed nothing here would leave a person unable to tell "no
+ * remote hosts" from "the remote check did not run".
+ */
+async function remoteSection(options: DoctorOptions): Promise<string[]> {
+  const aliases = options.remotes ?? [];
+  const command = options.remoteCommand ?? DEFAULT_REMOTE_COMMAND;
+  if (aliases.length === 0) {
+    return [
+      '  none configured. "nazar --remote <alias>" reads another machine over your own ssh:',
+      `  ssh ${SSH_ARGS.join(' ')} <alias> -- ${command}`,
+      '  No port is opened, no token is stored and nothing is installed there. See docs/REMOTE.md.',
+    ];
+  }
+
+  const lines: string[] = [`  command        ${command}`];
+  const probes = await Promise.all(
+    aliases.map((alias) =>
+      probeRemote(alias, command, options.spawn ?? sshSpawn, options.remoteTimeoutMs),
+    ),
+  );
+  for (const probe of probes) {
+    const head = `  ${probe.state === 'ok' ? 'ok' : '--'}  ${probe.alias.padEnd(16)}`;
+    if (probe.state === 'ok') {
+      lines.push(
+        `${head} nazar ${probe.version ?? 'unknown'} on ${probe.hostname ?? 'unknown'} in ${probe.durationMs.toFixed(0)} ms` +
+          (probe.sessions === undefined ? '' : `, ${plural(probe.sessions, 'session')}`),
+      );
+      for (const source of probe.sources) lines.push(`        ${source}`);
+      continue;
+    }
+    lines.push(
+      `${head} ${probe.state === 'no hello' ? 'ssh connected but no hello arrived' : 'no answer'} after ${probe.durationMs.toFixed(0)} ms`,
+    );
+    if (probe.error !== undefined) lines.push(`        ${probe.error}`);
+    lines.push(
+      `        check "ssh ${probe.alias}" works without a password, and that the far end has "${command.split(' ')[0] ?? 'nazar'}" on its PATH`,
+    );
+  }
+  return lines;
+}
+
+/**
  * Build the report. Nothing is started and nothing is written; the caller
  * prints the lines.
  */
@@ -1263,6 +1555,18 @@ export async function runDoctor(options: DoctorOptions = {}): Promise<DoctorRepo
       verbose,
     ),
   );
+  lines.push('');
+
+  /* ---- N-WP17a: Hermes ------------------------------------------- */
+
+  lines.push('Hermes sessions (read-only)');
+  lines.push(...(await hermesSection(options, home, verbose, show)));
+  lines.push('');
+
+  /* ---- N-WP17a: the remote hosts ---------------------------------- */
+
+  lines.push('Remote hosts (ssh)');
+  lines.push(...(await remoteSection(options)));
   lines.push('');
 
   lines.push('Pinned formats (docs/pinned-internal-formats.md)');

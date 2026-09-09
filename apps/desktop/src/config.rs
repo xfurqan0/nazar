@@ -112,9 +112,47 @@ pub struct Config {
     #[serde(default = "default_task_text")]
     pub task_text: String,
 
+    /// N-WP17a: the `~/.ssh/config` aliases the canvas also reads.
+    ///
+    /// Empty — the default and the absent value — is a machine that watches itself and
+    /// nothing else, which is every machine until somebody types a host into the settings
+    /// panel. Each entry becomes one `ssh <alias> -- nazar --agent --hermes` started by
+    /// the child server; the shell's whole part in it is writing this list down and
+    /// handing it over as `--remote a,b`.
+    ///
+    /// A `Vec<String>` rather than one comma-joined string, because this is a list and a
+    /// file that says so needs no parser to be read by a person. It is still validated on
+    /// the way out: [`Config::remotes`] drops anything that is not an alias, so a
+    /// hand-edited `"root@box"` or `"-oProxyCommand=…"` costs that entry and not the
+    /// user's autostart choice — the same trade [`lenient_port`] makes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub remotes: Vec<String>,
+
     /// Everything this build did not recognise, kept so it survives a round trip.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+/// Longest alias this shell will store. Aliases are names, not sentences.
+const MAX_ALIAS: usize = 64;
+
+/// The same shape `packages/server/src/remote.ts` accepts, written twice on purpose.
+///
+/// The two are in different languages and neither can call the other, so the rule lives
+/// in both — and both are narrow enough that "the same shape" is checkable by reading
+/// them: begins with a letter or a digit, then letters, digits, `.`, `_` and `-`.
+fn is_alias(value: &str) -> bool {
+    if value.is_empty() || value.len() > MAX_ALIAS {
+        return false;
+    }
+    let mut chars = value.chars();
+    let Some(first) = chars.next() else {
+        return false;
+    };
+    if !first.is_ascii_alphanumeric() {
+        return false;
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '.' || c == '_' || c == '-')
 }
 
 /// The value that means "the browser decides", which is what an absent key means.
@@ -161,6 +199,7 @@ impl Default for Config {
             autostart: false,
             port: None,
             task_text: default_task_text(),
+            remotes: Vec::new(),
             extra: Map::new(),
         }
     }
@@ -244,6 +283,50 @@ impl Config {
             return Ok(false);
         }
         self.task_text = wanted.to_owned();
+        self.save()?;
+        Ok(true)
+    }
+
+    /// N-WP17a: the aliases worth handing to `ssh`, in the order they were typed.
+    ///
+    /// An alias is a name in `~/.ssh/config` and nothing else: no `user@host`, no path,
+    /// nothing beginning with a dash, nothing with a space in it. The server refuses the
+    /// same shapes on its own command line, and this is the shell refusing them before
+    /// they get there — a list that reached `ssh` with an option in it would be a
+    /// settings file that could open a connection nobody asked for.
+    #[must_use]
+    pub fn remotes(&self) -> Vec<String> {
+        let mut seen = Vec::new();
+        for alias in &self.remotes {
+            let alias = alias.trim();
+            if is_alias(alias) && !seen.iter().any(|kept: &String| kept == alias) {
+                seen.push(alias.to_owned());
+            }
+        }
+        seen
+    }
+
+    /// Replace the list. Returns whether anything was written.
+    pub fn set_remotes(&mut self, aliases: &[String]) -> Result<bool, String> {
+        let wanted: Vec<String> = {
+            let mut kept: Vec<String> = Vec::new();
+            for alias in aliases {
+                let alias = alias.trim();
+                if !is_alias(alias) {
+                    return Err(format!(
+                        "\"{alias}\" is not an ssh alias. Put the host in ~/.ssh/config and name it here."
+                    ));
+                }
+                if !kept.iter().any(|one| one == alias) {
+                    kept.push(alias.to_owned());
+                }
+            }
+            kept
+        };
+        if self.remotes == wanted {
+            return Ok(false);
+        }
+        self.remotes = wanted;
         self.save()?;
         Ok(true)
     }
@@ -543,6 +626,70 @@ mod tests {
             !config.set_task_text_allowed(true).expect("no write needed"),
             "a switch moved to where it already was changes nothing on disk"
         );
+    }
+
+    /* ---- N-WP17a: the remote hosts ---------------------------------- */
+
+    #[test]
+    fn a_fresh_machine_watches_itself_and_nothing_else() {
+        let config = Config::default();
+        assert!(config.remotes().is_empty());
+        // And an empty list is not written, so a file this shell has touched still
+        // reads as one that never had the key.
+        let json = serde_json::to_string(&config).expect("serialised");
+        assert!(!json.contains("remotes"), "{json}");
+    }
+
+    #[test]
+    fn only_an_alias_survives_the_read() {
+        let scratch = Scratch::new("remotes-read");
+        std::fs::write(
+            scratch.file(),
+            r#"{"schemaVersion":1,"autostart":true,"remotes":["box"," build-box ","root@box","-oProxyCommand=x","../etc/hosts","box"]}"#,
+        )
+        .expect("seeded");
+        let read = Config::read(&scratch.file()).expect("read");
+        assert_eq!(
+            read.remotes(),
+            vec!["box".to_owned(), "build-box".to_owned()],
+            "a login, an option and a path are dropped; the same host twice is one"
+        );
+        assert!(read.autostart, "one bad entry does not cost the other settings");
+    }
+
+    #[test]
+    fn setting_a_host_that_is_not_an_alias_is_refused_with_a_sentence() {
+        let mut config = Config::default();
+        for bad in ["root@box", "-oProxyCommand=x", "../etc/hosts", "box host", ""] {
+            let error = config
+                .set_remotes(&[bad.to_owned()])
+                .expect_err("refused")
+                .to_string();
+            assert!(error.contains("is not an ssh alias"), "{bad}: {error}");
+        }
+        assert!(config.remotes.is_empty(), "nothing was written");
+    }
+
+    #[test]
+    fn setting_the_list_to_what_it_already_is_writes_nothing() {
+        let mut config = Config::default();
+        config.remotes = vec!["box".to_owned()];
+        assert!(
+            !config.set_remotes(&["box".to_owned()]).expect("no write needed"),
+            "a list set to what it already was changes nothing on disk"
+        );
+    }
+
+    #[test]
+    fn a_list_survives_a_round_trip() {
+        let scratch = Scratch::new("remotes-round-trip");
+        let config = Config {
+            remotes: vec!["box".to_owned(), "build-box".to_owned()],
+            ..Config::default()
+        };
+        config.write(&scratch.file()).expect("written");
+        let read = Config::read(&scratch.file()).expect("read back");
+        assert_eq!(read.remotes(), vec!["box".to_owned(), "build-box".to_owned()]);
     }
 
     /// The collision this module exists to avoid, asserted rather than described.

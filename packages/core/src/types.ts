@@ -14,8 +14,13 @@ import type { AgentDoneSignal } from './agent-done.js';
  * counts its tokens cumulatively rather than per message, and exposes no
  * process id at all — so each has its own reader, and this union is the one
  * place a card learns which of them it came from.
+ *
+ * `hermes` arrived with N-WP17a: a second agent runtime whose sessions live in
+ * a SQLite file rather than in a transcript store (`hermes-state.ts`). It is on
+ * this list because the canvas draws its cards; nothing else about the node
+ * model changed to admit it, which is the test a provider has to pass.
  */
-export const providers = ['claude', 'codex'] as const;
+export const providers = ['claude', 'codex', 'hermes'] as const;
 
 export type Provider = (typeof providers)[number];
 
@@ -182,14 +187,35 @@ export interface AgentNode {
 
 /**
  * One agent session, as far as its provider's sources can describe it: Claude
- * Code's registry plus transcript (WP1/WP2), or a Codex rollout (N-WP18).
+ * Code's registry plus transcript (WP1/WP2), a Codex rollout (N-WP18), or a
+ * row in a Hermes state database (N-WP17a).
  */
 export interface Session {
   /** `sessionId` when a source gave one, otherwise `pid-<pid>`. */
   readonly id: string;
   readonly provider: Provider;
-  /** The process appending to this session's files, or {@link NO_PID}. */
+  /**
+   * The process appending to this session's files, or {@link NO_PID}.
+   *
+   * Claude Code names a session file after its pid and the jump ladder raises
+   * that process's terminal. A Codex rollout names no process at all, a Hermes
+   * session has none of its own — one gateway serves every session in a profile
+   * — and a session read off a remote machine has one this machine cannot see
+   * either. All three are {@link NO_PID}, which is the stand-in a frozen history
+   * tree has always used, and the canvas refuses to jump to it rather than
+   * raising some local window that happens to match.
+   */
   readonly pid: number;
+  /**
+   * N-WP17a: the `~/.ssh/config` alias this session was read through, or absent
+   * when it was read on this machine.
+   *
+   * It is an alias the user typed into their own SSH configuration, never a
+   * hostname this program resolved and never an address. The card shows it as
+   * `@alias` beside the title, which is the whole of what "this one is not
+   * here" has to say.
+   */
+  readonly host?: string;
   readonly cwd?: string;
   /** `interactive` or `background`; only `interactive` was ever observed. */
   readonly kind?: string;

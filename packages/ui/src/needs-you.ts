@@ -38,7 +38,7 @@
 import type { ActivitySessionStatus } from './activity.js';
 import { isWaiting, sessionActivity } from './activity.js';
 import type { TokenLike } from './format.js';
-import { basename, formatAge, formatCount, formatCostUsd, formatDuration, orUnknown, unknownWord } from './format.js';
+import { basename, formatAge, formatCount, formatCostUsd, formatDuration, hostLabel, orUnknown, unknownWord } from './format.js';
 import { t, tCount } from './i18n.js';
 
 /**
@@ -90,6 +90,13 @@ export interface NeedsYouAgent {
 export interface NeedsYouSession {
   readonly id: string;
   readonly cwd?: string;
+  /**
+   * N-WP17a: the ssh alias this session was read through, or absent when it is
+   * on this machine. The strip draws it for the reason the card does — a mixed
+   * canvas's first question is *which machine* — and it is on the session
+   * rather than derived from the id so the two never disagree.
+   */
+  readonly host?: string;
   readonly status: ActivitySessionStatus;
   readonly state: 'alive' | 'unknown';
   readonly waitingFor?: string;
@@ -242,6 +249,8 @@ export interface WaitingRow {
   readonly label: string;
   /** The working directory, redacted exactly as the card draws it. */
   readonly folder: string;
+  /** `@alias` when the session is on another machine, absent when it is here. */
+  readonly host?: string;
   /** What it is waiting for, from the catalogue. */
   readonly what: string;
   readonly since: number;
@@ -279,10 +288,12 @@ export function waitingRows(
     const what = waitingForLabel(session.waitingFor);
     const waitedMs = Math.max(0, now - seen.since);
     const waited = formatDuration(waitedMs);
+    const host = hostLabel(session.host);
     rows.push({
       id: session.id,
       label,
       folder,
+      ...(host === undefined ? {} : { host }),
       what,
       since: seen.since,
       waitedMs,
@@ -299,6 +310,8 @@ export interface FinishedRow {
   readonly id: string;
   readonly label: string;
   readonly folder: string;
+  /** `@alias` when the session was on another machine, absent when it was here. */
+  readonly host?: string;
   /** How long the run took, or absent when no transcript timestamps bounded it. */
   readonly ranFor?: string;
   /** `12,043 in · 3,120 out`, or absent when nothing has been counted. */
@@ -333,10 +346,12 @@ export function finishedRows(
     const folder = orUnknown(session.cwd);
     const ago = formatAge(Math.max(0, now - record.at));
     const cost = formatCostUsd(record.costUsd);
+    const host = hostLabel(session.host);
     rows.push({
       id: record.id,
       label,
       folder,
+      ...(host === undefined ? {} : { host }),
       ...(record.ranForMs === undefined
         ? {}
         : { ranFor: t('needsYou.ranFor', { duration: formatDuration(record.ranForMs) }) }),
