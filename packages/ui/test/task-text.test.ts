@@ -148,10 +148,15 @@ test('the card geometry is the same in both states, and the node geometry is not
    * A session card's header already had a 28 px gap between the folder path and
    * the identity line, so the task line goes there and `CARD.headerHeight` never
    * moves — which is what every stored width and every dragged height is held
-   * against. A subagent node has six lines and no gap, so its seventh has to be
-   * paid for, and `TREE_SPEC_TASK` is where it is paid.
+   * against. A subagent node has no gap at all, so its extra line has to be paid
+   * for, and `TREE_SPEC_TASK` is where it is paid.
+   *
+   * (N-WP15 changed the header height itself, 212 → 180, by taking two rows of
+   * token counters off every card. That is a different question from this one:
+   * what is asserted here is that switching *task text* on and off moves
+   * nothing, and it is asserted against whatever the constant currently is.)
    */
-  assert.ok(canvas.includes('headerHeight: 212'), 'the header height is a constant, still');
+  assert.ok(canvas.includes('headerHeight: 180'), 'the header height is a constant, still');
   assert.match(canvas, /const task = svg\('text', 'nz-session__task'\);/);
   assert.match(canvas, /setAttr\(task, 'y', CARD\.pad \+ 46\);/, 'in the gap, not below it');
 

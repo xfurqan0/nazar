@@ -76,10 +76,14 @@ body {
   letter-spacing: 0.01em;
 }
 
-.nz-brand__tag {
-  color: var(--nz-text-faint);
-  font-size: var(--nz-size-sm);
-}
+/*
+ * N-WP15: the tagline is not on the bar any more.
+ *
+ * "watches, does not drive" is a promise about the product, and a promise
+ * repeated on every frame of a monitor stops being read after the first day. It
+ * is in the page title, in the brand's own tooltip and in the README, which is
+ * where somebody meeting Nazar for the first time actually is.
+ */
 
 .nz-bar__spacer {
   flex: 1 1 auto;
@@ -91,11 +95,14 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/*
+ * N-WP15 took the shouting out of this one: no uppercase, no wide tracking.
+ * `LIVE` and `DEMO DATA` were the loudest text on a page whose subject is
+ * elsewhere, and neither is an emergency.
+ */
 .nz-conn {
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
   padding: 4px 9px;
   border-radius: 999px;
   border: 1px solid var(--nz-panel-border);
@@ -108,9 +115,18 @@ body {
   border-color: var(--nz-accent);
 }
 
+/*
+ * The demo badge is a caption, not a control.
+ *
+ * It says "nothing on this canvas is real", which is a fact about the page and
+ * not something you can press — so N-WP15 takes its outline and its padding
+ * away and leaves the words, in the same place, at the weight of the counts
+ * beside them.
+ */
 .nz-conn[data-status='demo'] {
   color: var(--nz-warn-text);
-  border-color: var(--nz-warn);
+  border-color: transparent;
+  padding-inline: 0;
 }
 
 .nz-conn[data-status='lost'] {
@@ -451,8 +467,6 @@ body {
   color: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
 }
 
 /* A wrapper whose only job is to be hidden as a unit. It must not add a row of
@@ -475,13 +489,19 @@ body {
   display: none;
 }
 
+/*
+ * N-WP15: sentence case, here and in every other small heading.
+ *
+ * Uppercase plus wide tracking is the house style of a hundred dashboards and
+ * it costs something real: `SESSIONS` and `FOLDER TABS` are harder to read than
+ * the words they are made of, and the six catalogues write these headings as
+ * sentences anyway — the stylesheet was shouting somebody else's words.
+ */
 .nz-sidebar__heading {
   margin: 0 0 4px;
   color: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
 }
 
 /* ------------------------------------------- segment and switch (N-WP12) */
@@ -753,11 +773,14 @@ body {
   background: var(--nz-node-header);
 }
 
+/*
+ * The five state names in the colour settings. Sentence case since N-WP15, for
+ * the same reason the card's own status label is: this is `working` and `idle`,
+ * the very words the cards draw, and the two lists have to read as one thing.
+ */
 .nz-colour__label {
   flex: 1 1 auto;
   font-size: var(--nz-size-sm);
-  text-transform: uppercase;
-  letter-spacing: var(--nz-tracking-wide);
   color: var(--nz-text-muted);
 }
 
@@ -848,8 +871,6 @@ body {
   color: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
 }
 
 .nz-menu__item {
@@ -1293,8 +1314,6 @@ body {
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
   text-align: left;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   cursor: pointer;
 }
 
@@ -1657,44 +1676,53 @@ body {
 }
 
 /*
- * The frame is the state (WP4d).
+ * The ring is the state (N-WP15, revising WP4d).
  *
- * The small ring in the corner was too small to answer "which of these
- * fourteen cards is working" from across the desk, which was the whole
- * complaint. The card's own border carries it now: one colour per activity,
- * one class per activity, and exactly one class on at a time.
+ * WP4d moved the state onto the card's whole border because a 22 px ring could
+ * not answer "which of these fourteen is working" from across a desk. It
+ * worked, and it cost more than it was worth: on a canvas of nine cards, nine
+ * saturated 2 px rectangles are nine competing borders, and the one card that
+ * genuinely wants an answer from you — `waiting` — was shouting no louder than
+ * the eight that did not.
  *
- * Only `working` moves, and it breathes rather than blinks — 1.6 s, ease in
- * and out, stroke opacity never below 0.35. A hard flash is what an alarm
- * looks like, and a session doing its job is not an alarm; the state that *is*
- * an alarm is `waiting`, which keeps the banner and the expanding ring it has
- * always had.
+ * So the colour goes back to the ring, and the ring gets the **activity** it
+ * never had (it used to answer the narrower question of whether the process
+ * replies to a probe). Every card frame is the neutral `--nz-node-border` above
+ * — which is what `.nz-session__bg` already says, so there is nothing to write
+ * here — and exactly one frame on the canvas is coloured: the one waiting for
+ * you. Colour only where it means something.
  */
-.nz-session.is-working .nz-session__bg {
+.nz-session.is-working .nz-ring {
   stroke: var(--nz-state-working);
-  stroke-width: 2;
-  animation: nz-frame-pulse 1.6s ease-in-out infinite;
 }
 
-.nz-session.is-idle .nz-session__bg {
+.nz-session.is-idle .nz-ring {
   stroke: var(--nz-state-alive);
-  stroke-width: 2;
 }
 
-.nz-session.is-done .nz-session__bg {
+.nz-session.is-done .nz-ring {
   stroke: var(--nz-state-done);
-  stroke-width: 2;
 }
 
-.nz-session.is-unknown .nz-session__bg {
+.nz-session.is-unknown .nz-ring {
   stroke: var(--nz-state-unknown);
-  stroke-width: 2;
-  stroke-dasharray: 5 4;
+  stroke-dasharray: 3 3;
 }
 
+/*
+ * The one exception, and the reason it is one: a waiting session is the only
+ * state on this canvas that is about *you*. It is the only thing you can act
+ * on, it stops being true the moment you answer it, and until you do the card
+ * carries the amber frame the whole package used to spend on five states.
+ */
 .nz-session.is-waiting .nz-session__bg {
   stroke: var(--nz-state-waiting);
   stroke-width: 2;
+}
+
+.nz-session.is-waiting .nz-ring {
+  stroke: var(--nz-state-waiting);
+  stroke-width: 3.5;
 }
 
 .nz-session.is-unknown {
@@ -1702,28 +1730,35 @@ body {
 }
 
 /*
- * The word next to the colour. Drawn in the muted text token rather than in
- * the state colour: a ring only has to clear 3:1, text has to clear 4.5:1, and
+ * The word next to the colour. Drawn in a text token rather than in the state
+ * colour: a ring only has to clear 3:1, text has to clear 4.5:1, and
  * `stateAlive` on a white card does not — which is exactly why the label is
- * carrying the meaning and the frame is carrying the glance.
+ * carrying the meaning and the ring is carrying the glance.
+ *
+ * N-WP15 dropped the uppercase and the tracking. It is a word, in the language
+ * the page is in, and `ÇALIŞIYOR` is not more informative than `çalışıyor`.
  */
-.nz-session__activity,
-.nz-agent__activity {
+.nz-session__activity {
   fill: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
-}
-
-.nz-session__activity {
   text-anchor: end;
 }
 
-.nz-session.is-working .nz-session__activity,
-.nz-agent.is-working .nz-agent__activity,
-.nz-session.is-waiting .nz-session__activity {
+.nz-session.is-working .nz-session__activity {
   fill: var(--nz-text-muted);
+  font-weight: var(--nz-weight-strong);
+}
+
+/*
+ * On a waiting card this label is not the word `waiting` — it is what the
+ * session is waiting *for*, which is the only thing about it you did not
+ * already know. Amber, in `warnText` rather than in `stateWaiting`: this is
+ * text, so it is held to 4.5:1 and only the text token clears that on all four
+ * palettes in both modes (`theme.test.ts` measures both).
+ */
+.nz-session.is-waiting .nz-session__activity {
+  fill: var(--nz-warn-text);
   font-weight: var(--nz-weight-strong);
 }
 
@@ -1923,23 +1958,37 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-.nz-session__meta {
+/*
+ * N-WP15: the model and the effort, where two chips were.
+ *
+ * The same line, the same baseline, no box. `accentText` went with the chip —
+ * the model name is a fact about the run and not a badge for it — so both halves
+ * are the secondary text weight the rest of the header uses.
+ */
+.nz-session__model {
   fill: var(--nz-text-muted);
   font-size: var(--nz-size-sm);
-  font-variant-numeric: tabular-nums;
 }
 
-.nz-session__tokens {
+/*
+ * The body, which is one line since N-WP15: how long, how much work, what it is
+ * doing, how many tokens. It takes the full text colour the token counters used
+ * to have — it is the reading the card exists to give — but stays in the body
+ * face rather than the mono one, which is not decoration: `fitText` cuts this
+ * line to `inner` using a proportional estimate, and mono runs about a tenth
+ * wider than that estimate at every size. `tabular-nums` is what keeps the
+ * figures from jittering as they tick.
+ */
+.nz-session__meta {
   fill: var(--nz-text);
-  font-family: var(--nz-mono-family);
   font-size: var(--nz-size-sm);
   font-variant-numeric: tabular-nums;
 }
 
 /*
  * Cost and context window (WP3'). Muted, because they answer a different
- * question from the token counters above them and must not outshout them, and
- * drawn at all only when a status-line capture supplied them: the renderer sets
+ * question from the line above them and must not outshout it, and drawn at all
+ * only when a status-line capture supplied them: the renderer sets
  * `display: none` otherwise, so the line costs nothing on a machine with no
  * wrapper and the card never changes size either way.
  */
@@ -2033,25 +2082,19 @@ body {
 }
 
 /*
- * The working frame's breath. Only `stroke-opacity` moves, so one keyframe set
- * fits both the 2 px session border and the 1.6 px agent one, and neither
- * changes size — an animated `stroke-width` would nudge the card's own edge and
- * make a static screenshot disagree with itself by half a pixel.
+ * N-WP15 removed the second animation this stylesheet had.
+ *
+ * WP4d gave the working frame a 1.6 s breath, and on a canvas of nine cards
+ * that is nine rectangles quietly moving at once — motion that says nothing,
+ * because *most* sessions are working most of the time. One thing on this
+ * canvas moves now, and it is the halo above: the session that is waiting for
+ * you, which is the only state a person has to do something about.
  */
-@keyframes nz-frame-pulse {
-  0%,
-  100% {
-    stroke-opacity: 1;
-  }
-  50% {
-    stroke-opacity: 0.35;
-  }
-}
 
 /*
- * Reduced motion: the frame keeps its colour and stops moving, and the word on
- * the card is what is left to say "working" — which is why the word is drawn
- * whether anything animates or not.
+ * Reduced motion: the halo stops and stays visible, and the word on the card is
+ * what is left to say what the ring's colour means — which is why the word is
+ * drawn whether anything animates or not.
  */
 @media (prefers-reduced-motion: reduce) {
   .nz-session.is-waiting .nz-ring__pulse {
@@ -2059,14 +2102,7 @@ body {
     opacity: 0.5;
   }
 
-  .nz-session.is-working .nz-session__bg,
-  .nz-agent.is-working .nz-agent__bg {
-    animation: none;
-    stroke-opacity: 1;
-  }
-
-  .nz-session.is-working .nz-session__activity,
-  .nz-agent.is-working .nz-agent__activity {
+  .nz-session.is-working .nz-session__activity {
     fill: var(--nz-text);
   }
 
@@ -2078,8 +2114,18 @@ body {
 
 /* --------------------------------------------------------------- chip */
 
+/*
+ * N-WP15: two chips left, and neither of them is on a card at rest.
+ *
+ * There were five — model, effort, waiting-for, done, and the folded tree's
+ * summary — and four of them were readings wearing the shape of a control. What
+ * is left is the folded tree's summary row (`60 subagents · 37 running · …`,
+ * which stands in for sixty nodes and is bounded because each stands for a set)
+ * and `N finished hidden · show`, which is genuinely pressable. Both are
+ * outlines rather than fills for the same reason: a filled pill is a button.
+ */
 .nz-chip__bg {
-  fill: var(--nz-node-header);
+  fill: none;
   stroke: var(--nz-node-border);
   stroke-width: 1;
 }
@@ -2090,20 +2136,6 @@ body {
   font-weight: var(--nz-weight-medium);
 }
 
-.nz-chip--model .nz-chip__text {
-  fill: var(--nz-accent-text);
-}
-
-.nz-chip--waiting .nz-chip__bg {
-  fill: var(--nz-banner-bg);
-  stroke: var(--nz-banner-border);
-}
-
-.nz-chip--waiting .nz-chip__text {
-  fill: var(--nz-banner-text);
-  font-weight: var(--nz-weight-strong);
-}
-
 /* --------------------------------------------------------------- tree */
 
 .nz-rule {
@@ -2111,12 +2143,11 @@ body {
   stroke-width: 1;
 }
 
+/* `subagents · 6`. Sentence case since N-WP15, like every other label here. */
 .nz-tree__label {
   fill: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
 }
 
 .nz-edge {
@@ -2132,29 +2163,23 @@ body {
 }
 
 /*
- * A subagent's frame follows the same three rules as its session's, at the
- * smaller card's weight. An agent is never `idle` and never `waiting` —
- * `Agent.state` has three values and neither of those is one of them — so
- * those two rules would be dead CSS and are not written.
+ * N-WP15: a subagent's frame carries no state at all.
+ *
+ * A card with sixteen subagents was sixteen coloured rectangles inside a
+ * seventeenth, which is the densest place on the canvas and the worst place to
+ * spend colour. The dot in the node's corner says which of the three states
+ * `Agent.state` has this one is in, its third line says the same thing in words
+ * whenever there is a word for it (`done · 12m 03s`), and the node's own
+ * outline is the neutral `--nz-agent-border` above.
  */
-.nz-agent.is-working .nz-agent__bg {
-  stroke: var(--nz-state-working);
-  stroke-width: 1.6;
-  animation: nz-frame-pulse 1.6s ease-in-out infinite;
-}
 
 /*
- * A finished subagent stays on the canvas until its session goes, faded and
- * ringed in grey. Removing it would erase the answer to "what did that run
- * cost"; leaving it bright would claim it is still working.
+ * A finished subagent stays on the canvas until its session goes, faded.
+ * Removing it would erase the answer to "what did that run cost"; leaving it
+ * bright would claim it is still working.
  */
 .nz-agent.is-done {
   opacity: 0.62;
-}
-
-.nz-agent.is-done .nz-agent__bg {
-  stroke: var(--nz-state-done);
-  stroke-width: 1.5;
 }
 
 /*
@@ -2203,19 +2228,20 @@ body {
   font-weight: var(--nz-weight-medium);
 }
 
-.nz-agent.is-unknown .nz-agent__bg {
-  stroke: var(--nz-state-unknown);
-  stroke-dasharray: 4 3;
-}
-
-.nz-agent.is-orphan .nz-agent__bg {
-  stroke: var(--nz-warn);
+/*
+ * An orphan is the one thing about a node that is not a *state* — it is a
+ * written parent that does not resolve — so it keeps a mark, and the mark is
+ * the word `orphan` on the node's own third line rather than a colour around
+ * it. N-WP15 took the amber outline; `.nz-agent.is-orphan` still exists and is
+ * still written, because the marker's own rule uses it.
+ */
+.nz-agent.is-orphan .nz-agent__orphan {
+  fill: var(--nz-warn-text);
 }
 
 .nz-agent:focus-visible .nz-agent__bg {
   stroke: var(--nz-focus-ring);
   stroke-width: 2;
-  animation: none;
   stroke-opacity: 1;
 }
 
@@ -2247,7 +2273,7 @@ body {
 }
 
 /*
- * N-WP15a: the brief, on the node's seventh line.
+ * N-WP15a: the brief, on the node's last line.
  *
  * The faintest text on the node, deliberately. It is the only thing here that
  * is prose rather than a measurement, and a canvas whose loudest text was
@@ -2257,13 +2283,6 @@ body {
   fill: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   font-style: italic;
-}
-
-.nz-agent__tokens {
-  fill: var(--nz-text-faint);
-  font-family: var(--nz-mono-family);
-  font-size: var(--nz-size-xs);
-  font-variant-numeric: tabular-nums;
 }
 
 .nz-agent__orphan {
@@ -2734,8 +2753,6 @@ body {
   color: var(--nz-text-muted);
   font-size: var(--nz-size-xs);
   font-weight: var(--nz-weight-medium);
-  letter-spacing: var(--nz-tracking-wide);
-  text-transform: uppercase;
   overflow-wrap: anywhere;
 }
 
@@ -3108,6 +3125,4 @@ body {
   color: var(--nz-text-faint);
   font-family: var(--nz-mono-family);
   font-weight: var(--nz-weight-medium);
-  text-transform: none;
-  letter-spacing: 0;
 }

@@ -17,6 +17,9 @@
  *    elements — which a translator may reorder freely.
  * 3. **The picker.** Six languages, each written in its own language, and
  *    nothing else — see {@link fillLanguagePicker}.
+ * 4. **The tab title** (N-WP15). The tagline used to be a line of the top bar
+ *    and is the browser tab now, so it is a sentence that has to be translated
+ *    like every other one.
  */
 import type { Locale } from '../src/i18n.ts';
 import { LOCALES, currentLocale, t } from '../src/i18n.ts';
@@ -32,6 +35,8 @@ const LABEL = 'data-nz-label';
 const RICH = 'data-nz-rich';
 /** Which hole a child fills. */
 const SLOT = 'data-nz-slot';
+/** The product's own name. The one word on this page nobody translates. */
+const BRAND = 'Nazar';
 
 /**
  * The slot elements of a rich line, kept from the first pass.
@@ -103,6 +108,14 @@ export function applyStatic(root: ParentNode = document): void {
     const key = element.getAttribute(LABEL);
     if (key !== null) element.setAttribute('aria-label', t(key));
   }
+  /*
+   * N-WP15: the tab title, which is where the tagline went when it came off the
+   * top bar. Written here rather than in `index.html` for the reason every other
+   * word on this page is: the markup carries the product's name, the catalogues
+   * carry the sentence, and a browser tab in Korean must not say
+   * "watches, does not drive".
+   */
+  document.title = `${BRAND} — ${t('bar.tagline')}`;
   document.documentElement.lang = currentLocale();
 }
 

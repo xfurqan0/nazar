@@ -13,6 +13,7 @@ import {
   formatDuration,
   formatElapsed,
   formatTokens,
+  formatTotal,
   modelChip,
   orUnknown,
   summarize,
@@ -76,6 +77,34 @@ test('formatTokens prints all four counters and marks the missing ones', () => {
     '24,118 in · 9,402 out · 1,284,507 r · 61,440 w',
   );
   assert.equal(formatTokens({ in: 5 }), `5 in · ${unknownWord()} out · ${unknownWord()} r · ${unknownWord()} w`);
+});
+
+test('N-WP15: the card total is a magnitude, and it is the one rounded number', () => {
+  /*
+   * The card answers "is this a big session"; the hover card answers "how many
+   * tokens exactly". `formatCount` above is still exact everywhere it is used,
+   * including in the four counters this one summarises.
+   */
+  assert.equal(formatTotal({ in: 24_118, out: 9_402 }), '34k');
+  assert.equal(formatTotal({ in: 900, out: 12 }), '912');
+  assert.equal(formatTotal({ in: 999, out: 0 }), '999');
+  assert.equal(formatTotal({ in: 1000, out: 0 }), '1k');
+  assert.equal(formatTotal({ in: 1240, out: 0 }), '1.2k');
+  assert.equal(formatTotal({ in: 1_300_000, out: 0 }), '1.3M');
+  assert.equal(formatTotal({ in: 2_000_000, out: 0 }), '2M');
+});
+
+test('N-WP15: the total is input plus output, and cache is not in it', () => {
+  // A cache read is the whole prompt prefix re-read once per request, so adding
+  // it would put a number three orders of magnitude larger on the card and call
+  // it "the tokens". `cacheReadNote` is the long version of the same point.
+  assert.equal(formatTotal({ in: 1000, out: 1000, cacheRead: 96_200_000, cacheWrite: 61_440 }), '2k');
+  // A partially filled object still totals what it has; nothing at all is
+  // `unknown`, never `0` — the same rule every other formatter here follows.
+  assert.equal(formatTotal({ in: 5000 }), '5k');
+  assert.equal(formatTotal(undefined), unknownWord());
+  assert.equal(formatTotal({}), unknownWord());
+  assert.equal(formatTotal({ cacheRead: 900_000 }), unknownWord());
 });
 
 test('basename copes with both separators, trailing slashes and roots', () => {

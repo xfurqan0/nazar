@@ -145,6 +145,21 @@ export class TabBar {
     titles: ReadonlyMap<string, readonly string[]> = new Map(),
   ): void {
     this.last = { state, counts, titles };
+    /*
+     * N-WP15: a bar of one tab is not a bar.
+     *
+     * On a fresh install there is exactly one canvas — *All* — and a strip
+     * saying so, with a `+` next to it, is a row of chrome above every session
+     * that offers a choice nobody has made yet. It appears the moment there is
+     * a second tab, which is also the moment it starts meaning something.
+     *
+     * Set before the signature check, because the strip has to be right on the
+     * frame a tab is added *or removed* even when nothing else about it moved,
+     * and hiding it takes nothing away: a tab is opened from the session list
+     * in the drawer and from the ⋯ menu on a card, both of which say what they
+     * will do in words.
+     */
+    this.root.hidden = state.tabs.length < 2;
     const signature = JSON.stringify([
       state.tabs,
       state.active,

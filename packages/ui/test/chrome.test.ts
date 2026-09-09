@@ -98,10 +98,12 @@ test('every class the canvas sets has a rule that gives it a meaning', () => {
     '.nz-cardmenu__dot',
     '.nz-chip--running',
     '.nz-session__activity',
-    '.nz-agent__activity',
-    '.nz-session.is-working',
-    '.nz-session.is-idle',
-    '.nz-agent.is-working',
+    // N-WP15: a subagent node has no activity word — its dot and its third line
+    // carry the state — and the session's activity classes paint the ring
+    // rather than the card's whole border.
+    '.nz-session.is-working .nz-ring',
+    '.nz-session.is-idle .nz-ring',
+    '.nz-agent__orphan',
     // WP4e
     '.nz-usage-bead',
     '.nz-usage',
@@ -535,8 +537,8 @@ test('a missing cost and context can carry its reason', () => {
   assert.ok(canvas.includes('captureBlockedLabel'));
   assert.ok(css.includes('.nz-session__blocked'), 'the reason is set but styled nowhere');
   // It takes the line the two numbers would have used, so no card changes size.
-  assert.ok(canvas.includes("setAttr(blocked, 'y', 182)"));
-  assert.ok(canvas.includes("setAttr(cost, 'y', 182)"));
+  assert.ok(canvas.includes("setAttr(blocked, 'y', 150)"));
+  assert.ok(canvas.includes("setAttr(cost, 'y', 150)"));
 });
 
 test('every WP4f class the canvas sets has a rule that gives it a meaning', () => {
@@ -863,4 +865,135 @@ test('N-WP21: the strip remembers nothing, and the canvas is left alone', () => 
     1,
     'the page decides "waiting" in more than one place again',
   );
+});
+
+/* ------------------------------------------------------------------ *
+ * N-WP15: the cards calm down
+ *
+ * One fact, one signal. The card answers; the hover card explains. Colour only
+ * where it means something. Each test below is one of those three, held against
+ * the files rather than against a screenshot — Node has no DOM, and a rule that
+ * only a person looking at a picture can check is a rule that comes back.
+ * ------------------------------------------------------------------ */
+
+const tabbar = readFileSync(path.join(webDir, 'tabbar.ts'), 'utf8');
+const lang = readFileSync(path.join(webDir, 'lang.ts'), 'utf8');
+
+test('N-WP15: nothing on this page shouts', () => {
+  // Eight `text-transform: uppercase` rules went, and none came back. They were
+  // the card's status label, the subagent heading, the sidebar, settings and
+  // menu headings, the colour rows, the connection pill and the history group —
+  // all of them words the six catalogues already write as sentences.
+  assert.equal(
+    css.includes('text-transform: uppercase'),
+    false,
+    'a stylesheet rule is uppercasing somebody else’s words again',
+  );
+  // And the wide tracking that went with them wherever a *word* was being set
+  // in it: tracking is what makes uppercase legible, and on a lowercase word it
+  // is uppercase styling without the uppercase.
+  for (const selector of [
+    '.nz-session__activity',
+    '.nz-tree__label',
+    '.nz-sidebar__heading',
+    '.nz-settings__subheading',
+    '.nz-menu__heading',
+    '.nz-colour__label',
+    '.nz-history__project',
+    '.nz-conn',
+  ]) {
+    const rule = css.slice(css.indexOf(`${selector} {`));
+    assert.equal(
+      /letter-spacing: var\(--nz-tracking-wide\)/.test(rule.slice(0, rule.indexOf('}'))),
+      false,
+      `${selector} is still tracked like an uppercase label`,
+    );
+  }
+});
+
+test('N-WP15: a pill is a control, so nothing that is only a reading wears one', () => {
+  // The default chip has no fill left, and the two variants that carried one —
+  // the model chip's accent text and the waiting chip's banner ground — are
+  // gone with the chips themselves.
+  const chipStart = css.indexOf('.nz-chip__bg {');
+  const chipRule = css.slice(chipStart, css.indexOf('}', chipStart));
+  assert.match(chipRule, /fill: none;/);
+  assert.equal(css.includes('.nz-chip--model'), false, 'the model chip is back');
+  assert.equal(css.includes('.nz-chip--waiting'), false, 'the waiting chip is back');
+  // Two chips are left in the product, and both of them are bounded objects
+  // rather than measurements: the folded tree's summary row, and the pressable
+  // `N finished hidden · show`.
+  const variants = [...canvas.matchAll(/makeChip\([\w.]+, '(\w+)'\)/g)].map((one) => one[1]);
+  assert.deepEqual([...new Set(variants)].sort(), ['count', 'done', 'hidden', 'running', 'unknown']);
+  assert.equal(canvas.includes("makeChip(chipRow"), false, 'a card is drawing a chip row again');
+});
+
+test('N-WP15: the card body is one line, and the hover card keeps the ledger', () => {
+  // The two rows of counters are off the session card and off the subagent node.
+  assert.equal(css.includes('.nz-session__tokens'), false, 'the card counters are back');
+  assert.equal(css.includes('.nz-agent__tokens'), false, 'the node counters are back');
+  assert.equal(canvas.includes('tokensA'), false);
+  assert.equal(canvas.includes('tokensB'), false);
+  // The line that replaced them says how much in total, and the total is short.
+  assert.ok(canvas.includes('formatTotal(tokens)'), 'the card has no token total');
+  // And every row of the hover card is exactly where it was. This is the half
+  // of the trade that makes the other half honest.
+  for (const row of [
+    'model',
+    'effort',
+    'elapsed',
+    'current tool',
+    'tool calls',
+    'tokens in',
+    'tokens out',
+    'cache read',
+    'cache write',
+    'last write',
+    'cost',
+    'context',
+  ]) {
+    assert.ok(app.includes(`'${row}'`), `the hover card lost the ${row} row`);
+  }
+});
+
+test('N-WP15: the header shrank by exactly the rows that went', () => {
+  // 212 − 2 × 16 = 180. A card that kept its old height would have said less in
+  // the same space, so the removed rows are removed rather than blanked.
+  assert.ok(canvas.includes('headerHeight: 180'));
+  assert.ok(canvas.includes('height: 61'), 'the subagent node did not shrink with its lines');
+  // And it is still one number in one place: N-WP10's eight handles, WP4c's
+  // containment and the folded-tree row all read `CARD.headerHeight`, and no
+  // second copy of 212 or 180 was left behind in the drawing code.
+  assert.equal(/212/.test(canvas), false, 'the old header height is still written somewhere');
+});
+
+test('N-WP15: a bar of one tab is not drawn, and a second tab brings it back', () => {
+  assert.match(tabbar, /this\.root\.hidden = state\.tabs\.length < 2;/);
+  // Before the signature short-circuit, or the strip would be right only on the
+  // frames where something else about it also changed.
+  assert.ok(
+    tabbar.indexOf('this.root.hidden = state.tabs.length < 2;') <
+      tabbar.indexOf('const signature = JSON.stringify'),
+    'the strip is hidden after the early return that can skip it',
+  );
+  assert.ok(css.includes('.nz-tabs[hidden]'), 'a hidden tab bar is not actually hidden');
+});
+
+test('N-WP15: the tagline is the tab title, not a line of the bar', () => {
+  assert.equal(html.includes('nz-brand__tag'), false, 'the tagline is back on the bar');
+  assert.equal(css.includes('.nz-brand__tag'), false);
+  // Still translated, still one key, and still in all six catalogues — which
+  // `i18n.test.ts` checks; what this checks is that something writes it.
+  assert.match(lang, /document\.title = /);
+  assert.ok(lang.includes("t('bar.tagline')"));
+  assert.ok(html.includes('data-nz-title="bar.tagline"'), 'the brand has no tooltip');
+});
+
+test('N-WP15: the demo badge is a caption rather than a control', () => {
+  const demo = css.slice(
+    css.indexOf(".nz-conn[data-status='demo'] {"),
+    css.indexOf(".nz-conn[data-status='lost'] {"),
+  );
+  assert.match(demo, /border-color: transparent;/);
+  assert.match(demo, /padding-inline: 0;/);
 });

@@ -29,15 +29,14 @@ import {
 } from '../src/activity.ts';
 import {
   basename,
-  cacheReadNote,
   captureBlockedLabel,
   captureBlockedNote,
   cardContextLabel,
   cardCostLabel,
-  formatAge,
   formatCount,
   formatDuration,
   formatElapsed,
+  formatTotal,
   modelChip,
   orUnknown,
   renameNote,
@@ -88,7 +87,18 @@ export const CARD: CardSpec & { readonly radius: number } = {
   column: 360,
   gap: 24,
   pad: 16,
-  headerHeight: 212,
+  /**
+   * N-WP15: 212 → 180, and those 32 px are the two rows of token counters.
+   *
+   * The header used to carry the whole ledger — `in`, `out`, `cache r`,
+   * `cache w` — under a line that already said how long it had been going and
+   * how many tools it had called. The body is one line now, the four exact
+   * counters live on the hover card where there is room to read them, and the
+   * two rows they took are **removed rather than left blank**: a card that kept
+   * its old height would say less in the same space, which is the opposite of
+   * what "the card answers, the hover card explains" means.
+   */
+  headerHeight: 180,
   emptyTreeHeight: 10,
   collapsedHeight: 42,
   /**
@@ -101,25 +111,27 @@ export const CARD: CardSpec & { readonly radius: number } = {
 };
 
 /**
- * The agent card grew by one line in WP4d.
+ * N-WP15: the agent node is three lines, and 106 → 61 px.
  *
- * The five lines it had — type, model, meta, and two rows of counters — filled
- * it to the pixel, and the activity word has to be *readable*, not squeezed in
- * beside a token total that is sometimes twenty characters long. A sixth line
- * at the bottom carries it, with the `orphan` marker moved down to share it.
+ * It had six — type, model, meta, two rows of token counters and the activity
+ * word — and four of those were answering questions nobody asks of a node
+ * 156 px wide. What is left is what a subagent *is*: what it is, what is
+ * running it, and how it is going. Its state is the dot in the corner and, on
+ * the third line, the word the third line was already carrying (`done · 4m
+ * 24s`); the exact tokens are one hover away, where they always were.
  */
 export const AGENT = {
   width: 156,
-  height: 106,
+  height: 61,
   hGap: 16,
   vGap: 30,
   radius: 9,
   /**
    * N-WP15a: how much taller a node is while it is carrying a task line.
    *
-   * The six lines it has fill it to the pixel — a subagent node has no gap in it
-   * the way a session card's header does — so a seventh line has to be paid for.
-   * It is paid for **only when it is drawn**: with task text off, which is every
+   * The lines it has fill it to the pixel — a subagent node has no gap in it the
+   * way a session card's header does — so another line has to be paid for. It is
+   * paid for **only when it is drawn**: with task text off, which is every
    * browser until somebody switches it on, the spec below is the number it
    * always was and no tree, no card and no stored size moves by a pixel.
    */
@@ -231,7 +243,16 @@ export function handleRect(
 /** How tall the drag handle at the top of a card is. Below it, dragging pans. */
 export const HANDLE_HEIGHT = 62;
 
-const BADGE = 30;
+/**
+ * N-WP15: 30 → 16, so the provider mark sits *on* the name line.
+ *
+ * At 30 px it spanned the title and the folder path and read as an avatar for
+ * the card, which is a promise a logo cannot keep: every session on this canvas
+ * comes from the same provider, so the mark separates nothing and only takes
+ * the width the name wanted. At 16 it is what it is — a small statement of
+ * which agent this is — and the title gets the 14 px back.
+ */
+const BADGE = 16;
 const RING_RADIUS = 11;
 const MENU_SIZE = 22;
 const CHEVRON = 18;
@@ -446,21 +467,21 @@ function fitText(text: string, maxWidth: number, fontSize: number): string {
   return `${out}…`;
 }
 
-/** Font size and letter-spacing of the activity word. Mirrors styles.css. */
+/** Font size of the activity word. Mirrors styles.css. */
 const ACTIVITY_SIZE = 10;
-const ACTIVITY_TRACKING = 0.07;
 
 /**
- * How much room the activity word needs, so the line it shares can be cut to
- * fit instead of running underneath it. The word is drawn uppercase with
- * `tracking-wide`, and both of those are in the stylesheet, so both are
- * accounted for here.
+ * How much room the status label needs, so the line it shares can be cut to fit
+ * instead of running underneath it.
+ *
+ * N-WP15 dropped the uppercase and the wide tracking this used to have to
+ * account for, so it measures the word it actually draws. It also has more to
+ * measure: on a waiting card the label is what the session is waiting *for*
+ * (`permission prompt`) rather than the word `waiting`, which is longer than
+ * any of the five states.
  */
 function activityRoom(label: string): number {
-  const upper = label.toUpperCase();
-  return Math.round(
-    textWidth(upper, ACTIVITY_SIZE) + upper.length * ACTIVITY_SIZE * ACTIVITY_TRACKING + 12,
-  );
+  return Math.round(textWidth(label, ACTIVITY_SIZE) + 12);
 }
 
 /**
@@ -515,12 +536,8 @@ interface AgentEls {
   readonly type: SVGTextElement;
   readonly model: SVGTextElement;
   readonly meta: SVGTextElement;
-  readonly doneChip: ChipEls;
-  readonly tokensA: SVGTextElement;
-  readonly tokensB: SVGTextElement;
-  readonly activity: SVGTextElement;
   readonly orphan: SVGTextElement;
-  /** N-WP15a: the brief, on a seventh line the node only has when it is on. */
+  /** N-WP15a: the brief, on a line the node only has when the setting is on. */
   readonly task: SVGTextElement;
 }
 
@@ -538,13 +555,9 @@ interface SessionEls {
   readonly task: SVGTextElement;
   readonly identity: SVGTextElement;
   readonly activity: SVGTextElement;
-  readonly chipRow: SVGGElement;
-  readonly modelChip: ChipEls;
-  readonly effortChip: ChipEls;
-  readonly statusChip: ChipEls;
+  /** N-WP15: `opus-5[1m] · effort high`, where two chips used to be. */
+  readonly model: SVGTextElement;
   readonly meta: SVGTextElement;
-  readonly tokensA: SVGTextElement;
-  readonly tokensB: SVGTextElement;
   /** WP3': cost and context window. Both absent when no capture named this session. */
   readonly cost: SVGTextElement;
   readonly context: SVGTextElement;
@@ -783,14 +796,34 @@ export class CanvasRenderer {
     // strip the title has to share with them.
     setText(els.task, taskLine === undefined ? '' : fitText(taskLine, inner - BADGE - 16, 11));
     setText(els.nameNote, renameNote(named));
-    // The word for the frame colour, right-aligned under the ring. A frame is
-    // a colour, and a colour on its own is not a state — greyscale screenshots
-    // and colour-blind readers both lose it — so the word is not optional and
-    // the identity line gives up the room for it.
+    /*
+     * The status label, right-aligned under the ring.
+     *
+     * The ring is a colour, and a colour on its own is not a state — greyscale
+     * screenshots and colour-blind readers both lose it — so the word is not
+     * optional and the identity line gives up the room for it.
+     *
+     * N-WP15: on a waiting card the word is **what it is waiting for**, not the
+     * word `waiting`. The banner above the canvas already says "waiting" once;
+     * the card's job is to say which question is on the screen down there, and
+     * `permission prompt` says it in the same place, on the same line, in the
+     * amber the banner uses. It is also the last of the five signals that state
+     * used to have (banner, frame, ring, chip and word) — the chip has gone with
+     * the rest of the pills, and the frame is neutral now.
+     */
     const activityWord = activityLabel(activity);
-    const labelRoom = activityRoom(activityWord);
+    const waitingWord =
+      session.waitingFor === undefined || session.waitingFor.length === 0
+        ? activityWord
+        : session.waitingFor;
+    const statusLabel = fitText(
+      waiting ? waitingWord : activityWord,
+      Math.max(40, inner / 2),
+      ACTIVITY_SIZE,
+    );
+    const labelRoom = activityRoom(statusLabel);
     setAttr(els.activity, 'x', box.width - CARD.pad);
-    setText(els.activity, activityWord);
+    setText(els.activity, statusLabel);
     // A finished session has no process and no live status, so the identity
     // line names the run itself: which session, and how many agents it spawned.
     setText(
@@ -833,26 +866,48 @@ export class CanvasRenderer {
           (waiting ? t('card.waitingLabel', { waitingFor: orUnknown(session.waitingFor) }) : ''),
     );
 
-    // ---- chips ------------------------------------------------------
-    let x = 0;
-    x = layoutChip(els.modelChip, modelChip(session.model), x);
-    x = layoutChip(els.effortChip, t('chip.effort', { effort: orUnknown(session.effort) }), x);
-    if (waiting) {
-      setAttr(els.statusChip.g, 'display', 'inline');
-      layoutChip(els.statusChip, orUnknown(session.waitingFor), x);
-    } else {
-      setAttr(els.statusChip.g, 'display', 'none');
-    }
+    /*
+     * N-WP15: what was two chips is one line of ordinary secondary text.
+     *
+     * `opus-5[1m]` and `effort high` were never *pressable* and never a status —
+     * they are two words about the run, and a rounded box with a fill around
+     * each of them said "control" about something you cannot click. The line
+     * they are on is the same line the chips were on, so nothing above or below
+     * it moved.
+     */
+    setText(
+      els.model,
+      fitText(
+        `${modelChip(session.model)} · ${t('chip.effort', { effort: orUnknown(session.effort) })}`,
+        inner,
+        11.5,
+      ),
+    );
 
-    // ---- numbers ----------------------------------------------------
-    // Live: how long it has been going and how stale the numbers are. Frozen:
-    // how long it took and when it ended, because "3h ago" on a finished run
-    // says something about the clock rather than about the run.
+    /*
+     * ---- the body, in one line ---------------------------------------
+     *
+     * N-WP15. Three lines became one: `2h 17m · 214 tool calls · Grep · 33k
+     * tokens`. How long, how much work, what it is doing, how much it has read
+     * and written — and the four exact counters that used to take two rows are
+     * on the hover card, unchanged, where somebody who wants `cache r` can read
+     * it against `cache w` instead of glancing past both.
+     *
+     * The token figure is the only rounded number Nazar draws, and it is
+     * rounded here and nowhere else: a total at a glance is a magnitude, and
+     * `33k` is the magnitude. `formatTokens` on the hover card is still exact to
+     * the token, which is what the `(message.id, requestId)` dedupe buys.
+     *
+     * Frozen keeps its own line: "3h ago" on a finished run says something about
+     * the clock rather than about the run, so a past session is dated instead.
+     */
     const tools = session.toolCalls === undefined ? unknownWord() : formatCount(session.toolCalls);
     const ranFor =
       session.startedAt === undefined || session.transcriptAt === undefined
         ? undefined
         : Math.max(0, session.transcriptAt - session.startedAt);
+    const tokens = session.tokens;
+    const tokenTotal = formatTotal(tokens);
     setText(
       els.meta,
       fitText(
@@ -860,27 +915,18 @@ export class CanvasRenderer {
           ? t('card.metaFrozen', {
               duration: formatDuration(ranFor),
               tools,
+              tokens: tokenTotal,
               ended: formatStamp(session.transcriptAt),
             })
           : t('card.metaLive', {
               elapsed: formatElapsed(session.startedAt, now),
               tools,
-              written: formatAge(ageOf(session.transcriptAt, now)),
+              tool: session.currentTool ?? t('agent.toolUnknown'),
+              tokens: tokenTotal,
             }),
         inner,
         11.5,
       ),
-    );
-    const tokens = session.tokens;
-    setText(
-      els.tokensA,
-      `${t('tokens.in', { count: formatCount(tokens?.in) })}   ` +
-        t('tokens.out', { count: formatCount(tokens?.out) }),
-    );
-    setText(
-      els.tokensB,
-      `${t('tokens.cacheReadLong', { count: formatCount(tokens?.cacheRead) })}   ` +
-        t('tokens.cacheWriteLong', { count: formatCount(tokens?.cacheWrite) }),
     );
 
     /*
@@ -891,13 +937,13 @@ export class CanvasRenderer {
      * drawn*: there is no `$unknown`, and the card does not change size either
      * way, which is why these two share one line instead of taking a row each.
      *
-     * What changed is that they are now **words**. WP5 drew `$9.60   ctx 54%`
-     * in the muted token below four token counters, and the maintainer — who
-     * has the wrapper installed — never found them. `ctx` is jargon for a thing
-     * the rest of this interface spells out, and a number with no word in front
-     * of it disappears into a column of numbers. So: `cost $9.60` on the left,
-     * `context 54 %` on the right, both at the weight of the counters above
-     * them, and the context figure carries the same amber-at-60, red-at-85
+     * What changed in WP4e is that they are now **words**. WP5 drew
+     * `$9.60   ctx 54%` in the muted token below four token counters, and the
+     * maintainer — who has the wrapper installed — never found them. `ctx` is
+     * jargon for a thing the rest of this interface spells out, and a number
+     * with no word in front of it disappears into a column of numbers. So:
+     * `cost $9.60` on the left, `context 54 %` on the right, and the context
+     * figure carries the same amber-at-60, red-at-85
      * severity the usage bead does — because it is the same question about a
      * window filling up.
      */
@@ -1045,7 +1091,6 @@ export class CanvasRenderer {
     setAttr(agentEls.dot, 'data-state', agent.state);
     setActivityClass(agentEls.g, activity);
     setClass(agentEls.g, 'is-orphan', agent.orphan === true);
-    setText(agentEls.activity, activityLabel(activity));
 
     const inner = AGENT.width - 20;
     setText(agentEls.type, fitText(orUnknown(agent.agentType), inner - 12, 11.5));
@@ -1061,54 +1106,42 @@ export class CanvasRenderer {
       ),
     );
 
-    // The third line is the one that changes with state. A running agent shows
-    // how long it has been going and what it is doing; a finished one shows the
-    // chip WP4b exists for — `done · 12m 03s` — and, on a frozen tree where
-    // every agent is finished, its tool-call count next to the duration.
+    /*
+     * The third line is the one that changes with state, and since N-WP15 it is
+     * also the last one.
+     *
+     * A running agent shows how long it has been going and what it is doing; a
+     * finished one shows `done · 12m 03s` — the WP4b sentence, in plain text now
+     * rather than in the pill it used to wear, because it is a reading and not a
+     * button; and on a frozen tree, where every agent is finished, the duration
+     * carries its tool-call count instead.
+     *
+     * The word `done` is therefore still on the node, which matters: with the
+     * counters gone the dot is the only other thing that says a state, and a dot
+     * is a colour.
+     */
+    const orphan = agent.orphan === true;
+    setText(agentEls.orphan, orphan ? t('agent.orphan') : '');
+    // The `orphan` marker shares this line, right-aligned, so the reading has to
+    // stop short of it rather than run underneath it.
+    const metaRoom = orphan ? inner - Math.round(textWidth(t('agent.orphan'), 10) + 8) : inner;
     const duration = formatDuration(agent.durationMs);
-    if (frozen) {
-      setAttr(agentEls.doneChip.g, 'display', 'none');
-      setAttr(agentEls.meta, 'display', 'inline');
-      setText(
-        agentEls.meta,
-        fitText(
-          t('agent.metaFrozen', {
-            duration,
-            tools: agent.toolCalls === undefined ? unknownWord() : formatCount(agent.toolCalls),
-          }),
-          inner,
-          10,
-        ),
-      );
-    } else if (done) {
-      setAttr(agentEls.meta, 'display', 'none');
-      setAttr(agentEls.doneChip.g, 'display', 'inline');
-      layoutChip(agentEls.doneChip, t('agent.done', { duration }), 8);
-    } else {
-      setAttr(agentEls.doneChip.g, 'display', 'none');
-      setAttr(agentEls.meta, 'display', 'inline');
-      setText(
-        agentEls.meta,
-        fitText(
-          `${formatElapsed(agent.startedAt, now)} · ` +
-            (agent.currentTool === undefined ? t('agent.toolUnknown') : agent.currentTool),
-          inner,
-          10,
-        ),
-      );
-    }
-
     setText(
-      agentEls.tokensA,
-      `${t('tokens.in', { count: formatCount(agent.tokens?.in) })}  ` +
-        t('tokens.out', { count: formatCount(agent.tokens?.out) }),
+      agentEls.meta,
+      fitText(
+        frozen
+          ? t('agent.metaFrozen', {
+              duration,
+              tools: agent.toolCalls === undefined ? unknownWord() : formatCount(agent.toolCalls),
+            })
+          : done
+            ? t('agent.done', { duration })
+            : `${formatElapsed(agent.startedAt, now)} · ` +
+              (agent.currentTool === undefined ? t('agent.toolUnknown') : agent.currentTool),
+        metaRoom,
+        10,
+      ),
     );
-    setText(
-      agentEls.tokensB,
-      `${t('tokens.cacheRead', { count: formatCount(agent.tokens?.cacheRead) })}  ` +
-        t('tokens.cacheWrite', { count: formatCount(agent.tokens?.cacheWrite) }),
-    );
-    setText(agentEls.orphan, agent.orphan === true ? t('agent.orphan') : '');
 
     /*
      * N-WP15a. One line, and the choice of *what* to put on it is the whole
@@ -1255,40 +1288,31 @@ export class CanvasRenderer {
     setAttr(identity, 'y', 74);
 
     // Right-aligned on the identity line, under the ring: the word that says
-    // what the frame colour means. `x` follows the card width on every draw.
+    // what the ring's colour means, or — on a waiting card — what the session is
+    // waiting for. `x` follows the card width on every draw.
     const activity = svg('text', 'nz-session__activity');
     setAttr(activity, 'y', 74);
 
-    const chipRow = svg('g', 'nz-session__chips');
-    setAttr(chipRow, 'transform', `translate(${CARD.pad},86)`);
-    const modelChipEls = makeChip(chipRow, 'model');
-    const effortChipEls = makeChip(chipRow, 'effort');
-    const statusChipEls = makeChip(chipRow, 'waiting');
+    /*
+     * N-WP15: the model and the effort, as text.
+     *
+     * On the line the two chips were on, at the baseline the chip text had, so
+     * the whole header above and below it is where it was. What went is the
+     * rounded box behind each of them: neither is pressable, neither is a state,
+     * and a pill around a reading is a control that does nothing.
+     */
+    const model = svg('text', 'nz-session__model');
+    setAttr(model, 'x', CARD.pad);
+    setAttr(model, 'y', 100);
 
     const meta = svg('text', 'nz-session__meta');
     setAttr(meta, 'x', CARD.pad);
     setAttr(meta, 'y', 128);
 
-    const tokensA = svg('text', 'nz-session__tokens');
-    setAttr(tokensA, 'x', CARD.pad);
-    setAttr(tokensA, 'y', 150);
-
-    const tokensB = svg('text', 'nz-session__tokens');
-    setAttr(tokensB, 'x', CARD.pad);
-    setAttr(tokensB, 'y', 166);
-    // `cache r` is a running sum of whole contexts re-read, so it is orders of
-    // magnitude above the other three and reads as a bug. The note goes on a
-    // wrapping group rather than inside the <text>, because `setText` writes
-    // `textContent` and would erase a child <title> on the first tick.
-    const tokensBNote = svg('title');
-    setText(tokensBNote, cacheReadNote());
-    const tokensBGroup = svg('g');
-    tokensBGroup.append(tokensBNote, tokensB);
-
     /*
      * WP3'. The one line on the card whose source is optional: what this run
      * has cost and how full its context window is, both from the status-line
-     * capture. It sits in the gap the header already had between the counters
+     * capture. It sits in the gap the header already had between the body line
      * and the rule, so a machine without the wrapper loses a line rather than
      * gaining an empty one, and no card changes size either way.
      *
@@ -1300,10 +1324,10 @@ export class CanvasRenderer {
      */
     const cost = svg('text', 'nz-session__cost');
     setAttr(cost, 'x', CARD.pad);
-    setAttr(cost, 'y', 182);
+    setAttr(cost, 'y', 150);
 
     const context = svg('text', 'nz-session__context');
-    setAttr(context, 'y', 182);
+    setAttr(context, 'y', 150);
 
     /*
      * WP4f. The sentence that takes the same line when there is nothing to put
@@ -1313,7 +1337,7 @@ export class CanvasRenderer {
      */
     const blocked = svg('text', 'nz-session__blocked');
     setAttr(blocked, 'x', CARD.pad);
-    setAttr(blocked, 'y', 182);
+    setAttr(blocked, 'y', 150);
     const blockedNote = svg('title');
     setText(blockedNote, captureBlockedNote());
     const blockedGroup = svg('g');
@@ -1324,7 +1348,7 @@ export class CanvasRenderer {
     setAttr(rule, 'y1', 0);
     setAttr(rule, 'y2', 0);
     const ruleGroup = svg('g');
-    setAttr(ruleGroup, 'transform', `translate(${CARD.pad},188)`);
+    setAttr(ruleGroup, 'transform', `translate(${CARD.pad},156)`);
     const treeLabel = svg('text', 'nz-tree__label');
     setAttr(treeLabel, 'x', CHEVRON + 6);
     setAttr(treeLabel, 'y', 15);
@@ -1333,7 +1357,7 @@ export class CanvasRenderer {
     // The chip that offers the cleared subagents back. Its own group, so it can
     // sit on the rule line without being inside the group that draws the rule.
     const hiddenRow = svg('g', 'nz-hidden');
-    setAttr(hiddenRow, 'transform', `translate(${CARD.pad},191)`);
+    setAttr(hiddenRow, 'transform', `translate(${CARD.pad},159)`);
     const hiddenChip = makeChip(hiddenRow, 'hidden');
     hiddenChip.g.dataset['action'] = 'restore';
     hiddenChip.g.setAttribute('role', 'button');
@@ -1364,7 +1388,7 @@ export class CanvasRenderer {
     handle.dataset['drag'] = 'card';
 
     const chevron = svg('g', 'nz-chevron');
-    setAttr(chevron, 'transform', `translate(${CARD.pad},191)`);
+    setAttr(chevron, 'transform', `translate(${CARD.pad},159)`);
     chevron.dataset['action'] = 'collapse';
     chevron.setAttribute('role', 'button');
     chevron.setAttribute('tabindex', '0');
@@ -1441,10 +1465,8 @@ export class CanvasRenderer {
       task,
       identity,
       activity,
-      chipRow,
+      model,
       meta,
-      tokensA,
-      tokensBGroup,
       cost,
       context,
       blockedGroup,
@@ -1475,13 +1497,8 @@ export class CanvasRenderer {
       task,
       identity,
       activity,
-      chipRow,
-      modelChip: modelChipEls,
-      effortChip: effortChipEls,
-      statusChip: statusChipEls,
+      model,
       meta,
-      tokensA,
-      tokensB,
       cost,
       context,
       treeLabel,
@@ -1531,51 +1548,36 @@ export class CanvasRenderer {
     setAttr(model, 'x', 10);
     setAttr(model, 'y', 37);
 
+    /*
+     * The third and last line. It carries the reading that changes with state —
+     * `2m 10s · Grep`, `done · 12m 03s`, `4m 24s · 88 tool calls` — with the
+     * `orphan` marker right-aligned on the same line, which is where it sat
+     * before WP4d gave it a row of its own.
+     */
     const meta = svg('text', 'nz-agent__line');
     setAttr(meta, 'x', 10);
     setAttr(meta, 'y', 52);
 
-    // Occupies the same line as `meta`, and exactly one of the two is drawn.
-    const chipRow = svg('g', 'nz-agent__chips');
-    setAttr(chipRow, 'transform', 'translate(0,42)');
-    const doneChip = makeChip(chipRow, 'done');
-    setAttr(doneChip.g, 'display', 'none');
-
-    const tokensA = svg('text', 'nz-agent__tokens');
-    setAttr(tokensA, 'x', 10);
-    setAttr(tokensA, 'y', 68);
-
-    const tokensB = svg('text', 'nz-agent__tokens');
-    setAttr(tokensB, 'x', 10);
-    setAttr(tokensB, 'y', 82);
-
-    // The sixth line: the word for the frame colour on the left, and the
-    // `orphan` marker — which used to sit on top of the counters — on the
-    // right, where it now has a line of its own to be read on.
-    const activity = svg('text', 'nz-agent__activity');
-    setAttr(activity, 'x', 10);
-    setAttr(activity, 'y', 97);
-
     const orphan = svg('text', 'nz-agent__orphan');
     setAttr(orphan, 'x', AGENT.width - 10);
-    setAttr(orphan, 'y', 97);
+    setAttr(orphan, 'y', 52);
 
     /*
-     * N-WP15a: the seventh line, and the node is one line taller to carry it.
+     * N-WP15a: the fourth line, and the node is one line taller to carry it.
      *
-     * Unlike the session card there is no gap to put it in — the six lines fill
-     * the node — so it goes at the bottom and `AGENT.taskLine` pays for it. The
-     * background is grown by the same number in `drawAgent`, and the tree was
-     * laid out with `TREE_SPEC_TASK`, so the three agree by construction.
+     * Unlike the session card there is no gap to put it in — the three lines
+     * fill the node — so it goes at the bottom and `AGENT.taskLine` pays for it.
+     * The background is grown by the same number in `drawAgent`, and the tree
+     * was laid out with `TREE_SPEC_TASK`, so the three agree by construction.
      */
     const task = svg('text', 'nz-agent__task');
     setAttr(task, 'x', 10);
     setAttr(task, 'y', AGENT.height + 6);
     setAttr(task, 'display', 'none');
 
-    g.append(bg, dot, type, model, meta, chipRow, tokensA, tokensB, activity, orphan, task);
+    g.append(bg, dot, type, model, meta, orphan, task);
 
-    return { g, bg, dot, type, model, meta, doneChip, tokensA, tokensB, activity, orphan, task };
+    return { g, bg, dot, type, model, meta, orphan, task };
   }
 }
 

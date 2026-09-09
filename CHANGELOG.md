@@ -277,6 +277,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   under its tree but can never be made to hide it. Layouts written before this
   have no `heights` key, read as none, and go on sizing their own height. The
   ⋯ menu's *Reset width* is now *Reset size* and clears both axes.
+- **The cards say less, and mean more by it** (N-WP15). One fact, one signal:
+  the card answers, the hover card explains, and colour is spent only where it
+  means something. **The state is back on the ring**, which now carries the
+  activity rather than the narrower question of whether the process answers a
+  probe — green working, blue idle, grey-blue done, dashed grey unknown — and
+  **exactly one card on the canvas has a coloured border**: the one waiting for
+  you, which is the only state you can act on. A subagent's node has no coloured
+  border in any state; its dot and its last line carry it. Nothing breathes any
+  more: the working frame's 1.6 s pulse is gone, and the only motion left is the
+  halo on a waiting session. **The card's body is one line** —
+  `2h 17m · 214 tool calls · Grep · 34k tokens` — where it was a line plus two
+  rows of token counters; the four exact counters are on the hover card, which
+  is unchanged to the row. The total is input plus output (never cache) and is
+  the one rounded figure in the product, because a card carries a magnitude and
+  a hover card carries the number. **A subagent node is three lines** instead of
+  six and 61 px instead of 106, so a card with sixteen of them is half the
+  height it was; `done · 12m 03s` is text on its third line rather than a pill.
+  **No pill is left on a card at rest**: the model and effort chips are ordinary
+  secondary text, the `permission prompt` chip is the card's own status label in
+  amber, and the two chips that remain are the folded tree's summary row and the
+  pressable *N finished hidden · show*. **Nothing is uppercase** — eight
+  `text-transform` rules went, and the labels read as the sentences the six
+  catalogues always wrote. The provider badge is 16 px on the name line rather
+  than 30 px beside two, the *watches, does not drive* tagline is the browser tab
+  title and the brand's tooltip rather than a line of the top bar, the
+  `demo data` badge is a caption rather than an outlined pill, and **the tab
+  strip is not drawn until there is a second tab**. Card names (WP4g) and task
+  text (N-WP15a) are untouched; this package took the noise underneath them.
 
 ## [0.1.0] — unreleased
 

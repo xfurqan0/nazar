@@ -108,6 +108,52 @@ export function formatTokens(tokens: TokenLike | undefined): string {
   ].join(' · ');
 }
 
+/**
+ * N-WP15: `33k`. The one number on the canvas that is deliberately rounded,
+ * and the one place it is allowed to be.
+ *
+ * The card carries a *magnitude* — is this session a small one or a big one —
+ * and `33,215` answers that question with four digits nobody reads and one they
+ * do. The exact figures are one hover away, split into the four counters that
+ * make them meaningful, and `formatCount` is still exact everywhere it is used.
+ * So this rounds and says nothing else: no `≈`, no decimals below 10k, and
+ * `unknown` rather than `0` when no transcript line has been counted.
+ *
+ * **Input and output only.** A cache read is the whole prompt prefix re-read
+ * once per request, so adding it would put a number three orders of magnitude
+ * larger on the card and call it "the tokens" — see `cacheReadNote`.
+ */
+export function formatTotal(tokens: TokenLike | undefined): string {
+  if (tokens === undefined) return unknownWord();
+  const { in: input, out } = tokens;
+  if (input === undefined && out === undefined) return unknownWord();
+  const total = (Number.isFinite(input) ? (input as number) : 0) +
+    (Number.isFinite(out) ? (out as number) : 0);
+  return formatShort(total);
+}
+
+/**
+ * `912`, `33k`, `1.3M`. Whole units under a thousand, one decimal only where it
+ * is the difference between `1M` and `1.3M`.
+ */
+function formatShort(value: number): string {
+  if (!Number.isFinite(value)) return unknownWord();
+  const n = Math.trunc(Math.abs(value));
+  const sign = value < 0 ? '-' : '';
+  if (n < 1000) return `${sign}${n}`;
+  if (n < 1_000_000) {
+    const thousands = n / 1000;
+    return `${sign}${thousands < 10 ? trim(thousands) : Math.round(thousands)}k`;
+  }
+  return `${sign}${trim(n / 1_000_000)}M`;
+}
+
+/** One decimal, and not a trailing `.0`. */
+function trim(value: number): string {
+  const one = Math.round(value * 10) / 10;
+  return Number.isInteger(one) ? String(one) : one.toFixed(1);
+}
+
 /* ------------------------------------------------------------------ *
  * WP3': the two fields the status-line capture brings
  * ------------------------------------------------------------------ */

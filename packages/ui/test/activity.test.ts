@@ -298,71 +298,95 @@ function rulesFor(selector: string): string[] {
   }
 }
 
-test('every activity a session can have paints its frame', () => {
-  // `waiting` keeps the amber treatment it has had since WP4; the other four
-  // are WP4d's.
-  const frames: ReadonlyArray<readonly [string, string]> = [
+test('every activity a session can have paints its ring', () => {
+  /*
+   * N-WP15 moved this off the card's border and back onto the ring.
+   *
+   * WP4d's reasoning — a 22 px ring cannot be read across a desk — was right
+   * about the ring and wrong about what to do with it: nine saturated frames on
+   * nine cards is nine borders competing, and the one card that wants something
+   * from you cannot be louder than the eight that do not. So the ring carries
+   * the five colours (it used to carry the narrower `session.state`), and
+   * `is-waiting` is the only activity that still reaches the frame.
+   */
+  const rings: ReadonlyArray<readonly [string, string]> = [
     ['is-working', '--nz-state-working'],
     ['is-idle', '--nz-state-alive'],
     ['is-done', '--nz-state-done'],
     ['is-unknown', '--nz-state-unknown'],
     ['is-waiting', '--nz-state-waiting'],
   ];
-  for (const [className, token] of frames) {
-    const selector = `.nz-session.${className} .nz-session__bg`;
+  for (const [className, token] of rings) {
+    const selector = `.nz-session.${className} .nz-ring`;
     const bodies = rulesFor(selector);
     assert.ok(bodies.length > 0, `${selector} is set by the renderer but styled nowhere`);
     assert.ok(
       bodies.some((body) => body.includes(`stroke: var(${token})`)),
-      `${className} does not paint its frame with ${token}`,
+      `${className} does not paint its ring with ${token}`,
     );
   }
 });
 
-test('only the working frame moves, and it breathes rather than blinks', () => {
-  assert.ok(css.includes('@keyframes nz-frame-pulse'), 'the frame pulse is not defined');
+test('exactly one activity reaches a card frame, and it is the one you can answer', () => {
+  const framed = [
+    'is-working',
+    'is-idle',
+    'is-done',
+    'is-unknown',
+    'is-waiting',
+  ].filter((className) => rulesFor(`.nz-session.${className} .nz-session__bg`).length > 0);
+  assert.deepEqual(framed, ['is-waiting'], 'a frame is carrying a state again');
+  assert.ok(
+    rulesFor('.nz-session.is-waiting .nz-session__bg').some((body) =>
+      body.includes('stroke: var(--nz-state-waiting)'),
+    ),
+  );
 
-  for (const selector of [
-    '.nz-session.is-working .nz-session__bg',
-    '.nz-agent.is-working .nz-agent__bg',
-  ]) {
-    assert.ok(
-      rulesFor(selector).some((body) =>
-        /animation: nz-frame-pulse 1\.6s ease-in-out infinite/.test(body),
-      ),
-      `${selector} does not breathe`,
+  // And no subagent frame carries one at all: a card with sixteen nodes is the
+  // densest place on the canvas and the worst place to spend colour.
+  for (const className of ['is-working', 'is-done', 'is-unknown', 'is-orphan']) {
+    assert.equal(
+      rulesFor(`.nz-agent.${className} .nz-agent__bg`).length,
+      0,
+      `.nz-agent.${className} is painting the node's frame`,
     );
   }
+});
 
-  // Nothing else animates its frame: a fixed colour is the point of `idle` and
-  // `done`, and that is exactly what was asked for.
-  for (const selector of [
-    '.nz-session.is-idle .nz-session__bg',
-    '.nz-session.is-done .nz-session__bg',
-    '.nz-session.is-unknown .nz-session__bg',
-    '.nz-agent.is-done .nz-agent__bg',
-  ]) {
+test('one thing on the canvas moves, and it is the session waiting for you', () => {
+  // N-WP15 deleted the working frame's breath with the working frame. Most
+  // sessions are working most of the time, so it was motion that told you
+  // nothing; `nz-pulse` on the waiting halo is the whole animation budget now.
+  assert.equal(css.includes('@keyframes nz-frame-pulse'), false, 'the frame pulse is back');
+  assert.ok(css.includes('@keyframes nz-pulse'), 'the waiting halo is not defined');
+  assert.ok(
+    rulesFor('.nz-session.is-waiting .nz-ring__pulse').some((body) =>
+      /animation: nz-pulse 1\.6s ease-out infinite/.test(body),
+    ),
+  );
+  // Nothing a card is made of moves — the halo above is not part of one, it is
+  // drawn behind the ring and is invisible until a session waits. (`nz-hint-in`
+  // is the page's own toast, which is chrome and is not on the canvas.)
+  for (const selector of ['.nz-session__bg', '.nz-agent__bg', '.nz-ring {']) {
     for (const body of rulesFor(selector)) {
       assert.equal(
         /animation:\s*nz-/.test(body),
         false,
-        `${selector} animates and should be fixed`,
+        `${selector} animates and should be still`,
       );
     }
   }
 });
 
-test('reduced motion stops the frame and leaves the word', () => {
+test('reduced motion stops the halo and leaves the word', () => {
   const at = css.lastIndexOf('@media (prefers-reduced-motion: reduce)');
   assert.ok(at !== -1);
   const block = css.slice(at);
-  assert.ok(block.includes('.nz-session.is-working .nz-session__bg'), 'the session frame still moves');
-  assert.ok(block.includes('.nz-agent.is-working .nz-agent__bg'), 'the agent frame still moves');
+  assert.ok(block.includes('.nz-session.is-waiting .nz-ring__pulse'), 'the halo still moves');
   assert.match(block, /animation: none/);
   // The label is drawn on every card in every mode, which is what makes the
-  // static frame readable at all.
-  assert.ok(css.includes('.nz-session__activity'), 'the session card has no activity label');
-  assert.ok(css.includes('.nz-agent__activity'), 'the agent card has no activity label');
+  // static ring readable at all.
+  assert.ok(css.includes('.nz-session__activity'), 'the session card has no status label');
 });
 
 test('the renderer sets the classes and writes the word, and rebuilds nothing', () => {

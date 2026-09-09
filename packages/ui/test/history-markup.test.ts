@@ -62,7 +62,9 @@ test('every state the renderer sets has a rule that gives it meaning', () => {
   // agent looks exactly like a running one and the whole package is invisible.
   for (const marker of [
     '.nz-agent.is-done',
-    '.nz-agent.is-done .nz-agent__bg',
+    ".nz-agent__dot[data-state='done']",
+    // The folded tree's summary row still has one: `60 subagents · 22 done`
+    // stands in for sixty nodes, which is a set and not a reading.
     '.nz-chip--done',
     ".nz-ring[data-state='frozen']",
     '.nz-session.is-frozen .nz-ring__pulse',
@@ -80,7 +82,18 @@ test('every state the renderer sets has a rule that gives it meaning', () => {
   assert.ok(canvas.includes('setClass(node, activityClass(one), one === activity)'));
   assert.ok(canvas.includes("setClass(els.g, 'is-frozen', frozen)"));
   assert.ok(canvas.includes("'data-state', frozen ? 'frozen'"));
-  assert.ok(canvas.includes("makeChip(chipRow, 'done')"));
+  /*
+   * N-WP15: `done · 12m 03s` is text on the node's third line rather than a
+   * chip on a line of its own. The sentence is the same one WP4b wrote and it
+   * is still the only place a finished subagent says so in words — which is
+   * exactly why it had to survive the node losing three of its six lines.
+   */
+  assert.ok(canvas.includes("t('agent.done', { duration })"), 'the done reading is gone');
+  assert.equal(
+    canvas.includes("makeChip(chipRow, 'done')"),
+    false,
+    'the subagent node is wearing a pill again',
+  );
 });
 
 test('a frozen canvas does not animate and does not count', () => {

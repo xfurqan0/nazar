@@ -5,6 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <meta name="referrer" content="no-referrer" />
+    <!--
+      N-WP15: the tagline moved off the bar and onto the tab, and `web/lang.ts`
+      writes it — the markup carries the product's name and no sentence, which
+      is the N-WP13 rule and the reason the tab title is translated at all.
+    -->
     <title>Nazar</title>
     <link rel="icon" href="assets/nazar.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
@@ -89,7 +94,14 @@
         `beadLayerPath()` builds, and `test/bead.test.ts` fails the build if the
         two ever disagree.
       -->
-      <span class="nz-brand">
+      <!--
+        N-WP15: the tagline is the brand's tooltip, not a line of the bar.
+        "watches, does not drive" is a promise, and a promise printed on every
+        frame of a monitor is read once and then becomes furniture. `app.ts`
+        writes it into `title` from the same `bar.tagline` key, so all six
+        catalogues still carry it and nothing was translated away.
+      -->
+      <span class="nz-brand" data-nz-title="bar.tagline">
         <svg
           class="nz-bead"
           viewBox="0 0 16 16"
@@ -112,7 +124,6 @@
           <path fill="var(--nz-bead-black-dot)" d="M7 7h2v1h-2zM7 8h2v1h-2z" />
         </svg>
         <span class="nz-brand__name">Nazar</span>
-        <span class="nz-brand__tag" data-nz-t="bar.tagline"></span>
       </span>
 
       <span class="nz-bar__spacer"></span>
