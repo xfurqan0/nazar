@@ -261,6 +261,10 @@ test('the project-settings reader is read-only and reads one key', () => {
  * was added and why. N-WP21 in particular adds none: the Needs-you strip holds
  * how long each session has been waiting **in memory**, and a reload starts
  * those clocks again, which is honest about what a fresh page can know.
+ * N-WP16 adds exactly one, `nazar.sound.v1`: whether each of the two sounds is
+ * on, and the quiet-hours window. It is the same kind of thing as the rest —
+ * a preference the user set, in the browser they set it in — and nothing about
+ * a session is in it.
  */
 const STORAGE_KEYS = [
   'nazar.colours.v1',
@@ -269,6 +273,7 @@ const STORAGE_KEYS = [
   'nazar.names.v1',
   'nazar.notes.v1',
   'nazar.palette',
+  'nazar.sound.v1',
   'nazar.tabs.v1',
   'nazar.taskText.v1',
   'nazar.theme',

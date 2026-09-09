@@ -260,8 +260,13 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
   // opens a session.
   const history = new HistoryScanner({ taskText });
 
+  // N-WP16: the same object twice, under two names, because it plays two parts.
+  // `state` is polled for what is true now; `endings` is listened to for what
+  // just happened. Naming both is what lets a route test take one without the
+  // other.
   const server = await startNazarServer({
     state,
+    endings: state,
     uiDir,
     history,
     port: options.port,

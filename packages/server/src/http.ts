@@ -30,12 +30,18 @@ import type {
   HistoryIdsResult,
   HistoryListOptions,
   HistoryListPage,
+  SessionEnded,
   StateSnapshot,
 } from '@nazar/core';
 
 import type { RedactOptions } from './redact.js';
 import type { WireOptions } from './snapshot.js';
-import { toWireHistory, toWireHistoryPage, toWireState } from './snapshot.js';
+import {
+  toWireHistory,
+  toWireHistoryPage,
+  toWireSessionEnded,
+  toWireState,
+} from './snapshot.js';
 import { VERSION, VERSION_HEADER } from './version.js';
 
 /** Address the server binds. Never configurable: local only, by design. */
@@ -55,6 +61,23 @@ export interface StateSource {
   snapshot(): StateSnapshot;
   on(event: 'change', listener: (snapshot: StateSnapshot) => void): unknown;
   off(event: 'change', listener: (snapshot: StateSnapshot) => void): unknown;
+}
+
+/**
+ * N-WP16: where "a session has ended" comes from. `NazarState` satisfies it.
+ *
+ * A second interface rather than two more overloads on {@link StateSource},
+ * because the two are not the same kind of thing and the difference is worth a
+ * type. A state source answers *what is true now* and is polled by every new
+ * connection; this one announces *something that just happened* and can only be
+ * heard by a connection that was already open. It is optional in
+ * {@link NazarServerOptions} for the same reason: a server built without it
+ * serves exactly the stream it served before this package, and every existing
+ * test double stays a five-line object.
+ */
+export interface EndingsSource {
+  on(event: 'session-ended', listener: (ended: SessionEnded) => void): unknown;
+  off(event: 'session-ended', listener: (ended: SessionEnded) => void): unknown;
 }
 
 /**
@@ -84,6 +107,12 @@ const DEFAULT_HISTORY_LIMIT = 50;
 
 export interface NazarServerOptions {
   readonly state: StateSource;
+  /**
+   * N-WP16: the source of `session-ended` frames. Omitted, the stream carries
+   * state and nothing else — which is what every route test wants and what a
+   * canvas with the sound switched off would have made of the frames anyway.
+   */
+  readonly endings?: EndingsSource;
   /** Directory holding `index.html`, `bundle.js`, `styles.css` and `assets/`. */
   readonly uiDir: string;
   /** Past sessions. Omitted in tests that only exercise the live canvas. */
@@ -123,6 +152,7 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
   '.json': 'application/json; charset=utf-8',
   '.png': 'image/png',
   '.svg': 'image/svg+xml',
+  '.wav': 'audio/wav',
   '.woff2': 'font/woff2',
   '.txt': 'text/plain; charset=utf-8',
   '.map': 'application/json; charset=utf-8',
@@ -326,6 +356,31 @@ export function createRequestListener(
     };
     options.state.on('change', onChange);
 
+    /*
+     * N-WP16: the one frame on this stream that is not a whole state.
+     *
+     * It has to be its own frame rather than a field on the snapshot, and the
+     * reason is the stream's own contract: every `state` frame is complete and
+     * a reconnecting browser is correct on its first one. A "the following
+     * sessions have just ended" field would be replayed to a browser that
+     * reconnected after a laptop lid closed — and would ring for sessions that
+     * ended while nobody was watching, which is exactly the burst the canvas's
+     * own opening silence exists to prevent. An event fires once, to whoever is
+     * listening at the time, and is gone.
+     *
+     * It is also deliberately *not* something the canvas could work out for
+     * itself by diffing snapshots. A session missing from a frame could have
+     * ended, or the server could have restarted, or the registry could have
+     * failed one `claude agents --json` gate. Only the registry knows which,
+     * and this carries its answer rather than guessing at it from the outside.
+     */
+    const onEnded = (ended: SessionEnded): void => {
+      res.write(
+        `event: session-ended\ndata: ${JSON.stringify(toWireSessionEnded(ended, wireOptions))}\n\n`,
+      );
+    };
+    options.endings?.on('session-ended', onEnded);
+
     const beat = setInterval(() => {
       res.write(': heartbeat\n\n');
     }, heartbeatMs);
@@ -334,6 +389,7 @@ export function createRequestListener(
     const stop = (): void => {
       clearInterval(beat);
       options.state.off('change', onChange);
+      options.endings?.off('session-ended', onEnded);
     };
     res.on('close', stop);
     res.on('error', stop);

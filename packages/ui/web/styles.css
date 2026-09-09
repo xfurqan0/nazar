@@ -624,6 +624,53 @@ body {
   display: none;
 }
 
+/* ------------------------------------------------- quiet hours (N-WP16)
+
+   Two `<input type="time">` on one row, shown only while quiet hours are on.
+   The native control is kept rather than replaced: it carries the keyboard, the
+   locale's own 12- or 24-hour presentation and the mobile picker for free, and
+   an hour typed into a hand-rolled field is an hour somebody has to check. */
+
+.nz-quiet {
+  display: flex;
+  gap: 8px;
+  padding: 2px 10px 6px;
+}
+
+.nz-quiet[hidden] {
+  display: none;
+}
+
+.nz-quiet__field {
+  display: flex;
+  flex: 1 1 0;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.nz-quiet__label {
+  color: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+}
+
+.nz-quiet__time {
+  width: 100%;
+  min-width: 0;
+  padding: 5px 7px;
+  border: 1px solid var(--nz-panel-border);
+  border-radius: 6px;
+  background: var(--nz-canvas);
+  color: var(--nz-text);
+  font: inherit;
+  font-size: var(--nz-size-sm);
+}
+
+.nz-quiet__time:focus-visible {
+  outline: 2px solid var(--nz-accent);
+  outline-offset: 1px;
+}
+
 /* --------------------------------------------- language picker (N-WP13) */
 
 .nz-language {

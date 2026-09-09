@@ -48,7 +48,13 @@ export {
   resolveStaticPath,
   startNazarServer,
 } from './http.js';
-export type { HistorySource, NazarServer, NazarServerOptions, StateSource } from './http.js';
+export type {
+  EndingsSource,
+  HistorySource,
+  NazarServer,
+  NazarServerOptions,
+  StateSource,
+} from './http.js';
 
 export {
   REDACTION_HEAD,
@@ -67,6 +73,7 @@ export {
   toWireHistoryPage,
   toWireHistorySummary,
   toWireSession,
+  toWireSessionEnded,
   toWireState,
 } from './snapshot.js';
 export type { WireOptions } from './snapshot.js';

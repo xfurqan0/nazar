@@ -18,6 +18,6 @@
   ],
   "scripts": {
     "build": "tsc --build",
-    "test": "node --import tsx --test test/index.test.ts test/paths.test.ts test/project-slug.test.ts test/session-file.test.ts test/liveness.test.ts test/claude-agents.test.ts test/session-registry.test.ts test/transcript-tailer.test.ts test/transcript-extract.test.ts test/task-text.test.ts test/transcript-stats.test.ts test/subagent-meta.test.ts test/agent-tree.test.ts test/agent-done.test.ts test/session-tree.test.ts test/state.test.ts test/statusline-captures.test.ts test/project-settings.test.ts test/limits-file.test.ts test/quota.test.ts test/state-quota.test.ts test/pinned-paths.test.ts test/history.test.ts test/history-leak.test.ts"
+    "test": "node --import tsx --test test/index.test.ts test/paths.test.ts test/project-slug.test.ts test/session-file.test.ts test/liveness.test.ts test/claude-agents.test.ts test/session-registry.test.ts test/transcript-tailer.test.ts test/transcript-extract.test.ts test/task-text.test.ts test/transcript-stats.test.ts test/subagent-meta.test.ts test/agent-tree.test.ts test/agent-done.test.ts test/session-tree.test.ts test/state.test.ts test/state-endings.test.ts test/statusline-captures.test.ts test/project-settings.test.ts test/limits-file.test.ts test/quota.test.ts test/state-quota.test.ts test/pinned-paths.test.ts test/history.test.ts test/history-leak.test.ts"
   }
 }

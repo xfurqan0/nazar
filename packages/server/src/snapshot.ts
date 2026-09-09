@@ -51,6 +51,7 @@ import type {
   QuotaProvider,
   QuotaWindow,
   SessionContextWindow,
+  SessionEnded,
   SessionTokens,
   SessionView,
   StateSnapshot,
@@ -319,6 +320,28 @@ export function toWireState(snapshot: StateSnapshot, options?: WireOptions): Sta
       wrapper: snapshot.empty.wrapper,
     };
   }
+  return out;
+}
+
+/**
+ * N-WP16: one ended session, ready for its own SSE frame.
+ *
+ * It carries `type` because it is the only payload on this stream that is not a
+ * whole snapshot, and a frame that names itself is one a reader cannot mistake
+ * for a small state. The two free-form fields go through the same `redact()` a
+ * live card's do — an ended session's working directory is the same path it was
+ * a second earlier, and a canvas being screen-shared does not stop being shared
+ * because a session finished.
+ */
+export function toWireSessionEnded(
+  ended: SessionEnded,
+  options?: WireOptions,
+): SessionEnded & { readonly type: 'session-ended' } {
+  const out: {
+    -readonly [K in keyof SessionEnded]: SessionEnded[K];
+  } & { type: 'session-ended' } = { type: 'session-ended', id: ended.id, at: ended.at };
+  if (ended.name !== undefined) out.name = redact(ended.name, options);
+  if (ended.cwd !== undefined) out.cwd = redact(ended.cwd, options);
   return out;
 }
 

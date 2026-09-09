@@ -423,6 +423,67 @@
                 <span class="nz-switch__label" data-nz-t="settings.demo"></span>
                 <span class="nz-switch__track" aria-hidden="true"></span>
               </button>
+
+              <!--
+                N-WP16. A subheading rather than a section of its own: the
+                settings panel has five headings and they are the five things
+                you might come here to change, which is a list worth keeping
+                short. Sound is behaviour.
+
+                The first switch is on out of the box and the second is not —
+                an ending is rare and worth a sound, a permission prompt is
+                common and mostly answered in the terminal you are already in.
+                The quiet-hours fields appear only when quiet hours are on, so
+                the everyday state of this block is three switches.
+              -->
+              <h3 class="nz-settings__subheading" data-nz-t="settings.sound"></h3>
+              <button
+                id="sound-end-toggle"
+                type="button"
+                class="nz-switch"
+                role="switch"
+                aria-checked="false"
+              >
+                <span class="nz-switch__label" data-nz-t="settings.soundEnd"></span>
+                <span class="nz-switch__track" aria-hidden="true"></span>
+              </button>
+              <button
+                id="sound-waiting-toggle"
+                type="button"
+                class="nz-switch"
+                role="switch"
+                aria-checked="false"
+              >
+                <span class="nz-switch__label" data-nz-t="settings.soundWaiting"></span>
+                <span class="nz-switch__track" aria-hidden="true"></span>
+              </button>
+              <button
+                id="sound-quiet-toggle"
+                type="button"
+                class="nz-switch"
+                role="switch"
+                aria-checked="false"
+              >
+                <span class="nz-switch__label" data-nz-t="settings.soundQuiet"></span>
+                <span class="nz-switch__track" aria-hidden="true"></span>
+              </button>
+              <div id="sound-quiet-row" class="nz-quiet" hidden>
+                <label class="nz-quiet__field">
+                  <span class="nz-quiet__label" data-nz-t="settings.quietFrom"></span>
+                  <input id="sound-from" class="nz-quiet__time" type="time" />
+                </label>
+                <label class="nz-quiet__field">
+                  <span class="nz-quiet__label" data-nz-t="settings.quietTo"></span>
+                  <input id="sound-to" class="nz-quiet__time" type="time" />
+                </label>
+              </div>
+              <button
+                id="sound-test"
+                type="button"
+                class="nz-item"
+                data-nz-t="settings.soundTest"
+              ></button>
+              <p class="nz-about__line" data-nz-t="settings.soundNote"></p>
             </section>
 
             <!--

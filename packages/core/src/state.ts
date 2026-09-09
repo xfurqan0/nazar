@@ -124,8 +124,35 @@ export interface StateSnapshot {
   readonly empty?: EmptyDiagnosis;
 }
 
+/**
+ * N-WP16: one session that has ended.
+ *
+ * "Ended" here is the **session-level** answer to the question `agent-done.ts`
+ * asks about a subagent, and it is the same signal: `session-gone`. A session is
+ * over when the registry no longer holds it — its `~/.claude/sessions/<pid>.json`
+ * is gone, `claude agents --json` no longer lists it, and its pid failed the
+ * liveness probe for a whole gate interval. The registry already reaches that
+ * verdict exactly once per session, in `SessionRegistry.publish`'s `removed`, so
+ * this carries the verdict rather than deciding it a second time.
+ *
+ * Deliberately *not* derived from a subagent finishing. A busy session finishes
+ * dozens of subagents a minute and not one of them means the work is done.
+ */
+export interface SessionEnded {
+  /** The session's id — Claude Code's uuid, or Nazar's `pid-<pid>` stand-in. */
+  readonly id: string;
+  /** What it was called, when it was called anything. */
+  readonly name?: string;
+  /** Where it ran. Redacted on the wire like every other path. */
+  readonly cwd?: string;
+  /** Epoch ms at which the registry stopped holding it. */
+  readonly at: number;
+}
+
 export interface NazarStateEvents {
   change: [StateSnapshot];
+  /** N-WP16. One event per session, at the moment the registry drops it. */
+  'session-ended': [SessionEnded];
 }
 
 /** The subset of `SessionTreeOptions` the join passes through. */
@@ -277,8 +304,12 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
     if (this.started) return;
     this.started = true;
 
-    this.registry.on('change', () => {
+    this.registry.on('change', (change) => {
       if (!this.started) return;
+      // N-WP16, and before the trees are synced: `syncTrees` stops the watcher
+      // for a session that has gone, so this is the last moment the join can
+      // still say anything about it at all.
+      this.announceEnded(change.removed);
       void this.syncTrees();
       this.schedulePublish();
     });
@@ -389,6 +420,30 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
     }
 
     await Promise.all(starting);
+  }
+
+  /**
+   * N-WP16: say, once, that each of these sessions has ended.
+   *
+   * No bookkeeping of its own and no set of ids already announced, because there
+   * is nothing to deduplicate: a session appears in `removed` on the pass that
+   * takes it out of the registry's map, and the map cannot lose it twice. The
+   * *session* it names could come back — a new `claude` on the same pid — but
+   * that is a new session with its own end, not this one happening again.
+   *
+   * The listeners are the SSE stream and nothing else, so a machine with no
+   * canvas open does this work for an empty room. That is the price of one
+   * `emit` per ended session, which is not a price.
+   */
+  private announceEnded(removed: readonly Session[]): void {
+    if (removed.length === 0) return;
+    const at = this.now();
+    for (const session of removed) {
+      const ended: { -readonly [K in keyof SessionEnded]: SessionEnded[K] } = { id: session.id, at };
+      if (session.name !== undefined) ended.name = session.name;
+      if (session.cwd !== undefined) ended.cwd = session.cwd;
+      this.emit('session-ended', ended);
+    }
   }
 
   private schedulePublish(): void {

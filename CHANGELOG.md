@@ -208,6 +208,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   — the double-click and <kbd>Enter</kbd> are an ordinary click there, and the
   line in **About** about double-clicking a card goes with them.
 
+- **A sound when a session ends** (N-WP16). A monitor is only useful while you
+  are looking at it, and the point of a long agent run is that you are not. So
+  the canvas has a voice: a 250 ms tick when a **session** ends, on by default.
+  Never a subagent — a busy session finishes dozens a minute and not one of them
+  means the work is done — and never more than once for the same session.
+
+  **The restraint is the feature.** Several sessions ending inside two seconds
+  are one sound. The canvas is silent for the first five seconds after the page
+  opens, so a reload never rings for work that finished while nobody was
+  watching. **Quiet hours** (off by default; `22:00`–`07:00` when you turn them
+  on, wrapping midnight on your own wall clock, with nazar-tray's semantics down
+  to equal endpoints meaning an empty range rather than a whole silent day)
+  silence it. `?demo=1` makes no noise at all. A second sound, for **a session
+  waiting for permission**, is off by default: a prompt is common and is as often
+  answered in the terminal you are already in.
+
+  All of it is in **Settings → Behaviour → Sound**, in all six languages, with a
+  button that plays the tick so you can hear it before you decide. The
+  preferences live in this browser under `nazar.sound.v1` and nowhere else.
+
+  **Sounds play after your first click.** Every browser refuses to start audio on
+  a page nobody has touched, and refuses silently, so Nazar builds no audio
+  context and fetches nothing until you click or press a key — and says that
+  once, quietly, if a session ends before you have.
+
+  The clip is **synthesised, not stock**: `scripts/render-sound.mjs` writes 250 ms
+  of two sine partials (880 Hz and a fifth 9 dB under it) with an 8 ms attack and
+  an exponential tail that reaches exactly zero, peaking at −6 dBFS, as a 21.6 KB
+  16-bit mono WAV that is committed to the repository. A test re-runs the script
+  and fails if the bytes have moved — the same discipline the icon is held to,
+  applied to a sound. The canvas gains a `session-ended` frame on the SSE stream
+  to carry the event; it is a frame rather than a field because an event is heard
+  once by whoever is connected, where a snapshot is replayed to everyone who
+  reconnects. Zero runtime dependencies, as before.
+
 ### Changed
 
 - **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's

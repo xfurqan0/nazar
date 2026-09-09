@@ -90,6 +90,14 @@ import {
   writeLocaleChoice,
 } from '../src/i18n.ts';
 import { shortcutFor } from '../src/shortcuts.ts';
+import type { SoundSettings } from '../src/sound.ts';
+import {
+  newlyWaiting,
+  readSound,
+  SoundRules,
+  waitingIds,
+  writeSound,
+} from '../src/sound.ts';
 import { readTaskText, withTaskQuery, writeTaskText } from '../src/task-text.ts';
 import { readUsageOpen, writeUsageOpen } from '../src/usage-popover.ts';
 import type { LayoutState, TabsState } from '../src/workspace.ts';
@@ -151,6 +159,7 @@ import { UsagePanel } from './quota.ts';
 import { fillSegment, paintSwitch, SettingsPanel } from './settings.ts';
 import { jumpHint, jumpNeedsShell, Shell } from './shell.ts';
 import { Sidebar } from './sidebar.ts';
+import { armSoundUnlock, createSoundPlayer } from './sound.ts';
 import { CanvasMenu, CardMenu, LinkMenu, TabBar } from './tabbar.ts';
 
 declare const __NAZAR_VERSION__: string;
@@ -723,6 +732,15 @@ function start(): void {
   const settingsBack = element<HTMLButtonElement>('settings-back');
   const autoTabsRoot = element<HTMLElement>('auto-tabs');
   const languageRoot = element<HTMLElement>('language');
+  // N-WP16: three switches, two clock fields and a button that proves the
+  // browser will actually make a noise.
+  const soundEndButton = element<HTMLButtonElement>('sound-end-toggle');
+  const soundWaitingButton = element<HTMLButtonElement>('sound-waiting-toggle');
+  const soundQuietButton = element<HTMLButtonElement>('sound-quiet-toggle');
+  const soundQuietRow = element<HTMLDivElement>('sound-quiet-row');
+  const soundFrom = element<HTMLInputElement>('sound-from');
+  const soundTo = element<HTMLInputElement>('sound-to');
+  const soundTestButton = element<HTMLButtonElement>('sound-test');
 
   setText(versionNode, __NAZAR_VERSION__);
   setText(aboutVersionNode, __NAZAR_VERSION__);
@@ -823,6 +841,44 @@ function start(): void {
    * and vanishes in history.
    */
   let taskText = readTaskText(storage);
+
+  /*
+   * N-WP16: the sound, in three pieces.
+   *
+   * `sound` is the stored preferences, `soundPlayer` owns the audio context and
+   * the one decoded clip, and `sounds` owns the rules — one tick per session,
+   * two seconds of debounce, five seconds of silence after the page opens,
+   * quiet hours, and nothing at all in the demo.
+   *
+   * The player is built now and unlocked later: every browser refuses to start
+   * audio on a page nobody has touched, so `armSoundUnlock` waits for the first
+   * `pointerdown` or `keydown` and builds the context there. Until then
+   * `soundPlayer.play()` answers `false`, which is what the line below turns
+   * into the one sentence this feature owes the user — said once, and then
+   * never again in this browser.
+   */
+  let sound: SoundSettings = readSound(storage);
+  const soundPlayer = createSoundPlayer();
+  // The demo canvas is silent by rule, so it does not arm the gesture either:
+  // a screenshot run must build no audio graph and fetch no clip. Its Test
+  // button still works — that press unlocks the player itself.
+  if (!demo) armSoundUnlock(soundPlayer);
+  const playTick = (): void => {
+    if (soundPlayer.play()) return;
+    // Only one of the two ways `play()` can say no is worth a sentence: the page
+    // has not been touched yet. A clip that could not be fetched is a broken
+    // build, and telling somebody to click would be pointing at the wrong thing.
+    if (soundPlayer.unlocked || sound.hinted) return;
+    sound = { ...sound, hinted: true };
+    writeSound(storage, sound);
+    showHint(t('hint.soundNeedsAClick'));
+  };
+  const sounds = new SoundRules({
+    play: playTick,
+    settings: () => sound,
+    now: () => Date.now(),
+    demo,
+  });
 
   /*
    * Re-open the SSE stream at a URL that matches the current setting.
@@ -974,6 +1030,51 @@ function start(): void {
     paintSwitch(taskTextButton, taskText);
     restartStream();
     schedule();
+  });
+
+  /*
+   * N-WP16: the sound settings.
+   *
+   * One document in `localStorage` and one paint function, so a switch cannot
+   * be drawn out of step with what the rules read — `sounds` asks `() => sound`
+   * on every event rather than being handed a copy at construction.
+   *
+   * The two clock fields are `<input type="time">`, which hands back exactly the
+   * `HH:MM` that `inQuietHours` parses; a value it cannot parse suppresses
+   * nothing, so an empty field is a quiet range that never bites rather than one
+   * that silences the day.
+   */
+  const paintSound = (): void => {
+    paintSwitch(soundEndButton, sound.onSessionEnd);
+    paintSwitch(soundWaitingButton, sound.onWaiting);
+    paintSwitch(soundQuietButton, sound.quietHours);
+    soundQuietRow.hidden = !sound.quietHours;
+    soundFrom.value = sound.from;
+    soundTo.value = sound.to;
+  };
+  const saveSound = (next: SoundSettings): void => {
+    sound = next;
+    writeSound(storage, sound);
+    paintSound();
+  };
+  paintSound();
+  soundEndButton.addEventListener('click', () =>
+    saveSound({ ...sound, onSessionEnd: !sound.onSessionEnd }),
+  );
+  soundWaitingButton.addEventListener('click', () =>
+    saveSound({ ...sound, onWaiting: !sound.onWaiting }),
+  );
+  soundQuietButton.addEventListener('click', () =>
+    saveSound({ ...sound, quietHours: !sound.quietHours }),
+  );
+  soundFrom.addEventListener('change', () => saveSound({ ...sound, from: soundFrom.value }));
+  soundTo.addEventListener('change', () => saveSound({ ...sound, to: soundTo.value }));
+  // The Test button is a gesture, so it both unlocks the audio and skips every
+  // rule: somebody pressing it is asking what the sound is, not being told
+  // something. It is also the reliable way out of the autoplay lock for anyone
+  // who has kept their hands off the canvas.
+  soundTestButton.addEventListener('click', () => {
+    void soundPlayer.unlock().then(() => sounds.demonstrate());
   });
 
   paintSwitch(demoButton, demo);
@@ -3097,6 +3198,17 @@ function start(): void {
    * is the precedence that matters: the machine's owner outranks the page.
    */
   let source = new EventSource(withTaskQuery('/api/events', taskText));
+  /*
+   * N-WP16: which sessions were waiting for the user on the previous frame.
+   *
+   * `undefined` until the first frame lands, and that is the whole of the guard
+   * against a burst on open: a canvas that opens onto three sessions already
+   * waiting has watched none of them *start* waiting, so the first frame seeds
+   * this and rings for nothing. It survives a reconnect on purpose — a session
+   * that started waiting while the socket was down is a transition the user has
+   * genuinely not seen yet.
+   */
+  let waitingBefore: ReadonlySet<string> | undefined;
   const listen = (channel: EventSource): void => {
     channel.addEventListener('state', (event) => {
       try {
@@ -3104,6 +3216,13 @@ function start(): void {
       } catch {
         return;
       }
+      const waitingNow = waitingIds(state.sessions);
+      if (waitingBefore !== undefined) {
+        for (const id of newlyWaiting(waitingBefore, waitingNow)) {
+          sounds.handle({ kind: 'waiting', sessionId: id });
+        }
+      }
+      waitingBefore = waitingNow;
       everConnected = true;
       // N-WP20: stamped from the browser's clock, not the snapshot's. The age
       // shown is "how long since this page last heard anything", which is what
@@ -3118,6 +3237,26 @@ function start(): void {
       if (!pruned) {
         void transport.ids().then(prune, () => undefined);
       }
+    });
+    /*
+     * N-WP16: the one frame on this stream that is not a whole state.
+     *
+     * The server sends it when the *registry* drops a session — the session-level
+     * `session-gone`, the same signal `agent-done.ts` uses for a subagent — and
+     * sends it once, to whoever is connected at the time. A subagent finishing
+     * sends nothing: a busy session finishes dozens a minute.
+     *
+     * A frame this cannot read is dropped rather than guessed at. There is
+     * nothing to recover: the next one is a whole snapshot.
+     */
+    channel.addEventListener('session-ended', (event) => {
+      let ended: { id?: unknown };
+      try {
+        ended = JSON.parse((event as MessageEvent<string>).data) as { id?: unknown };
+      } catch {
+        return;
+      }
+      if (typeof ended.id === 'string') sounds.handle({ kind: 'ended', sessionId: ended.id });
     });
     channel.addEventListener('open', () => {
       everConnected = true;

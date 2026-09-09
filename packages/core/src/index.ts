@@ -240,6 +240,7 @@ export type {
   EmptyReason,
   NazarStateEvents,
   NazarStateOptions,
+  SessionEnded,
   SessionView,
   StateSnapshot,
   StateTreeOptions,

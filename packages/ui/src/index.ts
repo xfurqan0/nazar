@@ -322,6 +322,38 @@ export {
 } from './usage-popover.js';
 export type { UsageBead } from './usage-popover.js';
 
+export {
+  DEFAULT_SOUND,
+  MINUTES_IN_A_DAY,
+  SOUND_CLIP_URL,
+  SOUND_DEBOUNCE_MS,
+  SOUND_KEY,
+  SOUND_OPENING_SILENCE_MS,
+  SoundPlayer,
+  SoundRules,
+  inQuietHours,
+  minutesOfDay,
+  newlyWaiting,
+  parseClock,
+  readSound,
+  soundDecision,
+  waitingIds,
+  writeSound,
+} from './sound.js';
+export type {
+  SoundAudioContext,
+  SoundDecision,
+  SoundEvent,
+  SoundGate,
+  SoundKind,
+  SoundPlayerOptions,
+  SoundReason,
+  SoundRulesOptions,
+  SoundSettings,
+  SoundSourceNode,
+  WaitingSession,
+} from './sound.js';
+
 export { forestOf, makeDemoState } from './demo.js';
 export type { DemoOptions } from './demo.js';
 
