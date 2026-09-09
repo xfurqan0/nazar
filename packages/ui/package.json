@@ -30,6 +30,6 @@
   "scripts": {
     "build": "tsc --build && node build.mjs",
     "build:web": "node build.mjs",
-    "test": "node --import tsx --test test/layout.test.ts test/hidden.test.ts test/pack.test.ts test/workspace.test.ts test/shortcuts.test.ts test/chrome.test.ts test/bead.test.ts test/format.test.ts test/activity.test.ts test/theme.test.ts test/demo.test.ts test/quota-strip.test.ts test/demo-quota.test.ts test/history-view.test.ts test/history-markup.test.ts test/shell.test.ts test/colours.test.ts test/notes.test.ts test/contextmenu.test.ts test/usage-popover.test.ts test/names.test.ts test/projects.test.ts test/projects-markup.test.ts test/i18n.test.ts"
+    "test": "node --import tsx --test test/layout.test.ts test/hidden.test.ts test/pack.test.ts test/workspace.test.ts test/shortcuts.test.ts test/chrome.test.ts test/bead.test.ts test/format.test.ts test/activity.test.ts test/theme.test.ts test/demo.test.ts test/quota-strip.test.ts test/demo-quota.test.ts test/history-view.test.ts test/history-markup.test.ts test/shell.test.ts test/colours.test.ts test/notes.test.ts test/contextmenu.test.ts test/task-text.test.ts test/usage-popover.test.ts test/names.test.ts test/projects.test.ts test/projects-markup.test.ts test/i18n.test.ts"
   }
 }

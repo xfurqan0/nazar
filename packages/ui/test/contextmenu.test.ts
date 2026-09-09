@@ -26,6 +26,7 @@ import { fileURLToPath } from 'node:url';
 
 import {
   CANVAS_MENU_ITEMS,
+  LINK_MENU_ITEMS,
   contextActionOf,
   opensOwnMenu,
   suppressesNativeMenu,
@@ -111,6 +112,7 @@ test('exactly one answer leaves the native menu alone', () => {
     'card-menu',
     'canvas-menu',
     'note-menu',
+    'link-menu',
     'suppress',
     'native',
   ];
@@ -118,7 +120,98 @@ test('exactly one answer leaves the native menu alone', () => {
     every.filter((action) => !suppressesNativeMenu(action)),
     ['native'],
   );
-  assert.deepEqual(every.filter(opensOwnMenu), ['card-menu', 'canvas-menu', 'note-menu']);
+  assert.deepEqual(every.filter(opensOwnMenu), [
+    'card-menu',
+    'canvas-menu',
+    'note-menu',
+    'link-menu',
+  ]);
+});
+
+test('N-WP15a: a right-click on a link opens the link menu, wherever the link is', () => {
+  /*
+   * The regression `8526e9a` left behind. Taking the browser's menu away
+   * everywhere was right for a canvas and wrong for the three links on the
+   * page: *Open link in new tab* and *Copy link address* are the only two
+   * things anybody wants from a link, and `suppress` answered with neither.
+   *
+   * Every link this page has is in the **drawer**, which is chrome — so the
+   * link has to be decided *before* the surface, or the menu could never open
+   * on any of them. That ordering is what the first assertion pins.
+   */
+  const link = 'https://github.com/xfurqan0/nazar';
+  assert.equal(contextActionOf({ ...CHROME, href: link }), 'link-menu' satisfies ContextAction);
+  assert.equal(contextActionOf({ ...CANVAS, href: link }), 'link-menu');
+  // A link on a card, and a link on a frozen tree: still the link's menu. A
+  // link is a thing, and a right-click on a thing is about the thing rather
+  // than about what it happens to be lying on.
+  assert.equal(contextActionOf({ ...CANVAS, href: link, sessionId: 's1' }), 'link-menu');
+  assert.equal(contextActionOf({ ...CANVAS, href: link, frozen: true }), 'link-menu');
+
+  assert.equal(suppressesNativeMenu(contextActionOf({ ...CHROME, href: link })), true);
+  assert.equal(opensOwnMenu(contextActionOf({ ...CHROME, href: link })), true);
+
+  // A text field still wins: a link inside an editable region is somewhere the
+  // browser's Cut, Paste and spell-checker are the only useful menu, and that
+  // exception is the one this whole rule is trusted on.
+  assert.equal(contextActionOf({ ...CHROME, href: link, editable: true }), 'native');
+  // A note being typed into, likewise.
+  assert.equal(
+    contextActionOf({ ...CANVAS, href: link, noteId: 'n1', editing: true }),
+    'native',
+  );
+
+  // An anchor with no address is not a link. Without this an `<a>` used as a
+  // styling hook would open a menu whose two entries had nothing to act on.
+  assert.equal(contextActionOf({ ...CHROME, href: '' }), 'suppress');
+  assert.equal(contextActionOf({ ...CANVAS, href: '' }), 'canvas-menu');
+});
+
+test('N-WP15a: the link menu offers the two things there are to do with a link', () => {
+  assert.deepEqual(
+    LINK_MENU_ITEMS.map((item) => item.id),
+    ['open', 'copy'],
+  );
+  /*
+   * *Open in browser*, not *Open in new tab*, and the wording is the decision.
+   * A Tauri webview has no tabs, so the browser's own entry was either useless
+   * inside the shell or replaced the canvas with a web page and left no way
+   * back. One sentence that is true in both modes beats two that are each true
+   * in one.
+   */
+  assert.equal(LINK_MENU_ITEMS[0]?.labelKey, 'menu.openLink');
+  assert.equal(LINK_MENU_ITEMS[1]?.labelKey, 'menu.copyLink');
+});
+
+test('N-WP15a: the page routes a link right-click through the rule and opens the menu', () => {
+  const app = readFileSync(path.join(webDir, 'app.ts'), 'utf8');
+  const handler = app.slice(
+    app.indexOf("document.addEventListener('contextmenu'"),
+    app.indexOf('const runCardAction'),
+  );
+  // The href is read off the DOM here, like every other field of the hit, and
+  // fed to the same pure rule rather than to a branch of its own.
+  assert.ok(handler.includes('const href = linkHrefAt(event.target);'));
+  assert.ok(handler.includes('...(href === undefined ? {} : { href }),'));
+  assert.ok(
+    handler.includes("if (action === 'link-menu' && href !== undefined) {"),
+    'the link answer has to open something',
+  );
+  assert.ok(handler.includes('linkMenu.open(anchor, href)'));
+
+  // Only real web addresses. `mailto:` and `javascript:` are not things the two
+  // entries mean anything for, and refusing them at the source is cheaper than
+  // teaching every consumer to.
+  assert.match(app, /href\.startsWith\('http:\/\/'\) \|\| href\.startsWith\('https:\/\/'\)/);
+
+  // The same contract as the other three menus: Escape closes it, and a press
+  // anywhere else closes it. It lives on the chrome, so the canvas's own
+  // dismissal handler would never see it.
+  assert.ok(app.includes('if (linkMenu.isOpen) {'));
+  assert.ok(app.includes('linkMenuRoot.contains(node)'));
+
+  const html = readFileSync(path.join(webDir, 'index.html'), 'utf8');
+  assert.ok(html.includes('id="linkmenu" class="nz-menu"'));
 });
 
 test('the canvas menu offers the three things there are to do on empty canvas', () => {

@@ -5,11 +5,13 @@
 export {
   CliError,
   DEFAULT_PORT,
+  TASK_TEXT_VAR,
   USAGE,
   VERSION,
   main,
   parseOpen,
   parsePort,
+  parseTaskText,
   serve,
   unknownFlag,
   unknownFlagMessage,
@@ -48,7 +50,14 @@ export {
 } from './http.js';
 export type { HistorySource, NazarServer, NazarServerOptions, StateSource } from './http.js';
 
-export { REDACTION_HEAD, SECRET_MASK, collapseHome, redact, redactSecrets } from './redact.js';
+export {
+  REDACTION_HEAD,
+  SECRET_MASK,
+  collapseHome,
+  collapseHomeAnywhere,
+  redact,
+  redactSecrets,
+} from './redact.js';
 export type { RedactOptions } from './redact.js';
 
 export {
@@ -60,5 +69,6 @@ export {
   toWireSession,
   toWireState,
 } from './snapshot.js';
+export type { WireOptions } from './snapshot.js';
 
 export { WEB_DIR_NAME, resolveUiDir } from './ui-assets.js';

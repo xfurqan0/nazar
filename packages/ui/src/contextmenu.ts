@@ -48,6 +48,22 @@ export type ContextAction =
   | 'canvas-menu'
   /** Open the note's own ⋯ menu, at the pointer. */
   | 'note-menu'
+  /**
+   * N-WP15a: open the link menu — open in browser, copy address.
+   *
+   * `8526e9a` took the browser's menu away everywhere on the page, and that was
+   * right for a canvas and wrong for the three links on it. *Open link in new
+   * tab* and *Copy link address* are the only two things anybody wants from a
+   * link, and suppressing them left the drawer's own GitHub link answering a
+   * right-click with silence.
+   *
+   * Inside the desktop shell the browser's entry was never the right answer
+   * anyway: a Tauri webview has no tabs, so *open in new tab* either did
+   * nothing useful or replaced the canvas with a web page and left the user
+   * with no way back. The page's own menu says *Open in browser*, which is the
+   * true thing in both modes and the same words in both.
+   */
+  | 'link-menu'
   /** Take the browser's menu away and put nothing in its place. */
   | 'suppress'
   /** Leave the browser's menu alone. */
@@ -68,6 +84,11 @@ export interface ContextHit {
   readonly editing?: boolean;
   /** The card the pointer is over, if it is over one. */
   readonly sessionId?: string;
+  /**
+   * N-WP15a: the address of the `<a href>` the pointer is over, if it is over
+   * one. Read off the DOM by `app.ts`, like every other field here.
+   */
+  readonly href?: string;
   /** True while the canvas is showing a finished session out of history. */
   readonly frozen: boolean;
 }
@@ -81,6 +102,14 @@ export function contextActionOf(hit: ContextHit): ContextAction {
   // caret is.
   if (hit.noteId !== undefined) return hit.editing === true ? 'native' : 'note-menu';
   if (hit.editable) return 'native';
+  /*
+   * N-WP15a. A link is answered before the surfaces it sits on, and above the
+   * `suppress` rule that used to swallow it: every link this page has is in the
+   * drawer, which is chrome, so deciding by surface first would mean the link
+   * menu could never open. A link is a thing, and a right-click on a thing is
+   * about the thing rather than about what it is lying on.
+   */
+  if (hit.href !== undefined && hit.href.length > 0) return 'link-menu';
   // The chrome, and a frozen tree: nothing to offer, and the browser's menu is
   // still not this page's menu.
   if (!hit.onCanvas || hit.frozen) return 'suppress';
@@ -94,7 +123,12 @@ export function suppressesNativeMenu(action: ContextAction): boolean {
 
 /** Whether this action opens a menu of the page's own. */
 export function opensOwnMenu(action: ContextAction): boolean {
-  return action === 'card-menu' || action === 'canvas-menu' || action === 'note-menu';
+  return (
+    action === 'card-menu' ||
+    action === 'canvas-menu' ||
+    action === 'note-menu' ||
+    action === 'link-menu'
+  );
 }
 
 /** The entries of the canvas menu, in order. `add-note` carries the point. */
@@ -105,3 +139,24 @@ export const CANVAS_MENU_ITEMS = [
 ] as const;
 
 export type CanvasMenuItem = (typeof CANVAS_MENU_ITEMS)[number]['id'];
+
+/**
+ * N-WP15a: the entries of the link menu, in order.
+ *
+ * Two, and there is no third worth having. *Open in browser* is the reason
+ * somebody right-clicked a link at all, and *Copy address* is the reason they
+ * did not simply left-click it. Everything else the browser's own menu offers a
+ * link — save, open in a private window, inspect — either has no meaning inside
+ * a Tauri webview or belongs to a browser rather than to this page.
+ *
+ * *Open in browser* rather than *Open in new tab*, because that is the true
+ * sentence in both modes: in a browser the machine's default handler opens a
+ * new tab, and in the shell it opens the machine's browser, which is where an
+ * external link was always meant to go.
+ */
+export const LINK_MENU_ITEMS = [
+  { id: 'open', labelKey: 'menu.openLink' },
+  { id: 'copy', labelKey: 'menu.copyLink' },
+] as const;
+
+export type LinkMenuItem = (typeof LINK_MENU_ITEMS)[number]['id'];

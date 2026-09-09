@@ -65,13 +65,18 @@ export interface OutputStream {
 const HELP = `nazar - keep a watchful eye on your agents
 
 Usage:
-  nazar [--port <number>] [--no-open]
+  nazar [--port <number>] [--no-open] [--no-task-text]
   nazar doctor [--verbose]
 
 Options:
   --port <number>  Port for the local canvas server (default ${DEFAULT_PORT})
   --open           Open the canvas in your browser (default)
   --no-open        Start the server but do not open a browser
+  --no-task-text   Never read the task text out of a transcript, whatever the
+                   canvas asks for. Task text is off in every browser until
+                   somebody switches it on; this makes it unavailable, which is
+                   what a recording or a shared screen wants. NAZAR_TASK_TEXT=0
+                   does the same thing.
   -h, --help       Show this help
   -V, --version    Print the version
 
@@ -85,7 +90,8 @@ writes; it installs no hooks and changes no settings.
 `;
 
 /** One line, printed under every "unknown option". */
-export const USAGE = 'usage: nazar [--port <number>] [--no-open] | nazar doctor [--verbose]';
+export const USAGE =
+  'usage: nazar [--port <number>] [--no-open] [--no-task-text] | nazar doctor [--verbose]';
 
 /** Flags every level answers to. */
 const HELP_FLAGS = ['-h', '--help'];
@@ -95,7 +101,10 @@ const VERSION_FLAGS = ['-V', '--version'];
 const DOCTOR_FLAGS = ['-v', '--verbose'];
 
 /** What the serve path accepts, on top of the two above. */
-const SERVE_FLAGS = ['--open', '--no-open', '--port'];
+const SERVE_FLAGS = ['--open', '--no-open', '--port', '--task-text', '--no-task-text'];
+
+/** Environment variable that switches task text off without a flag (N-WP15a). */
+export const TASK_TEXT_VAR = 'NAZAR_TASK_TEXT';
 
 /**
  * The first argument that begins with `-` and is on none of the lists, or
@@ -180,9 +189,37 @@ export function parseOpen(argv: readonly string[]): boolean {
   return !argv.includes('--no-open');
 }
 
+/**
+ * N-WP15a: whether this process may read task text at all.
+ *
+ * The shape is `parseOpen`'s, and the negative wins for the same reason: a
+ * wrapper — the desktop shell, a `presenting` alias, a `.desktop` entry — can
+ * always append `--no-task-text` and be sure of the answer. The environment
+ * variable is the same switch for a shell profile, and it is checked *only* for
+ * the exact string `0`: an unset variable, an empty one and `NAZAR_TASK_TEXT=1`
+ * all mean "leave it to the flag", so a stray value in an inherited environment
+ * cannot quietly turn a feature on that the user never chose.
+ *
+ * Turning it off never has to be explained twice: whichever of the two said so
+ * wins, and there is no ordering to remember.
+ */
+export function parseTaskText(
+  argv: readonly string[],
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  if (argv.includes('--no-task-text')) return false;
+  return env[TASK_TEXT_VAR] !== '0';
+}
+
 export interface ServeOptions {
   readonly port: number;
   readonly open: boolean;
+  /**
+   * N-WP15a. Defaults to `true`, which means "the browser decides" — and every
+   * browser starts with it off. `false` is `--no-task-text`, and it reaches
+   * three places at once: the live readers, the history scanner and the wire.
+   */
+  readonly taskText?: boolean;
   readonly out: OutputStream;
   readonly err: OutputStream;
 }
@@ -205,15 +242,31 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
     throw new CliError(`the canvas is not built (${uiDir} is missing). Run "npm run build" first.`);
   }
 
-  const state = new NazarState();
+  /*
+   * N-WP15a. One boolean, three places, and it has to be all three.
+   *
+   * The readers take it because with it off no transcript prose is ever in this
+   * process; the server takes it because that is where a browser's `?task=1` is
+   * answered. Passing it to only the last would leave the text in memory and
+   * make `--no-task-text` a filter rather than a switch.
+   */
+  const taskText = options.taskText !== false;
+
+  const state = new NazarState({ treeOptions: { taskText } });
   await state.start();
 
   // WP4b. Constructing it costs nothing: the scanner walks no directory until
   // the history panel asks for a page, and opens no transcript until the user
   // opens a session.
-  const history = new HistoryScanner();
+  const history = new HistoryScanner({ taskText });
 
-  const server = await startNazarServer({ state, uiDir, history, port: options.port });
+  const server = await startNazarServer({
+    state,
+    uiDir,
+    history,
+    port: options.port,
+    taskText,
+  });
 
   // The URL goes out before anything is spawned. Every opener below can fail
   // silently on some machine, and a printed URL is the one thing that cannot.
@@ -230,6 +283,11 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
     options.err.write(
       'note: "claude agents --json" did not answer, so liveness comes from the session files alone\n',
     );
+  }
+  // Said out loud, because the point of the switch is that somebody can rely on
+  // it. A silent hard-disable is a promise nobody can check.
+  if (!taskText) {
+    options.out.write('task text is off: no transcript text is read on this run\n');
   }
 
   // Not awaited: the canvas is already reachable, and an opener that takes
@@ -311,7 +369,13 @@ export async function main(
 
   let handle: ServeHandle;
   try {
-    handle = await serve({ port, open: parseOpen(argv), out, err });
+    handle = await serve({
+      port,
+      open: parseOpen(argv),
+      taskText: parseTaskText(argv),
+      out,
+      err,
+    });
   } catch (error) {
     if (error instanceof CliError) {
       err.write(`nazar: ${error.message}\n`);

@@ -94,6 +94,14 @@ export interface StateTreeOptions {
   readonly watch?: boolean;
   readonly runningWindowMs?: number;
   readonly quietMs?: number;
+  /**
+   * N-WP15a: let every tree watcher read the human turn's text.
+   *
+   * Off unless the CLI turned it on, and the CLI turns it off for good with
+   * `--no-task-text`. Nothing downstream can put it back: this is the flag the
+   * *reader* takes, so with it off the text is never in the process.
+   */
+  readonly taskText?: boolean;
 }
 
 export interface NazarStateOptions {
@@ -285,6 +293,7 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
         ? {}
         : { runningWindowMs: this.treeOptions.runningWindowMs }),
       ...(this.treeOptions.quietMs === undefined ? {} : { quietMs: this.treeOptions.quietMs }),
+      ...(this.treeOptions.taskText === undefined ? {} : { taskText: this.treeOptions.taskText }),
     };
     return new SessionTreeWatcher(options);
   }
@@ -407,6 +416,8 @@ export class NazarState extends EventEmitter<NazarStateEvents> {
       if (tree.model !== undefined) view.model = tree.model;
       if (tree.effort !== undefined) view.effort = tree.effort;
       if (tree.currentTool !== undefined) view.currentTool = tree.currentTool;
+      // N-WP15a. Absent on every session unless the reader was asked for it.
+      if (tree.task !== undefined) view.task = tree.task;
       if (tree.tokens !== undefined) view.tokens = tree.tokens;
       if (tree.treeTokens !== undefined) view.treeTokens = tree.treeTokens;
       if (tree.toolCalls !== undefined) view.toolCalls = tree.toolCalls;

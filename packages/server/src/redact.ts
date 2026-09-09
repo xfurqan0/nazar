@@ -58,12 +58,54 @@ const SECRET_PATTERNS: readonly RegExp[] = [
 ];
 
 /**
+ * N-WP15a: the assignment-only form of the keyword rule, for prose.
+ *
+ * The rule above accepts whitespace as a separator, and that is right for a path
+ * or a command line — a value nobody has to be able to *read*, where
+ * over-masking costs nothing. It is wrong for a **sentence**, which is a value
+ * somebody has to be able to read: *Secret sweep before the flip* and *rotate
+ * the auth keys* are both eaten by it, and a task line masked down to
+ * `[redacted]` is a feature that looks broken rather than careful.
+ *
+ * So prose gets this instead: the same keywords, the same values, but an actual
+ * `:` or `=` between them. `token=abc` and `API_KEY: hunter2` are still masked;
+ * *the token rotation* is not. What is given up is a secret written with a bare
+ * space after the word — and every shape a real credential actually arrives in
+ * (`sk-ant-…`, `ghp_…`, a JWT, a bearer, a URL with a password in it) has its
+ * own literal pattern above and is caught whatever separates it from anything.
+ */
+const PROSE_ASSIGNMENT =
+  /[A-Za-z0-9_]*(?:api[_-]?key|secret|token|password|passwd|pwd|credential|auth)\b\s*[:=]\s*(?:"[^"]*"|'[^']*'|[^\s&"']+)/gi;
+
+/**
+ * Which entry of {@link SECRET_PATTERNS} is the loose keyword rule.
+ *
+ * Found rather than written down, so adding a vendor prefix above cannot
+ * silently point this at the wrong rule and quietly stop masking assignments in
+ * every task line on the canvas.
+ */
+const KEYWORD_PATTERN_INDEX = SECRET_PATTERNS.findIndex((pattern) =>
+  pattern.source.includes('passwd'),
+);
+
+/** The keyword rule a value of this kind should be swept with. */
+function patternsFor(prose: boolean): readonly RegExp[] {
+  if (!prose) return SECRET_PATTERNS;
+  return SECRET_PATTERNS.map((pattern, index) =>
+    index === KEYWORD_PATTERN_INDEX ? PROSE_ASSIGNMENT : pattern,
+  );
+}
+
+/**
  * Replace anything credential-shaped with {@link SECRET_MASK}. The URL rule
  * keeps its scheme so the result still reads as a URL.
+ *
+ * `prose` swaps the one rule that is a heuristic rather than a literal; see
+ * {@link PROSE_ASSIGNMENT} for what that gives up and what it does not.
  */
-export function redactSecrets(value: string): string {
+export function redactSecrets(value: string, prose = false): string {
   let out = value;
-  for (const pattern of SECRET_PATTERNS) {
+  for (const pattern of patternsFor(prose)) {
     pattern.lastIndex = 0;
     out = out.replace(pattern, (_match, scheme?: string) =>
       typeof scheme === 'string' ? `${scheme}${SECRET_MASK}@` : SECRET_MASK,
@@ -77,6 +119,20 @@ export interface RedactOptions {
   readonly home?: string;
   /** Characters kept before the ellipsis. Defaults to {@link REDACTION_HEAD}. */
   readonly head?: number;
+  /**
+   * N-WP15a: this value is a **sentence somebody typed**, not a path.
+   *
+   * Two things change, and they change in opposite directions:
+   *
+   * - the keyword sweep gets stricter about what it calls a secret
+   *   ({@link PROSE_ASSIGNMENT}), because a masked sentence is unreadable and
+   *   an unreadable task line is a broken feature rather than a careful one;
+   * - the home directory is collapsed **anywhere** in the string rather than
+   *   only at the front, because a path in a sentence is in the middle of it —
+   *   and the account name is the single most common accidental disclosure in
+   *   a shared screenshot, which is exactly what a canvas becomes.
+   */
+  readonly prose?: boolean;
 }
 
 /** Both separators, so a Windows path is collapsed whichever way it is written. */
@@ -101,6 +157,33 @@ export function collapseHome(value: string, home: string = os.homedir()): string
 }
 
 /**
+ * N-WP15a: the same collapse, but **wherever** the home directory appears.
+ *
+ * `collapseHome` above answers the question a `cwd` raises — *does this value
+ * start with the home directory* — and that is the right question for a value
+ * that is entirely a path. A sentence is not: "look at C:/Users/example/proj
+ * again" carries the account name in the middle of it, and one screenshot of a
+ * canvas is all it takes for that to be the disclosure the whole redaction
+ * module exists to prevent.
+ *
+ * Case-insensitively, because Windows paths are, and on both separators,
+ * because a person types whichever one they are looking at.
+ */
+export function collapseHomeAnywhere(value: string, home: string = os.homedir()): string {
+  let out = value;
+  for (const variant of homeVariants(home)) {
+    if (variant.length === 0) continue;
+    const lowered = variant.toLowerCase();
+    for (;;) {
+      const at = out.toLowerCase().indexOf(lowered);
+      if (at === -1) break;
+      out = `${out.slice(0, at)}~${out.slice(at + variant.length)}`;
+    }
+  }
+  return out;
+}
+
+/**
  * Mask, collapse, then cut to the first {@link REDACTION_HEAD} characters.
  * `undefined` in, `undefined` out, so a caller can pipe an optional field
  * straight through without inventing an empty string for it.
@@ -111,7 +194,10 @@ export function redact(value: string | undefined, options?: RedactOptions): stri
 export function redact(value: string | undefined, options: RedactOptions = {}): string | undefined {
   if (value === undefined) return undefined;
   const head = options.head ?? REDACTION_HEAD;
-  const masked = collapseHome(redactSecrets(value), options.home ?? os.homedir());
+  const prose = options.prose === true;
+  const home = options.home ?? os.homedir();
+  const swept = redactSecrets(value, prose);
+  const masked = prose ? collapseHomeAnywhere(swept, home) : collapseHome(swept, home);
   if (masked.length <= head) return masked;
   return `${masked.slice(0, head)}…`;
 }

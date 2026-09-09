@@ -78,10 +78,23 @@ export interface Agent {
   /** Full model id from the parent's `toolUseResult.resolvedModel`. */
   readonly modelId?: string;
   /**
-   * User-authored text from `meta.json`, capped at 200 characters. Hover card
-   * only: it is never persisted, never sent anywhere, and dropped when longer.
+   * User-authored text from `meta.json`, capped at 200 characters: the `Agent`
+   * tool's `description`, three to five words naming the job.
+   *
+   * Never persisted, and never sent anywhere **unless task text is switched on
+   * at both ends** (N-WP15a) — the server started without `--no-task-text`, and
+   * the browser asking for it. With it off, which is the default, `toWireAgent`
+   * drops the field exactly as it always did.
    */
   readonly description?: string;
+  /**
+   * N-WP15a: the brief this subagent was launched with — the first human turn
+   * of its own transcript, which is the `Agent` tool's `prompt`.
+   *
+   * Absent unless the reader was asked for task text. Cleaned and capped by
+   * `task-text.ts`; never written to disk, never logged, never in a fixture.
+   */
+  readonly task?: string;
   /** The parent's `Agent` tool-use id this subagent was launched from. */
   readonly toolUseId?: string;
   /** Set when the agent lives under `subagents/workflows/<runId>/`. */
@@ -185,6 +198,15 @@ export interface Session {
   readonly tokens?: SessionTokens;
   /** WP2 (transcript). */
   readonly currentTool?: string;
+  /**
+   * N-WP15a: what this session was last asked to do — the last human turn in
+   * its transcript, cleaned and capped by `task-text.ts`.
+   *
+   * Absent unless the reader was asked for task text, which nothing does by
+   * default. The **last** rather than the first, because an interactive session
+   * that has been open for an hour is not still doing what it was opened for.
+   */
+  readonly task?: string;
   /** WP2. Always empty in WP1. */
   readonly agents: readonly Agent[];
   /** Nazar's liveness verdict for this pass. */
@@ -248,6 +270,15 @@ export interface History {
   readonly durationMs?: number;
   readonly model?: string;
   readonly effort?: string;
+  /**
+   * N-WP15a: the last human turn of this finished session, under the same gate
+   * as the live canvas — absent unless the scanner was asked for task text.
+   *
+   * History is where "same rule, same gate" earns its keep: a frozen tree is
+   * read out of files that will never change again, so the only thing that can
+   * decide whether prose is read out of them is the switch.
+   */
+  readonly task?: string;
   /** The session transcript's own deduplicated totals. */
   readonly tokens?: SessionTokens;
   /** The session plus every subagent under it, each deduplicated separately. */

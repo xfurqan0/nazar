@@ -34,6 +34,7 @@ import { watchPath } from './fs-watch.js';
 import { sessionTranscriptPaths } from './paths.js';
 import type { SubagentsScan, WorkflowRun } from './subagent-meta.js';
 import { readSubagentsDir } from './subagent-meta.js';
+import type { ExtractOptions } from './task-text.js';
 import { extractTranscriptLine } from './transcript-extract.js';
 import type { AgentBridge, TokenTotals } from './transcript-stats.js';
 import { TranscriptStats, addTotals } from './transcript-stats.js';
@@ -67,6 +68,16 @@ export interface SessionTreeOptions {
   readonly runningWindowMs?: number;
   /** How long a transcript stays quiet before a closing turn counts as `done`. */
   readonly quietMs?: number;
+  /**
+   * N-WP15a: read the human turn's text out of every transcript this watcher
+   * tails, so the session and its subagents can say what they were asked to do.
+   *
+   * Off unless the caller says otherwise, and the switch is here — at the
+   * *reader* — rather than at the wire on purpose: with it off no task text is
+   * ever in this process to be filtered later, which is exactly what
+   * `nazar --no-task-text` promises and what a filter could not.
+   */
+  readonly taskText?: boolean;
   /** Clock, injected by tests. */
   readonly now?: () => number;
 }
@@ -80,6 +91,11 @@ export interface SessionTreeSnapshot {
   readonly model?: string;
   readonly effort?: string;
   readonly currentTool?: string;
+  /**
+   * N-WP15a: the session's last human turn. Absent unless `taskText` was asked
+   * for, and absent on a session whose transcript holds nothing a person typed.
+   */
+  readonly task?: string;
   readonly toolCalls?: number;
   readonly startedAt?: number;
   /** `mtimeMs` of the session transcript: when Claude Code last appended. */
@@ -119,6 +135,10 @@ function fingerprint(snapshot: SessionTreeSnapshot): string {
     snapshot.model ?? null,
     snapshot.effort ?? null,
     snapshot.currentTool ?? null,
+    // N-WP15a. In the fingerprint because a new turn on an otherwise idle
+    // session changes nothing else: without this the card would keep the
+    // previous task until some token count happened to move.
+    snapshot.task ?? null,
     snapshot.toolCalls ?? null,
     snapshot.startedAt ?? null,
     snapshot.lastWriteAt ?? null,
@@ -135,6 +155,7 @@ function fingerprint(snapshot: SessionTreeSnapshot): string {
       agent.modelId ?? null,
       agent.effort ?? null,
       agent.currentTool ?? null,
+      agent.task ?? null,
       agent.toolCalls ?? null,
       agent.tokens ?? null,
       agent.lastWriteAt ?? null,
@@ -170,6 +191,13 @@ export class SessionTreeWatcher extends EventEmitter<SessionTreeEvents> {
   private readonly runningWindowMs: number | undefined;
 
   private readonly quietMs: number | undefined;
+
+  /**
+   * N-WP15a. Frozen at construction and never re-read: the shell restarts the
+   * server to change it, so a watcher's answer to "may I read prose" cannot
+   * change under a running session.
+   */
+  private readonly extractOptions: ExtractOptions;
 
   private readonly now: () => number;
 
@@ -223,6 +251,7 @@ export class SessionTreeWatcher extends EventEmitter<SessionTreeEvents> {
     this.watchFactory = options.watchFactory ?? watchPath;
     this.runningWindowMs = options.runningWindowMs;
     this.quietMs = options.quietMs;
+    this.extractOptions = { taskText: options.taskText === true };
     this.now = options.now ?? Date.now;
     this.sessionTail = { tailer: new TranscriptTailer(paths.transcript), stats: new TranscriptStats() };
     this.current = {
@@ -312,7 +341,7 @@ export class SessionTreeWatcher extends EventEmitter<SessionTreeEvents> {
     if (result.restarted) tail.stats.reset();
     if (result.mtimeMs !== undefined) tail.lastWriteAt = result.mtimeMs;
     for (const line of result.lines) {
-      const event = extractTranscriptLine(line);
+      const event = extractTranscriptLine(line, this.extractOptions);
       if (event !== undefined) tail.stats.add(event);
     }
   }
@@ -340,6 +369,10 @@ export class SessionTreeWatcher extends EventEmitter<SessionTreeEvents> {
       if (tail.stats.effort !== undefined) entry.effort = tail.stats.effort;
       if (tail.stats.model !== undefined) entry.model = tail.stats.model;
       if (tail.stats.currentTool !== undefined) entry.currentTool = tail.stats.currentTool;
+      // N-WP15a: the *first* human turn of a subagent's own transcript is the
+      // brief the `Agent` tool launched it with. A `SendMessage` follow-up is a
+      // correction to a job, not the job.
+      if (tail.stats.firstTask !== undefined) entry.task = tail.stats.firstTask;
       entry.toolCalls = tail.stats.toolCalls;
       if (tail.stats.startedAt !== undefined) entry.startedAt = tail.stats.startedAt;
       if (tail.stats.lastEventAt !== undefined) entry.lastEventAt = tail.stats.lastEventAt;
@@ -394,6 +427,9 @@ export class SessionTreeWatcher extends EventEmitter<SessionTreeEvents> {
     if (sessionStats.model !== undefined) snapshot.model = sessionStats.model;
     if (sessionStats.effort !== undefined) snapshot.effort = sessionStats.effort;
     if (sessionStats.currentTool !== undefined) snapshot.currentTool = sessionStats.currentTool;
+    // N-WP15a: the *last* human turn of the session's own transcript — what it
+    // was asked to do most recently, which is the question a live card raises.
+    if (sessionStats.lastTask !== undefined) snapshot.task = sessionStats.lastTask;
     if (sessionStats.startedAt !== undefined) snapshot.startedAt = sessionStats.startedAt;
     if (lastWriteAt !== undefined) {
       snapshot.lastWriteAt = lastWriteAt;

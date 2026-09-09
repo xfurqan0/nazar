@@ -32,6 +32,66 @@ import { makeDemoQuota } from './demo-quota.js';
 
 const MINUTE = 60_000;
 
+/* ------------------------------------------------------------------ *
+ * N-WP15a: invented task text
+ * ------------------------------------------------------------------ */
+
+/**
+ * The tasks the demo canvas shows, and every one of them is made up.
+ *
+ * This is the one part of the demo where "nothing here is real" stops being a
+ * convention and becomes a rule with a test behind it. Everything else in this
+ * file is a number, an id or a placeholder path, and a slip would produce a
+ * screenshot with a wrong pid in it. These are *sentences*, and a slip would
+ * produce a screenshot of what somebody was actually working on — which is the
+ * single worst thing this repository could publish, because a demo screenshot
+ * is exactly what ends up in a README.
+ *
+ * So they are written here, by hand, about work that does not exist, and
+ * `test/demo.test.ts` asserts that every task the demo state carries came out
+ * of one of these three lists. Nothing is read from a machine, a transcript, a
+ * fixture or an environment variable to build them.
+ */
+export const DEMO_TASKS: readonly string[] = [
+  'Sweep the repository for secrets before the public flip',
+  'Work out why the canvas empties itself when the socket drops',
+  'Rewrite the release notes so a stranger can follow them',
+  'Find every place the port is assumed to be the default one',
+  'Make the frozen tree read the same tomorrow as it does today',
+];
+
+/** The briefs a subagent's hover card shows: longer, and equally invented. */
+export const DEMO_BRIEFS: readonly string[] = [
+  'Read every file under packages/ and list the ones that could write to disk, with the call that would do it. Report the list; change nothing.',
+  'Map how a snapshot travels from the reader to the browser and name each place a field could be dropped without anybody noticing.',
+  'Check the six catalogues against each other: same keys, same placeholders, and a complete set of plural forms for every counted key.',
+  'Reproduce the resize bug at 200 % zoom, then say which of the eight handles is taking the press it should not.',
+  'Compare the two ways a session can be found and describe what each one knows that the other does not.',
+];
+
+/** The three-to-five-word labels the `Agent` tool writes as its description. */
+export const DEMO_AGENT_LABELS: readonly string[] = [
+  'Secret sweep',
+  'Trace the snapshot',
+  'Catalogue parity check',
+  'Resize handle repro',
+  'Compare the two sources',
+];
+
+/**
+ * Pick one entry for an id, deterministically.
+ *
+ * The demo has to be identical from one run to the next — that is the whole
+ * reason it exists — so this is a character sum rather than the shared
+ * `mulberry` generator, whose state depends on how many times it has been
+ * called and therefore on the order the seeds happen to be walked in.
+ */
+function pickFor<T>(list: readonly T[], key: string): T {
+  let sum = 0;
+  for (let i = 0; i < key.length; i += 1) sum = (sum + key.charCodeAt(i) * (i + 1)) % 65_536;
+  return list[sum % list.length] as T;
+}
+
 /** Deterministic pseudo-random, so a generated canvas is the same every run. */
 function mulberry(seed: number): () => number {
   let state = seed >>> 0;
@@ -86,6 +146,11 @@ function buildAgents(sessionId: string, seeds: readonly AgentSeed[], now: number
     if (seed.tokens !== undefined) agent.tokens = seed.tokens;
     if (seed.toolCalls !== undefined) agent.toolCalls = seed.toolCalls;
     if (seed.orphan !== undefined) agent.orphan = seed.orphan;
+    // N-WP15a. Every demo agent carries both, so a screenshot taken with the
+    // setting on shows the feature rather than a canvas of blank lines. The
+    // canvas still only draws them when the switch is on.
+    agent.description = pickFor(DEMO_AGENT_LABELS, seed.id);
+    agent.task = pickFor(DEMO_BRIEFS, seed.id);
     if (seed.startedMinutesAgo !== undefined) {
       agent.startedAt = now - seed.startedMinutesAgo * MINUTE;
     }
@@ -187,6 +252,9 @@ function buildSession(seed: SessionSeed, now: number, captures: boolean): Sessio
   if (seed.model !== undefined) view.model = seed.model;
   if (seed.effort !== undefined) view.effort = seed.effort;
   if (seed.currentTool !== undefined) view.currentTool = seed.currentTool;
+  // N-WP15a: invented, from the list above, and keyed on the session id so the
+  // same card shows the same task on every run.
+  view.task = pickFor(DEMO_TASKS, seed.id);
   if (seed.tokens !== undefined) {
     view.tokens = seed.tokens;
     view.treeTokens = agents.reduce<SessionTokens>(

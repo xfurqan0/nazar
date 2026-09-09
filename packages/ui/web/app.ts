@@ -89,6 +89,7 @@ import {
   writeLocaleChoice,
 } from '../src/i18n.ts';
 import { shortcutFor } from '../src/shortcuts.ts';
+import { readTaskText, withTaskQuery, writeTaskText } from '../src/task-text.ts';
 import { readUsageOpen, writeUsageOpen } from '../src/usage-popover.ts';
 import type { LayoutState, TabsState } from '../src/workspace.ts';
 import {
@@ -148,7 +149,7 @@ import { UsagePanel } from './quota.ts';
 import { fillSegment, paintSwitch, SettingsPanel } from './settings.ts';
 import { jumpHint, jumpNeedsShell, Shell } from './shell.ts';
 import { Sidebar } from './sidebar.ts';
-import { CanvasMenu, CardMenu, TabBar } from './tabbar.ts';
+import { CanvasMenu, CardMenu, LinkMenu, TabBar } from './tabbar.ts';
 
 declare const __NAZAR_VERSION__: string;
 
@@ -380,10 +381,23 @@ class HoverCard {
 
   private readonly note: HTMLDivElement;
 
+  /**
+   * N-WP15a: the task, in full.
+   *
+   * A row would be wrong — every row here is a label and a short value on one
+   * line, and this is up to 300 characters of somebody's prose — so it is its
+   * own block under the subtitle, above the measurements. Hidden when there is
+   * nothing to show, which is the same rule the two capture rows follow and
+   * which keeps the card from reflowing into an empty gap.
+   */
+  private readonly task: HTMLDivElement;
+
   constructor(root: HTMLDivElement) {
     this.root = root;
     this.title = html('div', 'nz-card__title');
     this.subtitle = html('div', 'nz-card__subtitle');
+    this.task = html('div', 'nz-card__task');
+    this.task.hidden = true;
     const body = html('div', 'nz-card__body');
     // "cache read" is the one row nobody believes: it is the whole prompt
     // prefix re-read once per request, so it sits three orders of magnitude
@@ -393,7 +407,7 @@ class HoverCard {
     // `title` attribute is set anyway for anything reading the DOM.
     const note = html('div', 'nz-card__note');
     this.note = note;
-    root.append(this.title, this.subtitle, body, note);
+    root.append(this.title, this.subtitle, this.task, body, note);
 
     // Every row is created once and only written to. The two optional ones are
     // hidden rather than filled with `unknown`: a row that says "unknown"
@@ -427,6 +441,21 @@ class HoverCard {
       const row = this.rows.get(label);
       if (row !== undefined && label === 'cache read') row.title = cacheReadNote();
     }
+  }
+
+  /**
+   * Show the task, or take the block off the card.
+   *
+   * The text is written with `setText`, so it is a text node and nothing else:
+   * whatever a transcript happens to contain — angle brackets, an entity, a
+   * script tag — arrives as the characters somebody typed. That is the reason
+   * `task-text.ts` deliberately does *not* escape anything on the way out: the
+   * two places this string is drawn are an SVG text node and this one, and
+   * neither interprets markup.
+   */
+  private setTask(text: string | undefined): void {
+    this.task.hidden = text === undefined;
+    setText(this.task, text ?? '');
   }
 
   private set(label: (typeof CARD_ROWS)[number], value: string): void {
@@ -466,6 +495,9 @@ class HoverCard {
             state: session.state,
           }),
     );
+    // N-WP15a. `session.task` is present only when this browser asked for it
+    // and the server agreed, so there is nothing more to decide here.
+    this.setTask(session.task);
     this.set('model', orUnknown(session.model));
     this.set('effort', orUnknown(session.effort));
     // Frozen: how long the run took, and when it ended. A relative age on a
@@ -512,6 +544,14 @@ class HoverCard {
           ? ''
           : ` · ${t('hover.workflow', { id: agent.workflowRunId })}`),
     );
+    /*
+     * N-WP15a. The **brief**, not the label — the opposite choice to the node,
+     * and for the opposite reason: the node has 156 px and shows the three-word
+     * `description`, and this card has room for the 300 characters that say what
+     * the job actually was. The label is already on the node the pointer is
+     * sitting on, so repeating it here would spend the space saying nothing new.
+     */
+    this.setTask(agent.task ?? agent.description);
     this.set('model', orUnknown(agent.modelId ?? agent.model));
     this.set('effort', orUnknown(agent.effort));
     this.set(
@@ -650,6 +690,11 @@ function start(): void {
   const shellGroup = element<HTMLElement>('shell-group');
   const shellAbout = element<HTMLParagraphElement>('shell-about');
   const autostartButton = element<HTMLButtonElement>('autostart-toggle');
+  // N-WP15a: the two halves of one setting. The first is this browser's and is
+  // always there; the second is the machine's and only the shell can answer it.
+  const taskTextButton = element<HTMLButtonElement>('task-text-toggle');
+  const recordingButton = element<HTMLButtonElement>('recording-toggle');
+  const linkMenuRoot = element<HTMLDivElement>('linkmenu');
   // N-WP12: the drawer's two views, the gear that swaps them, and the slot the
   // folder-tab rule sits in now that it is a setting rather than a list row.
   const sidebarMain = element<HTMLElement>('sidebar-main');
@@ -723,6 +768,33 @@ function start(): void {
   // rather than a reading of the machine — and it follows the same rule: this
   // browser keeps it, nothing else ever sees it.
   let names: NamesState = readNames(storage);
+  /*
+   * N-WP15a: does this browser want the task line?
+   *
+   * One variable, read once at start-up and written when the switch moves. It
+   * reaches four places and they all have to agree on the same frame: the
+   * *measure* pass (a node showing a task is one line taller), the *draw* pass,
+   * the SSE subscription (the server sends the field only for `?task=1`) and
+   * the history fetch. A disagreement between the first two draws a tree
+   * outside its card; between the last two, a card whose task line appears live
+   * and vanishes in history.
+   */
+  let taskText = readTaskText(storage);
+
+  /*
+   * Re-open the SSE stream at a URL that matches the current setting.
+   *
+   * The subscription's shape is fixed by the request that opened it — the
+   * server reads `?task=1` once, at subscribe — so changing the setting means
+   * a new connection rather than a new frame on the old one. Declared here and
+   * filled in at the bottom of this function, where the stream is created: the
+   * settings panel is built long before that and would otherwise have to be
+   * moved for the sake of one call.
+   *
+   * In demo mode there is no stream at all and this stays the no-op it starts
+   * as, which is correct — the demo data is already in the page.
+   */
+  let restartStream = (): void => {};
 
   const saveLayout = (): void => writeLayout(storage, layout);
   const saveTabs = (): void => writeTabs(storage, tabs);
@@ -838,6 +910,29 @@ function start(): void {
   });
   sidebar.set(layout.sidebar, false);
 
+  /*
+   * N-WP15a: the everyday switch.
+   *
+   * Three things happen on a click and all three are needed. The choice is
+   * remembered for this browser; the stream is re-opened, because the server
+   * decides whether to send the field from the URL that subscribed; and the
+   * canvas is re-measured, because a node carrying a task is a line taller and
+   * the cards have to be sized around the tree again.
+   *
+   * The card the user placed does not move: the session card's task line lives
+   * in a gap the header already had, so `CARD.headerHeight` — which is what
+   * every stored width and dragged height is held against — is the same number
+   * in both states.
+   */
+  paintSwitch(taskTextButton, taskText);
+  taskTextButton.addEventListener('click', () => {
+    taskText = !taskText;
+    writeTaskText(storage, taskText);
+    paintSwitch(taskTextButton, taskText);
+    restartStream();
+    schedule();
+  });
+
   paintSwitch(demoButton, demo);
   demoButton.addEventListener('click', () => {
     const next = new URLSearchParams(window.location.search);
@@ -890,6 +985,46 @@ function start(): void {
         }
         autostartOn = now;
         paintAutostart(autostartOn, platform);
+      });
+    });
+
+    /*
+     * N-WP15a: recording mode — the hard switch, and the one control here that
+     * changes what the machine does rather than what this browser shows.
+     *
+     * On means the shell writes `taskText: "off"` into `desktop.json` and
+     * **restarts the child server with `--no-task-text`**, so the readers come
+     * back up unable to take transcript text out of a file at all. That is why
+     * it is worth a restart: a switch that only stopped sending the field would
+     * leave the text in memory, and the sentence this mode exists to be able to
+     * say is *nothing was read*.
+     *
+     * The shell answers with what the setting is **now**, and the button paints
+     * that rather than what was asked for — the same rule as the autostart
+     * switch above, for the same reason. The stream is re-opened afterwards
+     * because the server behind it is a new process.
+     */
+    let recordingOn = false;
+    const paintRecording = (on: boolean): void => {
+      recordingOn = on;
+      paintSwitch(recordingButton, on);
+      // A machine in recording mode makes the browser's own switch pointless:
+      // it can be on and still show nothing. Saying so beats leaving somebody
+      // to wonder why the line they switched on is not there.
+      taskTextButton.disabled = on;
+    };
+    void shell.taskTextOff().then((off) => paintRecording(off ?? false));
+
+    recordingButton.addEventListener('click', () => {
+      const wanted = !recordingOn;
+      void shell.setTaskTextOff(wanted).then((now) => {
+        if (now === undefined) {
+          showHint(t('hint.recordingFailed'));
+          return;
+        }
+        paintRecording(now);
+        restartStream();
+        schedule();
       });
     });
   }
@@ -1582,11 +1717,10 @@ function start(): void {
     const sessions = shown.sessions;
     const collapsed = new Set(frozen ? [] : layout.collapsed);
 
-    const metrics = measureCards(
-      sessions,
-      collapsed,
-      frozen ? {} : { widths: layout.widths, heights: layout.heights },
-    );
+    const metrics = measureCards(sessions, collapsed, {
+      ...(frozen ? {} : { widths: layout.widths, heights: layout.heights }),
+      taskText,
+    });
     const placements = frozen
       ? frozenPlacements(sessions, metrics)
       : resolvePlacements(sessions, metrics);
@@ -1596,6 +1730,7 @@ function start(): void {
       // WP4g. A frozen tree is a read of the past and belongs to no tab; it is
       // also not one of the canvas's cards, so it carries no name of its own.
       ...(frozen ? {} : { names: names.names }),
+      taskText,
     }).bounds;
     // Held for the gestures: a resize needs the card it is about to change and
     // the tree that decides how small it may get, and neither is worth
@@ -1702,6 +1837,7 @@ function start(): void {
     const metrics = measureCards(sessions, new Set(layout.collapsed), {
       widths: layout.widths,
       heights: layout.heights,
+      taskText,
     });
     const boxes = boxesOf(sessions, metrics);
     for (const placement of packShelves(boxes, packSpec(boxes)).placements) {
@@ -1731,6 +1867,34 @@ function start(): void {
       if (item === 'add-note') addNoteAt(at.x, at.y);
       else if (item === 'arrange') arrange();
       else fit();
+    },
+  });
+
+  /*
+   * N-WP15a: what the two link entries actually do.
+   *
+   * *Open* is `window.open(..., '_blank', 'noopener')` in both modes and that is
+   * not a compromise — the shell's `capabilities/canvas.json` deliberately grants
+   * the canvas no shell or opener permission at all, and a webview navigation to
+   * an external site is caught by Tauri's own external-link handling, which
+   * hands it to the machine's browser. So the page asks for the same thing
+   * everywhere and each host does the right thing with it, instead of the canvas
+   * having to learn which host it is in and the shell having to grow a fifth
+   * command the whole loopback origin could then call.
+   *
+   * *Copy* fails silently. `navigator.clipboard` is refused in some contexts and
+   * needs a permission in others; the address is printed in the menu the user is
+   * looking at, so a failure leaves them one selection away from it, and a hint
+   * saying "could not copy" would be noise on top of something they can see.
+   */
+  const linkMenu = new LinkMenu({
+    root: linkMenuRoot,
+    onPick: (item, href) => {
+      if (item === 'open') {
+        window.open(href, '_blank', 'noopener');
+        return;
+      }
+      void navigator.clipboard?.writeText(href).catch(() => undefined);
     },
   });
 
@@ -1855,6 +2019,29 @@ function start(): void {
       ? node.closest<HTMLElement>('.nz-note')?.dataset['noteId']
       : undefined;
 
+  /**
+   * N-WP15a: the address of the `<a href>` a pointer event happened in.
+   *
+   * `closest('a[href]')` because a link can wrap a `<span>` or an icon, and
+   * `element.href` rather than the attribute so a relative address arrives
+   * already resolved — the menu shows it and the shell has to open it, and both
+   * want the absolute form. Only `http` and `https` are answered: a `mailto:`
+   * or a `javascript:` is not something this menu's two entries mean anything
+   * for, and refusing them here is cheaper than teaching the shell to.
+   */
+  const linkHrefAt = (node: EventTarget | null): string | undefined => {
+    if (!(node instanceof Element)) return undefined;
+    // `'a'` rather than `'a[href]'`: nested anchors are invalid markup, so the
+    // nearest `<a>` is the only candidate either way — and an `<a>` with no
+    // address has an empty `href`, which the scheme check below refuses anyway.
+    // (It also keeps this literal a bare word, which is what the N-WP13 gate
+    // wants from a string in a page module.)
+    const anchor = node.closest<HTMLAnchorElement>('a');
+    if (anchor === null) return undefined;
+    const href = anchor.href;
+    return href.startsWith('http://') || href.startsWith('https://') ? href : undefined;
+  };
+
   /** The note being typed into right now, if one is. */
   const noteWithCaret = (): string | undefined => {
     const caret = document.activeElement;
@@ -1936,6 +2123,7 @@ function start(): void {
     if (event.defaultPrevented) return;
     const note = noteIdAt(event.target);
     const sessionId = sessionIdOf(event.target);
+    const href = linkHrefAt(event.target);
     // A press moved the caret itself, so the note it was in beforehand is the
     // honest answer; the keyboard's own menu key moved nothing.
     const caret = askedByPointer ? caretNoteAtPress : noteWithCaret();
@@ -1944,6 +2132,7 @@ function start(): void {
       onCanvas: event.target instanceof Node && host.contains(event.target),
       ...(note === undefined ? {} : { noteId: note, editing: caret === note }),
       ...(sessionId === undefined ? {} : { sessionId }),
+      ...(href === undefined ? {} : { href }),
       frozen: isFrozen(),
     });
     if (action === 'native') return;
@@ -1953,8 +2142,15 @@ function start(): void {
     if (action === 'suppress') return;
     cardMenu.close();
     canvasMenu.close();
+    linkMenu.close();
     notesLayer.closeMenus();
     const anchor = { left: event.clientX, top: event.clientY, bottom: event.clientY };
+    // N-WP15a. Before the note and the card, because a link inside either is
+    // still a link and the two entries it offers are about the address.
+    if (action === 'link-menu' && href !== undefined) {
+      linkMenu.open(anchor, href);
+      return;
+    }
     if (action === 'note-menu' && note !== undefined) {
       notesLayer.openMenu(note, { clientX: event.clientX, clientY: event.clientY });
       return;
@@ -2022,6 +2218,11 @@ function start(): void {
     const node = event.target;
     if (canvasMenu.isOpen && !(node instanceof Node && canvasMenuRoot.contains(node))) {
       canvasMenu.close();
+    }
+    // N-WP15a: the same rule for the link menu, which lives on the chrome and
+    // so is never closed by the canvas's own handler.
+    if (linkMenu.isOpen && !(node instanceof Node && linkMenuRoot.contains(node))) {
+      linkMenu.close();
     }
     if (usage.isOpen && node instanceof Node && !usage.contains(node)) usage.set(false, false);
     if (node instanceof Element && node.closest('.nz-note') === null) notesLayer.closeMenus();
@@ -2092,7 +2293,7 @@ function start(): void {
           pointerY: event.clientY,
           start,
           bounds: {
-            minWidth: cardMinimumFor(session, metric.collapsed).width,
+            minWidth: cardMinimumFor(session, metric.collapsed, taskText).width,
             maxWidth: MAX_CARD_WIDTH,
             /*
              * The floor on the height is not the same question for the two
@@ -2315,7 +2516,11 @@ function start(): void {
 
   // One instance, so the demo source remembers which rows have been opened and
   // the listing hydrates exactly as the real one does.
-  const transport: HistoryTransport = demo ? makeDemoHistory() : httpTransport();
+  const transport: HistoryTransport = demo
+    ? makeDemoHistory()
+    // N-WP15a: a getter rather than a value, so a session opened after the
+    // switch moved is fetched the way the live canvas is drawing.
+    : httpTransport(() => taskText);
 
   const panel = new HistoryPanel({
     root: historyRoot,
@@ -2451,6 +2656,12 @@ function start(): void {
       // is the case where the menu is open and the keyboard is elsewhere.
       if (notesLayer.openMenuFor !== undefined) {
         notesLayer.closeMenus();
+        return;
+      }
+      // N-WP15a: and the link menu, which is the fourth menu on this page and
+      // keeps the same contract as the other three.
+      if (linkMenu.isOpen) {
+        linkMenu.close();
         return;
       }
       if (canvasMenu.isOpen) {
@@ -2629,36 +2840,61 @@ function start(): void {
   syncHash();
   setConnection('connecting');
   let everConnected = false;
-  const source = new EventSource('/api/events');
-  source.addEventListener('state', (event) => {
-    try {
-      state = JSON.parse((event as MessageEvent<string>).data) as StateSnapshot;
-    } catch {
-      return;
-    }
-    everConnected = true;
-    setConnection('live');
-    schedule();
-    // One listing, once, and only to decide what to forget. It opens no
-    // transcript: the scanner lists by `readdir` and `stat` alone.
-    if (!pruned) {
-      void transport
-        .list(200)
-        .then((page) => prune(page.sessions.map((one) => one.sessionId)))
-        .catch(() => undefined);
-    }
-  });
-  source.addEventListener('open', () => {
-    everConnected = true;
-    setConnection('live');
-  });
-  source.addEventListener('error', () => {
-    // EventSource retries on its own and leaves `readyState` at CONNECTING
-    // while it does, so that flag cannot tell "starting up" from "dropped".
-    // Having once been live is what makes this a disconnection, and the canvas
-    // keeps the last snapshot on screen rather than blanking itself.
-    setConnection(everConnected ? 'lost' : 'connecting');
-  });
+  /*
+   * N-WP15a: the stream carries the setting in its URL.
+   *
+   * `?task=1` only when this browser asked for it. A server started with
+   * `--no-task-text` ignores the parameter and answers without the field, which
+   * is the precedence that matters: the machine's owner outranks the page.
+   */
+  let source = new EventSource(withTaskQuery('/api/events', taskText));
+  const listen = (channel: EventSource): void => {
+    channel.addEventListener('state', (event) => {
+      try {
+        state = JSON.parse((event as MessageEvent<string>).data) as StateSnapshot;
+      } catch {
+        return;
+      }
+      everConnected = true;
+      setConnection('live');
+      schedule();
+      // One listing, once, and only to decide what to forget. It opens no
+      // transcript: the scanner lists by `readdir` and `stat` alone.
+      if (!pruned) {
+        void transport
+          .list(200)
+          .then((page) => prune(page.sessions.map((one) => one.sessionId)))
+          .catch(() => undefined);
+      }
+    });
+    channel.addEventListener('open', () => {
+      everConnected = true;
+      setConnection('live');
+    });
+    channel.addEventListener('error', () => {
+      // EventSource retries on its own and leaves `readyState` at CONNECTING
+      // while it does, so that flag cannot tell "starting up" from "dropped".
+      // Having once been live is what makes this a disconnection, and the canvas
+      // keeps the last snapshot on screen rather than blanking itself.
+      setConnection(everConnected ? 'lost' : 'connecting');
+    });
+  };
+  listen(source);
+
+  /*
+   * N-WP15a. Closing and re-opening rather than asking the old stream to change
+   * its mind: the server decided this connection's shape when it accepted it,
+   * and a second connection left open would go on pushing frames of the old
+   * shape underneath the new one.
+   *
+   * `everConnected` is deliberately not reset. This is not a dropped socket and
+   * the canvas must not flash *disconnected* because somebody moved a switch.
+   */
+  restartStream = (): void => {
+    source.close();
+    source = new EventSource(withTaskQuery('/api/events', taskText));
+    listen(source);
+  };
 
   // Elapsed times and write ages keep moving between snapshots.
   window.setInterval(schedule, 1000);

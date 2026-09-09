@@ -299,10 +299,46 @@
                   <span class="nz-switch__label" data-nz-t="settings.autostart.windows"></span>
                   <span class="nz-switch__track" aria-hidden="true"></span>
                 </button>
+                <!--
+                  N-WP15a: the hard switch, and the only control on this page
+                  that changes what the *machine* does rather than what this
+                  browser shows. It restarts the child server with
+                  `--no-task-text`, so it is the shell's to offer and it is not
+                  drawn in a browser — there the same thing is a CLI flag, and a
+                  person running `npx` is already at a command line.
+                -->
+                <button
+                  id="recording-toggle"
+                  type="button"
+                  class="nz-switch"
+                  role="switch"
+                  aria-checked="false"
+                >
+                  <span class="nz-switch__label" data-nz-t="settings.recording"></span>
+                  <span class="nz-switch__track" aria-hidden="true"></span>
+                </button>
+                <p class="nz-about__line" data-nz-t="settings.recordingNote"></p>
               </div>
               <!-- `web/projects.ts` puts the auto-create switch here: the list it
                    belongs to is in the drawer, but the rule is a setting. -->
               <div id="auto-tabs" class="nz-settings__slot"></div>
+              <!--
+                N-WP15a: the everyday half of the same setting. Off on a fresh
+                install and in every new browser; the note under it is the whole
+                privacy contract in one line, which is short enough that nobody
+                has to go and read a README to know what they just switched on.
+              -->
+              <button
+                id="task-text-toggle"
+                type="button"
+                class="nz-switch"
+                role="switch"
+                aria-checked="false"
+              >
+                <span class="nz-switch__label" data-nz-t="settings.taskText"></span>
+                <span class="nz-switch__track" aria-hidden="true"></span>
+              </button>
+              <p class="nz-about__line" data-nz-t="settings.taskTextNote"></p>
               <button
                 id="demo-toggle"
                 type="button"
@@ -500,6 +536,13 @@
     <div id="cardmenu" class="nz-menu" role="menu" hidden></div>
     <!-- What a right-click on empty canvas offers instead of the browser's menu. -->
     <div id="canvasmenu" class="nz-menu" role="menu" hidden></div>
+    <!--
+      N-WP15a. And what a right-click on a link offers, which `8526e9a` had
+      taken away and put nothing in the place of: open it in the machine's
+      browser, or copy the address. Same element kind as the two above, so one
+      stylesheet rule and one Escape behaviour cover all three.
+    -->
+    <div id="linkmenu" class="nz-menu" role="menu" hidden></div>
 
     <script src="bundle.js" defer></script>
   </body>

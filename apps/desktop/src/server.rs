@@ -277,7 +277,7 @@ pub fn plan_port(stored: Option<u16>, version: &str) -> Option<Plan> {
 ///
 /// `stored` is the port from `desktop.json`, and the returned handle's `port` is the one
 /// the caller should store back. A launch that reuses its port writes nothing.
-pub fn start(entry: &Path, stored: Option<u16>) -> Result<ServerHandle, String> {
+pub fn start(entry: &Path, stored: Option<u16>, task_text: bool) -> Result<ServerHandle, String> {
     let entry = simplify(entry);
     // The plan is used once. If the stored port fails to start a server, every later
     // attempt asks the operating system for a number nobody has, because retrying a port
@@ -287,12 +287,29 @@ pub fn start(entry: &Path, stored: Option<u16>) -> Result<ServerHandle, String> 
 
     for attempt in 1..=ATTEMPTS {
         let port = match planned.take() {
-            Some(Plan::Adopt(port)) => match adopt(port) {
+            // N-WP15a. A server this shell did not start was started by
+            // somebody else, on somebody else's command line, and there is no
+            // way to ask it whether it was started with `--no-task-text`.
+            // Adopting one while recording mode is on would mean showing a
+            // canvas that could hand out task text under a switch that
+            // promises it cannot. So in recording mode the shell never adopts:
+            // it starts a server it knows the flags of. The cost is one
+            // ephemeral port and therefore, once, the browser-stored
+            // arrangement — which is the right way round, because the mode
+            // exists for the moment a screen is being shared.
+            Some(Plan::Adopt(port)) if task_text => match adopt(port) {
                 Ok(handle) => return Ok(handle),
                 Err(error) => {
                     // It answered a moment ago and does not now. Fall through to starting
                     // one of our own rather than reporting somebody else's shutdown.
                     last = format!("attempt {attempt} of {ATTEMPTS} adopting port {port}: {error}");
+                    continue;
+                }
+            },
+            Some(Plan::Adopt(_)) => match free_port() {
+                Ok(port) => port,
+                Err(error) => {
+                    last = format!("attempt {attempt} of {ATTEMPTS}: no free port ({error})");
                     continue;
                 }
             },
@@ -306,7 +323,7 @@ pub fn start(entry: &Path, stored: Option<u16>) -> Result<ServerHandle, String> 
             },
         };
 
-        match attempt_start(&entry, port) {
+        match attempt_start(&entry, port, task_text) {
             Ok(handle) => return Ok(handle),
             Err(error) => {
                 // The path is in every failure line, because a server that will not start
@@ -337,12 +354,24 @@ fn adopt(port: u16) -> Result<ServerHandle, String> {
     })
 }
 
-fn attempt_start(entry: &Path, port: u16) -> Result<ServerHandle, String> {
-    let mut child = node::command("node")
+fn attempt_start(entry: &Path, port: u16, task_text: bool) -> Result<ServerHandle, String> {
+    let mut command = node::command("node");
+    command
         .arg(entry)
         .arg("--no-open")
         .arg("--port")
-        .arg(port.to_string())
+        .arg(port.to_string());
+    // N-WP15a. Recording mode is passed to the child as the CLI flag rather
+    // than as a setting the server would have to read for itself: the flag is
+    // already the documented way to say this, `desktop.json` is the shell's
+    // file and not the server's, and a flag on the command line is something a
+    // user can see in Task Manager. Turning the mode on is therefore a server
+    // restart, which is exactly what makes the guarantee real — the readers
+    // come back up unable to take text out of a transcript at all.
+    if !task_text {
+        command.arg("--no-task-text");
+    }
+    let mut child = command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())

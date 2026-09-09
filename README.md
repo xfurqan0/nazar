@@ -126,6 +126,52 @@ None of this touches a session. Moving a card moves a picture in your browser.
 
 **Names and projects never leave the browser.** A card's name is not sent to the server, not written to disk and not pushed into your session. A project is matched against the working directory the canvas was already drawing on the card — the redacted one, with your home directory collapsed to `~` — so nothing about this feature put a path on the wire or in a screenshot that was not there before. That is also why a project under your home directory is written the way the cards write it, `~/proj/app`, and the expanded form does not match: the browser is never told what `~` stands for.
 
+### Task text
+
+**Off by default, and it is the only place Nazar shows *what* rather than *how much*.**
+The switch is in the settings panel under **Behaviour**, next to the note that is the whole
+contract: *read from the transcript, never written to disk, kept in this browser only*.
+With it on, a session card gains one quiet line under its folder saying what it was last
+asked to do, and each subagent node gains one saying what it was launched for. Hover either
+and the card shows the whole thing, up to 300 characters.
+
+What is on that line, exactly:
+
+- **A session shows its last human turn.** Not its first — a session you opened this
+  morning is not still doing what you opened it for, and the card is answering *what is
+  this one doing now*.
+- **A subagent shows its first**, which is the brief the `Agent` tool launched it with. A
+  later message to a running agent is a correction to a job; the brief is the job. The node
+  itself shows the three-to-five-word label the `Agent` tool wrote instead, when there is
+  one, because 156 pixels have room for a label and not for a sentence — the sentence is on
+  the hover card.
+- **Never the model's reply**, never a tool result, never a system reminder, never a slash
+  command's own bookkeeping and never an interruption marker. Those are the four other
+  things Claude Code writes into a `user` line, and none of them is something you typed.
+- **One line, cleaned.** Line breaks collapse, control characters and invisible formatting
+  are dropped — a right-to-left override in a task would otherwise display a card's line
+  backwards — the text is cut at 300 characters with the cut marked, and anything
+  credential-shaped is masked on the way out, exactly as a working directory is.
+
+Three switches, and each one outranks the one before it:
+
+1. **The browser's**, in the settings panel. Off on a fresh install and off in every new
+   browser; it lives in `localStorage` on the canvas's own origin, so it is per browser and
+   goes nowhere.
+2. **The request's.** The server adds the field only for a request that carries `?task=1`,
+   which is what the switch above sends. A browser that has not switched it on receives the
+   payload it always received, with no `task` key on it at all.
+3. **The machine's.** `nazar --no-task-text`, or `NAZAR_TASK_TEXT=0`, and the server never
+   *reads* the text — not "does not send it", does not take it out of the file. No browser
+   talking to that server can be shown a task line whatever its own switch says. In the
+   desktop app the same thing is the **recording mode** switch, which writes the setting and
+   restarts the canvas server with that flag. It is the one to use while sharing a screen.
+
+`?demo=1` shows the feature with invented tasks about work that does not exist, and a test
+asserts that every task on the demo canvas came out of a hand-written list — a demo
+screenshot is what ends up in a README, and it must never be a picture of somebody's real
+work.
+
 ### Six UI languages
 
 **English, Türkçe, 中文, 한국어, Русский, Español.** Every word the canvas draws comes from
@@ -243,6 +289,7 @@ explanation is worse than none. It still writes nothing, anywhere.
 - **`limits.json` is written to be safe to paste into a bug report.** No tokens, no account identifiers, no session ids — a percentage, a state and a reset time per window, plus the plan name and which source produced it.
 - **Nazar still writes nothing.** It reads `~/.nazar`; it never creates, changes or deletes anything in it, and the same static gate that proves it cannot write to `~/.claude` covers `~/.nazar` too. It reads three settings files for one key each — `.claude/settings.json` and `.claude/settings.local.json` inside your projects, for the caveat above, and `~/.claude/settings.json`, so `nazar doctor` can say whether the wrapper is your status line at all and roughly when it was installed. All three are opened read-only, the key is `statusLine.command` and nothing else is looked at, and the static gate allows those names in one reader, its barrel and `doctor` and fails the build anywhere else. Nothing in Nazar can write to any of them: precision mode (v1.1) is still the only thing that will ever change one, with a backup, a shown diff and an exact uninstall.
 - **A jump reads other sessions' transcripts.** Working out which tabs are already spoken for means reading `~/.claude/sessions/<pid>.json` for the other live sessions and scanning up to a megabyte from the tail of up to 33 transcripts — backwards, stopping at the first `ai-title` line, so no transcript is read whole and no other line type is parsed. Two title fields are all that leaves the module: the text, and what produced it. Nothing is written, and none of it happens until you jump on a Windows Terminal host.
+- **Task text is off, and it is off in three places.** The line saying what a session was asked to do is a *setting*, not a feature: the browser's switch starts off and lives only in that browser's `localStorage`; the server sends the field only to a request that asked for it, so a browser that has not switched it on is answered exactly as it was before this existed; and `nazar --no-task-text` (or `NAZAR_TASK_TEXT=0`) stops the readers extracting any text at all, so there is nothing in the process to send. What is shown is the last thing *you* typed, never the model's reply, never a tool result and never a system reminder — cleaned to one line, cut at 300 characters, swept for anything credential-shaped, never written to disk and never in a fixture. See [Task text](#task-text).
 - **Your notes never leave the browser.** A sticky note is plain text in `localStorage` on `http://127.0.0.1:<port>`. It is not written to disk, not sent anywhere, not readable by the server, and not visible to Claude Code or to any agent. Nazar has no code that could send it: there is no outbound network call in the whole program. Clearing your site data deletes your notes, and nothing else has a copy.
 
 ## Why
@@ -257,7 +304,7 @@ Existing tools draw the inside of a *single* session, or give you a canvas you a
 - **Never touches credentials.** The one credential-shaped file sitting in the directory Nazar watches is excluded by name, and a test asserts the skip.
 - **Nothing installed into Claude Code.** No hooks, no settings changes, no file written anywhere — and that is a gate, not a claim: a test reads the shipped sources and fails if any of them imports a filesystem call that could write. The one thing Nazar remembers, how you arranged your canvas, is kept in your browser's own storage for `127.0.0.1`, which is why there is no state directory to uninstall. An optional precision mode will add lightweight HTTP hooks later, with a backup, a shown diff and an exact uninstall.
 - **Exact numbers.** Tokens are read from the transcripts and deduplicated by `(message.id, requestId)`, because the same message is written once per API block with the full usage attached to every copy. A naive sum inflates output tokens by up to about 2.5x depending on the transcript's shape; there is a regression test for exactly that trap.
-- **Metadata only.** Nazar reads *how much* and *how long*, never *what*. No prompt, response, thinking block or tool input is ever parsed into memory — history included. Two leak tests enforce it, one of them over ten real transcripts from your own machine.
+- **Metadata only by default.** Nazar reads *how much* and *how long*, never *what*. No response, thinking block or tool input is ever parsed into memory — history included — and two leak tests enforce it, one of them over ten real transcripts from your own machine. The one exception is **opt-in, off, and per browser**: a switch in the settings panel adds a single line to each card saying what that session was last asked to do. See [Task text](#task-text).
 - **Watch, don't control.** No prompt sending, no permission answering, no session management.
 - **Your history stays yours.** History is a read of what Claude Code already keeps. Nazar never copies, moves or deletes a transcript, and does not extend `cleanupPeriodDays`.
 - **Zero runtime dependencies.** Not one, the tree layout included. The build asserts it: after bundling, every import left in the shipped file is a Node builtin.
@@ -278,6 +325,7 @@ Nazar derives everything from what is already on your disk. That is what makes i
 - **Token totals can lag a few seconds.** Transcript writes are asynchronous. Nazar shows the age of the last write next to the numbers rather than pretending they are current.
 - **"Current tool" is the last one started,** read from the transcript's last `tool_use` block. Exact start and stop timing needs the precision mode that comes with hooks.
 - **History reaches back only as far as Claude Code's retention** — `cleanupPeriodDays`, 30 by default. When Claude Code expires a transcript it leaves the panel, because the panel is a view of Claude Code's own store and not a copy of it.
+- **Task text is a line, not a transcript viewer, and it is off until you say otherwise.** It shows the last thing you typed at a session and the brief a subagent was launched with — one line each, cut at 300 characters, and nothing the model said. It is per browser, so switching it on in one browser leaves every other one as it was, and it is never written to disk. On a shared screen or a recording, use `nazar --no-task-text` (or the *recording mode* switch in the desktop app, which restarts the server with that flag): that stops the text being read at all rather than merely stopping it being shown, which is the difference between a promise and a preference.
 - **Codex *sessions* are v2.** The data model is provider-agnostic and the rollout format is already audited, but nothing draws a Codex session on the canvas yet. Codex's **usage limits** are a different matter and are here today: nazar-tray reads the Codex rollout log, and Nazar reads the `limits.json` it writes, so Codex's windows sit in the usage panel beside Claude's.
 - **Your canvas belongs to a port.** `localStorage` is scoped per origin and an origin includes the port, so the layout, tabs, projects, names, notes, colours, theme and usage panel are kept per port and are not migrated between them. The desktop app therefore chooses a free loopback port once and stores it in `%APPDATA%\nazar\desktop.json`; it reuses that port on every later launch, and if a healthy Nazar of the same version is already on it, it shows that one rather than starting a second. You only lose an arrangement if the port has to change — something else took it while Nazar was closed, or the settings file was deleted — and then it is once. In a browser the same rule applies to `--port`: `nazar --port 5000` is a different canvas from the default 4676, on purpose, because they are different origins and the browser will not share a store between them.
 - **The desktop installer is unsigned.** There is no code-signing certificate behind `nazar-desktop_0.1.0_x64-setup.exe`, so Windows SmartScreen warns on first run and you have to choose *More info · Run anyway*. It clears itself once the download has built enough reputation, which is a matter of downloads rather than of anything that can be done to the file.

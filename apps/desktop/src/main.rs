@@ -139,6 +139,8 @@ fn main() {
             jump_to_session,
             get_autostart,
             set_autostart,
+            get_task_text_off,
+            set_task_text_off,
             open_download_page
         ])
         .setup(move |app| {
@@ -289,7 +291,21 @@ fn boot_up(app: &AppHandle) {
         .try_state::<Shell>()
         .and_then(|shell| shell.config.lock().ok().and_then(|config| config.port));
 
-    match server::start(&entry, stored) {
+    // N-WP15a: recording mode, read from the same file and passed to the child as
+    // `--no-task-text`. Absent settings mean "the browser decides", which is what
+    // every machine that has never touched the switch gets.
+    let task_text = app
+        .try_state::<Shell>()
+        .and_then(|shell| {
+            shell
+                .config
+                .lock()
+                .ok()
+                .map(|config| config.task_text_allowed())
+        })
+        .unwrap_or(true);
+
+    match server::start(&entry, stored, task_text) {
         Ok(handle) => {
             let url = handle.url.clone();
             let port = handle.port;
@@ -433,6 +449,48 @@ fn stop_server(app: &AppHandle) {
     }
 }
 
+/// N-WP15a: stop the child server and start another one with the current settings.
+///
+/// The one thing in this application that changes the *server's* command line while it is
+/// running, and it exists because recording mode has to be a flag rather than a filter —
+/// see `set_task_text_off`. Everything it needs is already here: `boot_up` resolves the
+/// entry, `server::start` picks the port, and the stored port is reused when it is free,
+/// so the webview usually comes back to the same origin and the user's arrangement with
+/// it.
+///
+/// An **adopted** server is not ours to stop, and `server::start` will not adopt one while
+/// recording mode is on, so the pair is consistent: turning the mode on always ends with
+/// a server this shell started and knows the flags of.
+fn restart_server(app: &AppHandle) -> Result<(), String> {
+    let entry = server::resolve_entry(app.path().resource_dir().ok().as_deref())
+        .ok_or_else(|| "the packaged canvas server is missing from this installation".to_owned())?;
+
+    stop_server(app);
+
+    let Some(shell) = app.try_state::<Shell>() else {
+        return Err("the shell is not ready".to_owned());
+    };
+    let (stored, task_text) = {
+        let config = shell
+            .config
+            .lock()
+            .map_err(|_| "the settings are locked".to_owned())?;
+        (config.port, config.task_text_allowed())
+    };
+
+    let handle = server::start(&entry, stored, task_text)?;
+    let url = handle.url.clone();
+    let port = handle.port;
+    if let Ok(mut slot) = shell.server.lock() {
+        *slot = Some(handle);
+    }
+    if let Ok(mut config) = shell.config.lock() {
+        let _ = config.remember_port(port);
+    }
+    go_to_canvas(app, &url);
+    Ok(())
+}
+
 /// Quit: the server first, then the process.
 pub fn shut_down(app: &AppHandle) {
     stop_server(app);
@@ -519,6 +577,58 @@ fn set_autostart(app: AppHandle, enabled: bool) -> Result<bool, String> {
         let _ = config.save();
     }
     Ok(now)
+}
+
+/// N-WP15a: is this machine in recording mode?
+///
+/// `true` means the child server was started with `--no-task-text`. The canvas asks once,
+/// when the settings panel is built, so the switch is painted from the machine's own
+/// answer rather than from a value the page remembered.
+#[tauri::command]
+fn get_task_text_off(shell: tauri::State<'_, Shell>) -> bool {
+    shell
+        .config
+        .lock()
+        .map(|config| !config.task_text_allowed())
+        .unwrap_or(false)
+}
+
+/// Turn recording mode on or off, and restart the canvas server so it takes effect.
+///
+/// Answers with the state it actually reached, not the one it was asked for — the same
+/// contract [`set_autostart`] keeps, and here it matters more: a restart can fail, and a
+/// switch claiming task text is off while a server that reads it is still running would
+/// be the one lie this feature must never tell. So the setting is written, the server is
+/// restarted, and **a failed restart puts the setting back** before answering.
+///
+/// The window is re-pointed at whatever URL came back. It is nearly always the same one —
+/// `plan_port` reuses the stored port when it is free, which is what keeps the browser's
+/// arrangement — but a restart that had to take a different port would otherwise leave
+/// the webview showing a dead address.
+#[tauri::command]
+fn set_task_text_off(app: AppHandle, off: bool) -> Result<bool, String> {
+    let Some(shell) = app.try_state::<Shell>() else {
+        return Err("the shell is not ready".to_owned());
+    };
+
+    {
+        let mut config = shell
+            .config
+            .lock()
+            .map_err(|_| "the settings are locked".to_owned())?;
+        config.set_task_text_allowed(!off)?;
+    }
+
+    match restart_server(&app) {
+        Ok(()) => Ok(off),
+        Err(error) => {
+            // Put the file back, so the switch and the running server agree again.
+            if let Ok(mut config) = shell.config.lock() {
+                let _ = config.set_task_text_allowed(off);
+            }
+            Err(error)
+        }
+    }
 }
 
 /// Open the Node download page in the machine's browser.

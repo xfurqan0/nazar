@@ -28,9 +28,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The task text, switched off** (N-WP15a). Nazar draws *how much* and *how
+  long* and never *what*, and that stays the default — but forty cards raise one
+  question no token count answers: **which of these is the one I asked to do the
+  thing?** So there is now a switch, in **Settings → Behaviour**, that adds one
+  quiet line to each card: what that session was **last asked to do**, and what
+  each subagent was **launched for**. Hover either and the card shows the whole
+  thing, up to 300 characters. It is **off on a fresh install and off in every
+  new browser**, and the note under the switch is the entire contract: *read from
+  the transcript, never written to disk, kept in this browser only*.
+
+  What reaches the line is the human turn and nothing else — **never the model's
+  reply, never a tool result, never a system reminder**, never a slash command's
+  own bookkeeping and never an interruption marker. A session shows its *last*
+  turn, because one you opened this morning is not still doing what you opened it
+  for; a subagent shows its *first*, because that is the brief it was launched
+  with and a later message is a correction to a job rather than the job. The text
+  is collapsed to one line, stripped of control characters and invisible
+  formatting, cut at 300 characters with the cut marked, and swept for anything
+  credential-shaped exactly as a working directory is.
+
+  **Three independent switches, and each one outranks the last.** The browser's,
+  which starts off and never leaves that browser. The request's: the server adds
+  the field only for a page that asked, so a browser that has not switched it on
+  gets the payload it always got. And the machine's — `nazar --no-task-text`, or
+  `NAZAR_TASK_TEXT=0` — which stops the text being **read**, not merely being
+  sent, so no browser talking to that server can be shown a task line whatever
+  its own switch says. The desktop app offers the same thing as a **recording
+  mode** switch, which restarts the canvas server with that flag: it is the one to
+  use while sharing a screen, and it is the only one that is a promise rather than
+  a preference.
+
 - **Six UI languages: English, Türkçe, 中文, 한국어, Русский, Español** (N-WP13). Every word the canvas draws now comes from a catalogue — the sidebar and the settings panel, the cards and their menus, the tab bar, the history view, the usage panel, the empty states, and every tooltip and `aria-label` — and the desktop app's tray menu reads the very same files, so the tray and the canvas cannot end up in different languages. The picker is in **Settings → Language** and lists the six by name, with the one you are reading ticked. **There is no *follow the system* entry, and the behaviour it named is still what you get**: until you pick a language, Nazar takes the first of your browser's preferred languages it can paint itself in and falls back to English rather than to a page of message keys — so the option already ticked the first time you open the list is the language your machine asked for. **Changing language does not reload the page.** Your choice lives in this browser under `nazar.locale.v1`. English and Turkish were written by hand; Chinese, Korean, Russian and Spanish were machine-translated first and **corrections are welcome as pull requests** — `packages/ui/locales/README.md` has the rules and the status table. Numbers are deliberately not localised: durations, token counts, byte sizes and timestamps read the same everywhere, because this canvas is read next to other tools that print the same numbers.
 
 ### Changed
+
+- **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's
+  menu away everywhere was right for a canvas and wrong for the three links on
+  it — all of them in the sidebar, all of them answering a right-click with
+  nothing at all since the last release. They now open a small menu of their own:
+  **Open in browser** and **Copy address**, which are the only two things anybody
+  wants from a link. *Open in browser* rather than *Open in new tab*, because
+  that is the true sentence in both places this page runs: a browser opens a new
+  tab, and the desktop window has no tabs and hands the address to the machine's
+  browser, which is where an external link was always meant to go. Same keyboard
+  behaviour as the other three menus — it takes focus when it opens, `Esc` closes
+  it, and a press anywhere else closes it — and a text field still keeps the
+  browser's own menu, links included.
 
 - **The right-click is the page's, everywhere, and a note answers it with its
   own menu** (N-WP14). Right-clicking the top bar, the sidebar, the tab bar or a

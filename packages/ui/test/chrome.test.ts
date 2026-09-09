@@ -473,7 +473,12 @@ test('a resize is a re-layout, not a scale', () => {
   assert.ok(app.includes('layout = withWidth(layout, drag.id, box.width)'));
   // N-WP10: the geometry is one pure function, so the gesture holds no maths.
   assert.ok(app.includes('resizeCard(drag.handle, drag.start, dx, dy, drag.bounds)'));
-  assert.ok(app.includes('minWidth: cardMinimumFor(session, metric.collapsed).width'));
+  // N-WP15a: the third argument is the task-text setting. A node carrying a
+  // task line is taller, which changes how the tree wraps and therefore how
+  // narrow the card may be dragged — so the gesture has to ask the same
+  // question the measure pass asked, or a drag could squeeze a card under the
+  // tree that is actually in it.
+  assert.ok(app.includes('minWidth: cardMinimumFor(session, metric.collapsed, taskText).width'));
   assert.ok(
     app.includes(
       'minHeight: isCornerHandle(handle) ? minCardHeight(CARD) : metric.box.contentHeight',

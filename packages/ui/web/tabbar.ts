@@ -18,7 +18,12 @@
  * `../src/contextmenu.ts` decides which of the two a click gets, and where the
  * browser's own menu is left alone.
  */
-import { CANVAS_MENU_ITEMS, type CanvasMenuItem } from '../src/contextmenu.ts';
+import {
+  CANVAS_MENU_ITEMS,
+  LINK_MENU_ITEMS,
+  type CanvasMenuItem,
+  type LinkMenuItem,
+} from '../src/contextmenu.ts';
 import { renameTerminalHint } from '../src/format.ts';
 import { t, tCount } from '../src/i18n.ts';
 import { folderName } from '../src/projects.ts';
@@ -698,6 +703,88 @@ export class CanvasMenu {
   close(): void {
     if (this.point === undefined) return;
     this.point = undefined;
+    this.root.hidden = true;
+    clear(this.root);
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * The link menu (N-WP15a)
+ * ------------------------------------------------------------------ */
+
+export interface LinkMenuOptions {
+  readonly root: HTMLElement;
+  /** Run one entry against the address the menu was opened on. */
+  readonly onPick: (item: LinkMenuItem, href: string) => void;
+}
+
+/**
+ * The menu an `<a href>` offers instead of the browser's.
+ *
+ * The same element kind, the same placement rule and the same keyboard contract
+ * as the two above — one stylesheet rule, one Escape behaviour, one way to be
+ * closed by a press elsewhere. That sameness is the whole design: the page took
+ * a gesture away from the browser in `8526e9a`, so what it puts back has to
+ * behave like one menu everywhere rather than like three approximations.
+ */
+export class LinkMenu {
+  private readonly root: HTMLElement;
+
+  private readonly options: LinkMenuOptions;
+
+  private target: string | undefined;
+
+  constructor(options: LinkMenuOptions) {
+    this.root = options.root;
+    this.options = options;
+    this.root.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') return;
+      event.stopPropagation();
+      this.close();
+    });
+  }
+
+  get isOpen(): boolean {
+    return this.target !== undefined;
+  }
+
+  /** The address this menu is open on, for anything that has to know. */
+  get openFor(): string | undefined {
+    return this.target;
+  }
+
+  open(anchor: AnchorRect, href: string): void {
+    this.target = href;
+    clear(this.root);
+
+    for (const entry of LINK_MENU_ITEMS) {
+      const item = html('button', 'nz-menu__item');
+      item.type = 'button';
+      item.setAttribute('role', 'menuitem');
+      setText(item, t(entry.labelKey));
+      item.addEventListener('click', () => {
+        const address = this.target;
+        this.close();
+        if (address !== undefined) this.options.onPick(entry.id, address);
+      });
+      this.root.append(item);
+    }
+
+    // The address itself, under the two entries and not clickable: a link in
+    // the drawer is a word ("how to get usage limits"), and the one question a
+    // right-click on it raises that neither entry answers is *where does this
+    // go*. It is a `<p>` rather than a `title`, because a menu that has already
+    // replaced the browser's should not need a second hover to be read.
+    const hint = html('p', 'nz-menu__note nz-menu__note--link');
+    setText(hint, href);
+    this.root.append(hint);
+
+    placeMenu(this.root, anchor, 190);
+  }
+
+  close(): void {
+    if (this.target === undefined) return;
+    this.target = undefined;
     this.root.hidden = true;
     clear(this.root);
   }

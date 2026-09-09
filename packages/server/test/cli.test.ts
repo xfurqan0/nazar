@@ -6,10 +6,12 @@ import test from 'node:test';
 import {
   CliError,
   DEFAULT_PORT,
+  TASK_TEXT_VAR,
   USAGE,
   main,
   parseOpen,
   parsePort,
+  parseTaskText,
   serve,
   unknownFlag,
   unknownFlagMessage,
@@ -50,6 +52,46 @@ test('the browser opens by default and --no-open wins over --open', () => {
   assert.equal(parseOpen(['--open', '--no-open']), false);
 });
 
+test('N-WP15a: task text is available by default and either switch turns it off', () => {
+  /*
+   * "Available" is not "shown": the browser's own switch is off until somebody
+   * moves it, so a default run displays no task text at all. What this flag
+   * decides is whether a browser that *asks* can be answered — and turning it
+   * off has to be possible from two places, because the two callers are
+   * different people.
+   *
+   * The flag is for a wrapper: the desktop shell appends it, and so would a
+   * `presenting` alias. The variable is for a shell profile, and it is read
+   * only for the exact string `0` — an unset variable, an empty one and a `1`
+   * all leave the decision to the flag, so a stray value in an inherited
+   * environment cannot silently switch a feature the user never chose.
+   */
+  assert.equal(parseTaskText([], {}), true);
+  assert.equal(parseTaskText(['--port', '8080'], {}), true);
+
+  assert.equal(parseTaskText(['--no-task-text'], {}), false);
+  assert.equal(parseTaskText([], { [TASK_TEXT_VAR]: '0' }), false);
+
+  // Whichever said so wins, and there is no ordering to remember.
+  assert.equal(parseTaskText(['--task-text'], { [TASK_TEXT_VAR]: '0' }), false);
+  assert.equal(parseTaskText(['--no-task-text'], { [TASK_TEXT_VAR]: '1' }), false);
+
+  // Everything that is not the exact string `0`.
+  for (const value of [undefined, '', '1', 'false', 'off', 'no']) {
+    assert.equal(parseTaskText([], { [TASK_TEXT_VAR]: value }), true, String(value));
+  }
+});
+
+test('N-WP15a: both spellings of the flag are known to the parser', () => {
+  // The point of the unknown-flag gate is that a misspelling stops the command
+  // rather than being ignored, so a flag this program accepts has to be on the
+  // list or `nazar --no-task-text` would exit 2 and start nothing at all.
+  const serve = ['--open', '--no-open', '--port', '--task-text', '--no-task-text'];
+  assert.equal(unknownFlag(['--no-task-text'], serve), undefined);
+  assert.equal(unknownFlag(['--task-text'], serve), undefined);
+  assert.equal(unknownFlag(['--no-tasktext'], serve), '--no-tasktext');
+});
+
 test('--help describes the flags without starting anything', async () => {
   const out = new Capture();
   const err = new Capture();
@@ -57,6 +99,8 @@ test('--help describes the flags without starting anything', async () => {
   assert.equal(await main(['--help'], out, err), 0);
   assert.match(out.text, /--port <number>/);
   assert.match(out.text, /--no-open/);
+  assert.match(out.text, /--no-task-text/);
+  assert.match(out.text, /NAZAR_TASK_TEXT=0/);
   assert.match(out.text, /127\.0\.0\.1/);
   assert.equal(err.text, '');
 });

@@ -22,6 +22,6 @@
   },
   "scripts": {
     "build": "tsc --build",
-    "test": "node --import tsx --test test/cli.test.ts test/doctor.test.ts test/open.test.ts test/redact.test.ts test/snapshot.test.ts test/http.test.ts test/history-routes.test.ts"
+    "test": "node --import tsx --test test/cli.test.ts test/doctor.test.ts test/open.test.ts test/redact.test.ts test/snapshot.test.ts test/task-text.test.ts test/http.test.ts test/history-routes.test.ts"
   }
 }

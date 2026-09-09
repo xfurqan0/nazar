@@ -115,6 +115,32 @@ export class Shell {
   setAutostart(enabled: boolean): Promise<boolean | undefined> {
     return this.call<boolean>('set_autostart', { enabled });
   }
+
+  /**
+   * N-WP15a: is this machine in recording mode — task text hard-disabled?
+   *
+   * `true` means the child server was started with `--no-task-text`, so no
+   * browser talking to it can be shown a task line however its own switch is
+   * set. `undefined` means the shell did not answer, which the canvas reads as
+   * "not on": the safe direction here is the one that leaves the browser's own
+   * switch in charge, and that switch is itself off by default.
+   */
+  taskTextOff(): Promise<boolean | undefined> {
+    return this.call<boolean>('get_task_text_off');
+  }
+
+  /**
+   * Turn recording mode on or off; resolves with what it is **now**.
+   *
+   * The shell rewrites `desktop.json` and restarts the child server, so this
+   * call takes about as long as a server start and the canvas has to re-open
+   * its stream once it resolves. It answers with the state it reached rather
+   * than the one it was asked for, so a restart that failed paints the switch
+   * back instead of leaving a control that lies.
+   */
+  setTaskTextOff(off: boolean): Promise<boolean | undefined> {
+    return this.call<boolean>('set_task_text_off', { off });
+  }
 }
 
 /** What a browser is told when it double-clicks a card. */

@@ -188,6 +188,11 @@ export type {
 export { TranscriptStats, addTotals } from './transcript-stats.js';
 export type { AgentBridge, TokenTotals } from './transcript-stats.js';
 
+/* N-WP15a: the opt-in task-text reader. Off unless a caller says otherwise. */
+
+export { MAX_TASK_TEXT, cleanTaskText, extractTaskText, stripHarnessText } from './task-text.js';
+export type { ExtractOptions } from './task-text.js';
+
 export { MAX_DESCRIPTION_LENGTH, parseAgentMeta, readSubagentsDir } from './subagent-meta.js';
 export type {
   AgentMeta,

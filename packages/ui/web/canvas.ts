@@ -114,6 +114,16 @@ export const AGENT = {
   hGap: 16,
   vGap: 30,
   radius: 9,
+  /**
+   * N-WP15a: how much taller a node is while it is carrying a task line.
+   *
+   * The six lines it has fill it to the pixel — a subagent node has no gap in it
+   * the way a session card's header does — so a seventh line has to be paid for.
+   * It is paid for **only when it is drawn**: with task text off, which is every
+   * browser until somebody switches it on, the spec below is the number it
+   * always was and no tree, no card and no stored size moves by a pixel.
+   */
+  taskLine: 15,
 } as const;
 
 /** The tree geometry, as one spec, so nothing has to restate the four numbers. */
@@ -123,6 +133,25 @@ export const TREE_SPEC: TreeSpec = {
   hGap: AGENT.hGap,
   vGap: AGENT.vGap,
 };
+
+/** The same, one line taller: what a tree of nodes showing a task needs. */
+export const TREE_SPEC_TASK: TreeSpec = {
+  ...TREE_SPEC,
+  nodeHeight: AGENT.height + AGENT.taskLine,
+};
+
+/**
+ * N-WP15a: which of the two the canvas is laying out with.
+ *
+ * A function rather than a branch at each call site, so "the measure pass and
+ * the draw pass agree about how tall a node is" stays one fact in one place.
+ * Them disagreeing is exactly how a tree ends up drawn outside the card that
+ * was sized around it, which is the failure WP4c's containment rule exists to
+ * make impossible.
+ */
+export function treeSpecFor(showTask: boolean): TreeSpec {
+  return showTask ? TREE_SPEC_TASK : TREE_SPEC;
+}
 
 /** The width a tree must wrap at so its automatically sized card contains it. */
 export const TREE_MAX_WIDTH = treeMaxWidth(CARD);
@@ -272,6 +301,16 @@ export interface RenderOptions {
    * this is. These strings live in `localStorage` and nowhere else.
    */
   readonly names?: Readonly<Record<string, string>>;
+  /**
+   * N-WP15a: draw the task line.
+   *
+   * The renderer never decides this for itself and never infers it from whether
+   * a `task` field happens to be present: the switch is the browser's, the
+   * server may refuse it, and the *measure* pass was given the same answer. A
+   * renderer that drew a line the measure pass had not budgeted for would put
+   * text outside the card it was sized around.
+   */
+  readonly taskText?: boolean;
 }
 
 /**
@@ -306,8 +345,12 @@ const EMPTY_TREE: TreeLayout = {
  * whose tree grew after it was sized simply gets taller, because the tree wraps
  * to whatever budget it is given and can never overflow the frame.
  */
-export function cardMinimumFor(session: SessionView, collapsed: boolean): CardMinimum {
-  return cardMinimum(toTreeInput(session.roots), collapsed, TREE_SPEC, CARD);
+export function cardMinimumFor(
+  session: SessionView,
+  collapsed: boolean,
+  showTask = false,
+): CardMinimum {
+  return cardMinimum(toTreeInput(session.roots), collapsed, treeSpecFor(showTask), CARD);
 }
 
 /** The widest any card may be dragged. One number, from the card spec. */
@@ -322,6 +365,14 @@ export interface MeasureOptions {
   readonly widths?: Readonly<Record<string, number>>;
   /** N-WP10: heights the user dragged to, by session id. */
   readonly heights?: Readonly<Record<string, number>>;
+  /**
+   * N-WP15a: whether the nodes in these trees are carrying a task line.
+   *
+   * It belongs to the *measure* pass and not only to the drawing, because it
+   * changes how tall a node is — and the wrapping, the card's content height
+   * and the containment rule are all computed from that.
+   */
+  readonly taskText?: boolean;
 }
 
 /**
@@ -349,6 +400,7 @@ export function measureCards(
   options: MeasureOptions = {},
 ): Map<string, CardMetric> {
   const metrics = new Map<string, CardMetric>();
+  const spec = treeSpecFor(options.taskText === true);
   for (const session of sessions) {
     const folded = collapsed.has(session.id);
     const stored = options.widths?.[session.id];
@@ -360,7 +412,7 @@ export function measureCards(
     const tree = folded
       ? EMPTY_TREE
       : layerTree(toTreeInput(session.roots), {
-          ...TREE_SPEC,
+          ...spec,
           maxWidth: width === undefined ? TREE_MAX_WIDTH : width - CARD.pad * 2,
         });
     const storedHeight = options.heights?.[session.id];
@@ -468,6 +520,8 @@ interface AgentEls {
   readonly tokensB: SVGTextElement;
   readonly activity: SVGTextElement;
   readonly orphan: SVGTextElement;
+  /** N-WP15a: the brief, on a seventh line the node only has when it is on. */
+  readonly task: SVGTextElement;
 }
 
 interface SessionEls {
@@ -480,6 +534,8 @@ interface SessionEls {
   readonly ringPulse: SVGCircleElement;
   readonly title: SVGTextElement;
   readonly path: SVGTextElement;
+  /** N-WP15a: the task line. `display: none` unless the browser asked for it. */
+  readonly task: SVGTextElement;
   readonly identity: SVGTextElement;
   readonly activity: SVGTextElement;
   readonly chipRow: SVGGElement;
@@ -552,6 +608,7 @@ export class CanvasRenderer {
         ...(options.names?.[session.id] === undefined
           ? {}
           : { name: options.names[session.id] as string }),
+        taskText: options.taskText === true,
       });
     }
 
@@ -630,7 +687,7 @@ export class CanvasRenderer {
     now: number,
     frozen: boolean,
     hiddenCount: number,
-    label: { readonly name?: string },
+    label: { readonly name?: string; readonly taskText?: boolean },
   ): void {
     const els = this.sessions.get(session.id) ?? this.createSession(session);
     const { box, tree, collapsed } = metric;
@@ -706,6 +763,25 @@ export class CanvasRenderer {
         name: named ? (label.name as string) : basename(session.cwd),
       }),
     );
+    /*
+     * N-WP15a: the task line.
+     *
+     * Three states, and only the first two are "on": a switched-on canvas with
+     * a task shows it, a switched-on canvas whose session has no readable human
+     * turn shows **nothing** rather than the word `unknown` — an absent task is
+     * not a missing measurement, it is a session nobody has typed at — and a
+     * switched-off canvas has no node in the DOM's text at all, which is what
+     * the UI test asserts.
+     *
+     * `display` rather than a class, because the element is reused across frames
+     * and this is the same mechanism the two optional capture lines use.
+     */
+    const taskLine = label.taskText === true ? session.task : undefined;
+    setAttr(els.task, 'display', taskLine === undefined ? 'none' : 'inline');
+    // The path's budget, not the title's: this line sits below the ⋯ button and
+    // the ring, so it has the full width the path has rather than the narrower
+    // strip the title has to share with them.
+    setText(els.task, taskLine === undefined ? '' : fitText(taskLine, inner - BADGE - 16, 11));
     setText(els.nameNote, renameNote(named));
     // The word for the frame colour, right-aligned under the ring. A frame is
     // a colour, and a colour on its own is not a state — greyscale screenshots
@@ -935,7 +1011,7 @@ export class CanvasRenderer {
         const agent = byId.get(node.id);
         if (agent === undefined) continue;
         placedIds.add(node.id);
-        this.drawAgent(els, session, agent, node, now, frozen);
+        this.drawAgent(els, session, agent, node, now, frozen, label.taskText === true);
       }
     }
     for (const [id, agentEls] of els.agents) {
@@ -954,6 +1030,7 @@ export class CanvasRenderer {
     node: PlacedTreeNode,
     now: number,
     frozen: boolean,
+    showTask: boolean,
   ): void {
     let agentEls = els.agents.get(agent.id);
     if (agentEls === undefined) {
@@ -1032,6 +1109,25 @@ export class CanvasRenderer {
         t('tokens.cacheWrite', { count: formatCount(agent.tokens?.cacheWrite) }),
     );
     setText(agentEls.orphan, agent.orphan === true ? t('agent.orphan') : '');
+
+    /*
+     * N-WP15a. One line, and the choice of *what* to put on it is the whole
+     * decision, because there is only ever room for one.
+     *
+     * The `Agent` tool's `description` wins when it exists: it is three to five
+     * words written to name the job, which is exactly what a 156 px node can
+     * show, where the brief's first 156 px are usually still clearing its
+     * throat. The brief is the fallback, and the full 300 characters of it are
+     * on the hover card, where there is room to read.
+     */
+    const brief = showTask ? (agent.description ?? agent.task) : undefined;
+    setAttr(agentEls.task, 'display', brief === undefined ? 'none' : 'inline');
+    setText(agentEls.task, brief === undefined ? '' : fitText(brief, inner, 10));
+    // The node is drawn one line taller whenever the setting is on — not
+    // whenever *this* agent has a task. Sizing per node would give a tree of
+    // ragged rectangles and, worse, would disagree with the layout, which was
+    // told one height for every node in the tree.
+    setAttr(agentEls.bg, 'height', showTask ? AGENT.height + AGENT.taskLine : AGENT.height);
 
     setAttr(
       agentEls.g,
@@ -1134,6 +1230,25 @@ export class CanvasRenderer {
     const path = svg('text', 'nz-session__path');
     setAttr(path, 'x', CARD.pad + BADGE + 12);
     setAttr(path, 'y', CARD.pad + 30);
+
+    /*
+     * N-WP15a: the task line, in the gap the header already had.
+     *
+     * The path sits at y=46 and the identity line at y=74, which left 28 px of
+     * nothing between them — this line goes there rather than growing the
+     * header, and that is the whole answer to "does the card change size when
+     * the setting is on". It does not. `CARD.headerHeight` is untouched, so
+     * every stored width, every dragged height and N-WP10's whole size model
+     * are the same numbers in both states, and switching the setting on and off
+     * cannot move a card the user placed.
+     *
+     * (The subagent node is the opposite case — six lines and no gap — which is
+     * why `AGENT.taskLine` exists and why only *that* geometry is conditional.)
+     */
+    const task = svg('text', 'nz-session__task');
+    setAttr(task, 'x', CARD.pad + BADGE + 12);
+    setAttr(task, 'y', CARD.pad + 46);
+    setAttr(task, 'display', 'none');
 
     const identity = svg('text', 'nz-session__identity');
     setAttr(identity, 'x', CARD.pad);
@@ -1323,6 +1438,7 @@ export class CanvasRenderer {
       ring,
       title,
       path,
+      task,
       identity,
       activity,
       chipRow,
@@ -1356,6 +1472,7 @@ export class CanvasRenderer {
       ringPulse,
       title,
       path,
+      task,
       identity,
       activity,
       chipRow,
@@ -1443,9 +1560,22 @@ export class CanvasRenderer {
     setAttr(orphan, 'x', AGENT.width - 10);
     setAttr(orphan, 'y', 97);
 
-    g.append(bg, dot, type, model, meta, chipRow, tokensA, tokensB, activity, orphan);
+    /*
+     * N-WP15a: the seventh line, and the node is one line taller to carry it.
+     *
+     * Unlike the session card there is no gap to put it in — the six lines fill
+     * the node — so it goes at the bottom and `AGENT.taskLine` pays for it. The
+     * background is grown by the same number in `drawAgent`, and the tree was
+     * laid out with `TREE_SPEC_TASK`, so the three agree by construction.
+     */
+    const task = svg('text', 'nz-agent__task');
+    setAttr(task, 'x', 10);
+    setAttr(task, 'y', AGENT.height + 6);
+    setAttr(task, 'display', 'none');
 
-    return { g, bg, dot, type, model, meta, doneChip, tokensA, tokensB, activity, orphan };
+    g.append(bg, dot, type, model, meta, chipRow, tokensA, tokensB, activity, orphan, task);
+
+    return { g, bg, dot, type, model, meta, doneChip, tokensA, tokensB, activity, orphan, task };
   }
 }
 

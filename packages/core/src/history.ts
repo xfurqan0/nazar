@@ -44,6 +44,7 @@ import type { AgentActivity } from './agent-tree.js';
 import { projectsDirPath, sessionTranscriptPaths } from './paths.js';
 import { projectDisplayFor } from './project-slug.js';
 import { readSubagentsDir } from './subagent-meta.js';
+import type { ExtractOptions } from './task-text.js';
 import { extractTranscriptLine } from './transcript-extract.js';
 import type { AgentBridge } from './transcript-stats.js';
 import { addTotals, TranscriptStats } from './transcript-stats.js';
@@ -119,6 +120,17 @@ export interface HistoryScannerOptions {
   readonly cacheLimit?: number;
   readonly concurrency?: number;
   readonly indexTtlMs?: number;
+  /**
+   * N-WP15a: read the human turn's text out of a session being opened, so a
+   * frozen card can say what that run was asked to do.
+   *
+   * The **same gate as the live canvas, and for the same reason**: the switch
+   * is on the reader. With it off — which is the default and is what a scanner
+   * built by any test gets — `open()` produces a history object with no `task`
+   * anywhere in it and no `description` on any agent, exactly as before, which
+   * is what `test/history-leak.test.ts` walks.
+   */
+  readonly taskText?: boolean;
   /** Clock, injected by tests. */
   readonly now?: () => number;
 }
@@ -182,6 +194,7 @@ export const READ_SLICE_BYTES = 4 << 20;
  */
 async function readTranscript(
   file: string,
+  extract?: ExtractOptions,
 ): Promise<{ stats: TranscriptStats; bytesRead: number; lastWriteAt?: number }> {
   const tailer = new TranscriptTailer(file, { maxBytesPerRead: READ_SLICE_BYTES });
   const stats = new TranscriptStats();
@@ -194,7 +207,7 @@ async function readTranscript(
     // A file that shrank under us is not the file we started: begin again.
     if (result.restarted) stats.reset();
     for (const line of result.lines) {
-      const event = extractTranscriptLine(line);
+      const event = extractTranscriptLine(line, extract);
       if (event !== undefined) stats.add(event);
     }
     bytesRead += result.bytesRead;
@@ -221,6 +234,13 @@ export class HistoryScanner {
 
   readonly indexTtlMs: number;
 
+  /**
+   * N-WP15a. Frozen at construction, like the live watcher's: whether prose may
+   * be read out of a transcript is a property of how this process was started,
+   * never of the request that arrived.
+   */
+  private readonly extractOptions: ExtractOptions;
+
   private readonly now: () => number;
 
   /** Insertion-ordered, so the first key is the least recently used. */
@@ -246,6 +266,7 @@ export class HistoryScanner {
     this.cacheLimit = Math.max(1, options.cacheLimit ?? DEFAULT_CACHE_LIMIT);
     this.concurrency = Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY);
     this.indexTtlMs = options.indexTtlMs ?? DEFAULT_INDEX_TTL_MS;
+    this.extractOptions = { taskText: options.taskText === true };
     this.now = options.now ?? Date.now;
   }
 
@@ -518,7 +539,7 @@ export class HistoryScanner {
     this.counters.parses += 1;
 
     this.counters.fileReads += 1;
-    const session = await readTranscript(entry.transcript);
+    const session = await readTranscript(entry.transcript, this.extractOptions);
     let bytesRead = session.bytesRead;
 
     const paths = sessionTranscriptPaths(entry.projectDir, entry.sessionId);
@@ -526,7 +547,7 @@ export class HistoryScanner {
 
     const agentStats = await mapLimit(scan.transcripts, this.concurrency, async (file) => {
       this.counters.fileReads += 1;
-      const read = await readTranscript(file.file);
+      const read = await readTranscript(file.file, this.extractOptions);
       return { agentId: file.agentId, ...read };
     });
 
@@ -549,6 +570,9 @@ export class HistoryScanner {
       if (read.stats.lastEventAt !== undefined) one.lastEventAt = read.stats.lastEventAt;
       if (read.lastWriteAt !== undefined) one.lastWriteAt = read.lastWriteAt;
       if (read.stats.lastLineType !== undefined) one.lastLineType = read.stats.lastLineType;
+      // N-WP15a: the brief, under the same gate. Absent unless this scanner was
+      // built with `taskText`, which is not the default anywhere.
+      if (read.stats.firstTask !== undefined) one.task = read.stats.firstTask;
       one.pendingToolUse = read.stats.pendingToolUse;
       activity.set(read.agentId, one);
     }
@@ -564,12 +588,14 @@ export class HistoryScanner {
       bridges,
       now: frozenNow,
       sessionGone: true,
-      // The one prose field in the node model stays out of history entirely.
-      // The live tree keeps it in memory for a hover card that a frozen
-      // session does not have, and `toWireAgent` drops it either way; not
-      // building it here makes the history object metadata-only by
-      // construction rather than by a filter somebody could forget to apply.
-      omitDescription: true,
+      // `meta.json`'s `description` stays out of history unless task text was
+      // asked for, and the construction is still the guarantee rather than a
+      // filter: with the switch off the key is never built, so there is nothing
+      // for a later filter to forget. N-WP15a is what made the flag a variable
+      // — before it, this was the constant `true`, and the reasoning is the
+      // same in both states: prose is built only where somebody has said it may
+      // be read, never merely stripped on the way out.
+      omitDescription: this.extractOptions.taskText !== true,
     });
 
     const history: {
@@ -595,6 +621,8 @@ export class HistoryScanner {
     }
     if (session.stats.model !== undefined) history.model = session.stats.model;
     if (session.stats.effort !== undefined) history.effort = session.stats.effort;
+    // N-WP15a: the last human turn of a run that is over. Absent unless asked.
+    if (session.stats.lastTask !== undefined) history.task = session.stats.lastTask;
 
     const tokens = session.stats.tokens;
     if (tokens !== undefined) history.tokens = tokens;

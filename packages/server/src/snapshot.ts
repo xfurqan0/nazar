@@ -7,8 +7,8 @@
  *
  * What it removes, and why:
  *
- * - `agent.description` — user-authored prose from `meta.json`. The hover card
- *   specified for v1 does not show it, so it does not leave the process.
+ * - `agent.description` — user-authored prose from `meta.json`. Dropped, unless
+ *   the caller asked for task text (below).
  * - `agent.toolUseId` — an id the canvas has no use for; the tree is keyed on
  *   `agent.id`.
  * - the head of `cwd` and `name` — the only free-form strings that survive, and
@@ -19,7 +19,28 @@
  * parse time in `@nazar/core`, so the strongest statement about commands is
  * that none of them ever reaches here. The redaction is still applied to the
  * two path-shaped fields, because a working directory is a path.
+ *
+ * ## N-WP15a: the one thing a caller can ask to have added
+ *
+ * {@link WireOptions.task} adds two fields and only those two: `task` on a
+ * session, a history and an agent, and `description` on an agent. Three
+ * properties, all of them load-bearing:
+ *
+ * - **Absent, not empty.** With the flag off the keys are not on the object at
+ *   all. An empty string would be a third state every consumer would have to
+ *   learn, and it would let a payload carry a field the leak tests were written
+ *   to forbid while those tests went on passing.
+ * - **The flag belongs to one request.** Two browsers against the same server
+ *   get different answers on the same frame, because one asked and one did not.
+ *   Nothing is remembered between requests.
+ * - **It is still redacted.** Task text is the most sensitive string that has
+ *   ever crossed this wire, so it goes through the same `redact()` as `cwd` —
+ *   secrets masked, home collapsed — with the cut moved out to the length the
+ *   core reader already capped it to. Over-masking a sentence that merely
+ *   contains the word *password* is the safe direction for a line nobody has to
+ *   be able to read in full.
  */
+import { MAX_TASK_TEXT } from '@nazar/core';
 import type {
   Agent,
   AgentNode,
@@ -42,6 +63,37 @@ import { redact } from './redact.js';
 export const MAX_WIRE_STRING = 80;
 
 /**
+ * What a caller wants this snapshot to look like.
+ *
+ * A `RedactOptions` on its own still satisfies it, which is why every existing
+ * call site is untouched: the redaction options are the same object, and `task`
+ * simply defaults to absent.
+ */
+export interface WireOptions extends RedactOptions {
+  /**
+   * N-WP15a: include the task text this snapshot's sources carry.
+   *
+   * Set per request by `http.ts` from `?task=1`, and only when the server was
+   * started without `--no-task-text`. Absent means the fields are not written,
+   * which is the shape every consumer had before this option existed.
+   */
+  readonly task?: boolean;
+}
+
+/**
+ * Task text, on its way out.
+ *
+ * The same gate every free-form string on this wire goes through, with the head
+ * widened from {@link MAX_WIRE_STRING} to the cap the core reader already
+ * applied — cutting a 300-character task to 80 here would make the setting
+ * useless while looking like it worked.
+ */
+function redactTask(value: string | undefined, options?: WireOptions): string | undefined {
+  if (value === undefined) return undefined;
+  return redact(value, { ...options, head: MAX_TASK_TEXT, prose: true });
+}
+
+/**
  * Cut an enum-shaped value (`model`, `effort`, `kind`, a tool name) to length.
  * These never hold a path, so they are not swept for secrets: the sweep would
  * mangle a legitimate name such as `token-counter` for no gain.
@@ -62,7 +114,7 @@ function copyTokens(tokens: SessionTokens | undefined): SessionTokens | undefine
 }
 
 /** One subagent, with the two dropped fields gone and the rest length-capped. */
-export function toWireAgent(agent: Agent): Agent {
+export function toWireAgent(agent: Agent, options?: WireOptions): Agent {
   const out: {
     -readonly [K in keyof Agent]: Agent[K];
   } = {
@@ -90,15 +142,35 @@ export function toWireAgent(agent: Agent): Agent {
   if (agent.writeAgeMs !== undefined) out.writeAgeMs = agent.writeAgeMs;
   if (agent.doneSignal !== undefined) out.doneSignal = agent.doneSignal;
 
+  /*
+   * N-WP15a. The two prose fields, and only when the caller asked.
+   *
+   * `description` is the `Agent` tool's three-to-five-word label and `task` is
+   * the brief it was launched with. The label is the better *line* — a node is
+   * 156 px wide — and the brief is what the hover card has room for, so both
+   * cross and the canvas decides which goes where. Neither is present at all
+   * unless this request asked for task text, which is what keeps the default
+   * payload byte-identical to the one before this package.
+   */
+  if (options?.task === true) {
+    const description = redactTask(agent.description, options);
+    if (description !== undefined) out.description = description;
+    const task = redactTask(agent.task, options);
+    if (task !== undefined) out.task = task;
+  }
+
   return out;
 }
 
-function toWireNode(node: AgentNode): AgentNode {
-  return { agent: toWireAgent(node.agent), children: node.children.map(toWireNode) };
+function toWireNode(node: AgentNode, options?: WireOptions): AgentNode {
+  return {
+    agent: toWireAgent(node.agent, options),
+    children: node.children.map((child) => toWireNode(child, options)),
+  };
 }
 
 /** One session, redacted. `agents` and `roots` carry the same sanitized set. */
-export function toWireSession(session: SessionView, options?: RedactOptions): SessionView {
+export function toWireSession(session: SessionView, options?: WireOptions): SessionView {
   const out: {
     -readonly [K in keyof SessionView]: SessionView[K];
   } = {
@@ -109,8 +181,8 @@ export function toWireSession(session: SessionView, options?: RedactOptions): Se
     state: session.state,
     source: session.source,
     lastSeenAt: session.lastSeenAt,
-    agents: session.agents.map(toWireAgent),
-    roots: session.roots.map(toWireNode),
+    agents: session.agents.map((agent) => toWireAgent(agent, options)),
+    roots: session.roots.map((node) => toWireNode(node, options)),
     orphans: [...session.orphans],
     treeRead: session.treeRead,
   };
@@ -128,6 +200,12 @@ export function toWireSession(session: SessionView, options?: RedactOptions): Se
   if (session.lastWriteAt !== undefined) out.lastWriteAt = session.lastWriteAt;
   if (session.statusUpdatedAt !== undefined) out.statusUpdatedAt = session.statusUpdatedAt;
   if (session.currentTool !== undefined) out.currentTool = clip(session.currentTool);
+  // N-WP15a: what this session was last asked to do. Absent on every card
+  // unless this request asked for it and the reader was allowed to read it.
+  if (options?.task === true) {
+    const task = redactTask(session.task, options);
+    if (task !== undefined) out.task = task;
+  }
   if (session.toolCalls !== undefined) out.toolCalls = session.toolCalls;
   if (session.transcriptAt !== undefined) out.transcriptAt = session.transcriptAt;
   if (session.writeAgeMs !== undefined) out.writeAgeMs = session.writeAgeMs;
@@ -219,7 +297,7 @@ export function toWireQuota(quota: Quota): Quota {
 }
 
 /** The whole snapshot, ready for `JSON.stringify`. */
-export function toWireState(snapshot: StateSnapshot, options?: RedactOptions): StateSnapshot {
+export function toWireState(snapshot: StateSnapshot, options?: WireOptions): StateSnapshot {
   const out: {
     -readonly [K in keyof StateSnapshot]: StateSnapshot[K];
   } = {
@@ -246,14 +324,22 @@ export function toWireState(snapshot: StateSnapshot, options?: RedactOptions): S
  * the live canvas puts `cwd` through, so a slug that happens to contain a
  * token-shaped run is masked and an absurdly long one is cut.
  */
-function wireProject(project: string, options?: RedactOptions): string {
+function wireProject(project: string, options?: WireOptions): string {
   return redact(project, options);
 }
 
-/** One listing row. The raw slug and the project directory never leave. */
+/**
+ * One listing row.
+ *
+ * The raw slug and the project directory never leave — and neither does a task,
+ * at any setting. A listing is built by `readdir` and `stat` alone and opens no
+ * transcript, so there is no task text here to send; adding one would mean
+ * parsing every session on disk to draw a list, which is the thing WP4b exists
+ * not to do.
+ */
 export function toWireHistorySummary(
   summary: HistorySummary,
-  options?: RedactOptions,
+  options?: WireOptions,
 ): HistorySummary {
   const out: {
     -readonly [K in keyof HistorySummary]: HistorySummary[K];
@@ -276,15 +362,15 @@ export function toWireHistorySummary(
 }
 
 /** One frozen session. Agents go through the same gate as the live canvas. */
-export function toWireHistory(history: History, options?: RedactOptions): History {
+export function toWireHistory(history: History, options?: WireOptions): History {
   const out: {
     -readonly [K in keyof History]: History[K];
   } = {
     sessionId: history.sessionId,
     project: wireProject(history.project, options),
     agentCount: history.agentCount,
-    agents: history.agents.map(toWireAgent),
-    roots: history.roots.map(toWireNode),
+    agents: history.agents.map((agent) => toWireAgent(agent, options)),
+    roots: history.roots.map((node) => toWireNode(node, options)),
     orphans: [...history.orphans],
     dedupeFallbacks: history.dedupeFallbacks,
     bytesRead: history.bytesRead,
@@ -298,6 +384,10 @@ export function toWireHistory(history: History, options?: RedactOptions): Histor
   if (history.durationMs !== undefined) out.durationMs = history.durationMs;
   if (history.model !== undefined) out.model = clip(history.model);
   if (history.effort !== undefined) out.effort = clip(history.effort);
+  if (options?.task === true) {
+    const task = redactTask(history.task, options);
+    if (task !== undefined) out.task = task;
+  }
   if (history.toolCalls !== undefined) out.toolCalls = history.toolCalls;
   const tokens = copyTokens(history.tokens);
   if (tokens !== undefined) out.tokens = tokens;
@@ -309,7 +399,7 @@ export function toWireHistory(history: History, options?: RedactOptions): Histor
 /** One page of the listing. */
 export function toWireHistoryPage(
   page: HistoryListPage,
-  options?: RedactOptions,
+  options?: WireOptions,
 ): HistoryListPage {
   const out: {
     -readonly [K in keyof HistoryListPage]: HistoryListPage[K];

@@ -91,9 +91,40 @@ pub struct Config {
     )]
     pub port: Option<u16>,
 
+    /// N-WP15a: whether the canvas may show the task text at all.
+    ///
+    /// `"on"` — the default and the absent value — means *the browser decides*, and every
+    /// browser decides "no" until somebody moves the switch in the settings panel. `"off"`
+    /// is recording mode: the shell starts its child server with `--no-task-text`, so no
+    /// browser talking to it can be shown a task line whatever its own switch says, and
+    /// the readers in `@nazar/core` never take prose out of a transcript in the first
+    /// place.
+    ///
+    /// **Why a string and not a `bool`.** Two reasons, and the second is the one that
+    /// decided it. A boolean called `taskText` would have to be `false` for "off", and
+    /// `#[serde(default)]` on a `bool` is `false` — so a file written by a build that
+    /// predates this key, or a file with the key hand-deleted, would read as recording
+    /// mode and quietly turn the feature off for a user who never asked. And the setting
+    /// genuinely has room to grow a third state later ("on, and remember it per project",
+    /// say) that a boolean would have to be replaced to express. An unrecognised value
+    /// reads as the default, for the same reason [`lenient_port`] exists: one strange
+    /// setting must not cost the user their autostart choice as well.
+    #[serde(default = "default_task_text")]
+    pub task_text: String,
+
     /// Everything this build did not recognise, kept so it survives a round trip.
     #[serde(flatten)]
     pub extra: Map<String, Value>,
+}
+
+/// The value that means "the browser decides", which is what an absent key means.
+pub const TASK_TEXT_ON: &str = "on";
+
+/// The value that means recording mode: the child server gets `--no-task-text`.
+pub const TASK_TEXT_OFF: &str = "off";
+
+fn default_task_text() -> String {
+    TASK_TEXT_ON.to_owned()
 }
 
 const fn default_schema_version() -> u32 {
@@ -129,6 +160,7 @@ impl Default for Config {
             schema_version: SCHEMA_VERSION,
             autostart: false,
             port: None,
+            task_text: default_task_text(),
             extra: Map::new(),
         }
     }
@@ -190,6 +222,30 @@ impl Config {
     pub fn read(path: &std::path::Path) -> Result<Self, String> {
         let text = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
         serde_json::from_str(&text).map_err(|error| error.to_string())
+    }
+
+    /// N-WP15a: may the canvas ask for task text on this machine?
+    ///
+    /// True unless the setting says exactly [`TASK_TEXT_OFF`]. Anything else — the
+    /// default, a value from a newer build, a hand-edited typo — leaves the browser in
+    /// charge, and the browser's own default is off. That direction is deliberate: the
+    /// failure mode of guessing wrong here is a feature that is switched off in a
+    /// browser and stays off, rather than a machine that silently stopped honouring a
+    /// mode somebody turned on for a reason.
+    #[must_use]
+    pub fn task_text_allowed(&self) -> bool {
+        self.task_text != TASK_TEXT_OFF
+    }
+
+    /// Turn recording mode on or off. Returns whether anything was written.
+    pub fn set_task_text_allowed(&mut self, allowed: bool) -> Result<bool, String> {
+        let wanted = if allowed { TASK_TEXT_ON } else { TASK_TEXT_OFF };
+        if self.task_text == wanted {
+            return Ok(false);
+        }
+        self.task_text = wanted.to_owned();
+        self.save()?;
+        Ok(true)
     }
 
     /// Record the port the canvas is being served on, if it is not already recorded.
@@ -430,6 +486,63 @@ mod tests {
             "a launch that reused its port changes nothing on disk"
         );
         assert_eq!(again.port, Some(49_732));
+    }
+
+    /* ---- N-WP15a: recording mode ------------------------------------ */
+
+    #[test]
+    fn a_fresh_machine_leaves_the_task_text_setting_to_the_browser() {
+        let config = Config::default();
+        assert_eq!(config.task_text, TASK_TEXT_ON);
+        assert!(
+            config.task_text_allowed(),
+            "the default is 'the browser decides', and every browser decides no"
+        );
+    }
+
+    #[test]
+    fn a_file_written_before_this_key_existed_does_not_read_as_recording_mode() {
+        // The whole reason the setting is a string. A `bool` would default to
+        // `false`, and every machine upgrading from an older build would come
+        // up with the feature silently hard-disabled and no way to see why.
+        let scratch = Scratch::new("task-text-absent");
+        std::fs::write(scratch.file(), r#"{"schemaVersion":1,"autostart":true}"#).expect("seeded");
+        let read = Config::read(&scratch.file()).expect("read");
+        assert!(read.task_text_allowed());
+        assert!(read.autostart, "the rest of the document survives it");
+    }
+
+    #[test]
+    fn recording_mode_survives_a_round_trip_and_a_value_nobody_knows_does_not_break_it() {
+        let scratch = Scratch::new("task-text-round-trip");
+        let config = Config {
+            task_text: TASK_TEXT_OFF.to_owned(),
+            ..Config::default()
+        };
+        config.write(&scratch.file()).expect("written");
+        let read = Config::read(&scratch.file()).expect("read back");
+        assert_eq!(read, config);
+        assert!(!read.task_text_allowed());
+
+        // A value from a newer build, or a typo. It must not be read as "off":
+        // the safe direction is the one that leaves the browser in charge, and
+        // the browser is off by default anyway.
+        std::fs::write(scratch.file(), r#"{"taskText":"per-project"}"#).expect("seeded");
+        let odd = Config::read(&scratch.file()).expect("still parses");
+        assert!(odd.task_text_allowed());
+    }
+
+    #[test]
+    fn setting_the_mode_to_what_it_already_is_writes_nothing() {
+        let mut config = Config::default();
+        assert!(config.task_text_allowed());
+        // `set_task_text_allowed` writes through `save`, which resolves its own
+        // path from the environment, so the no-op branch is what is asserted
+        // here — the same shape as `remember_port` above.
+        assert!(
+            !config.set_task_text_allowed(true).expect("no write needed"),
+            "a switch moved to where it already was changes nothing on disk"
+        );
     }
 
     /// The collision this module exists to avoid, asserted rather than described.

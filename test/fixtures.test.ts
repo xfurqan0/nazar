@@ -127,6 +127,60 @@ test('no transcript fixture holds prompt or response text', () => {
   }
 });
 
+test('N-WP15a: no fixture carries a task anybody actually typed', () => {
+  /*
+   * The test above already proves every content-block field in every transcript
+   * slice was replaced with `[redacted]`, and that is where task text would come
+   * from. This is the narrower claim the new feature needs, stated in its own
+   * terms so that deleting it would be a visible act:
+   *
+   * **a fixture's `user` lines hold nothing a person wrote.** `task-text.ts`
+   * reads exactly those lines, so while this holds, running the whole task-text
+   * path over the fixtures cannot produce a sentence off anybody's machine — and
+   * the fixtures are what the tests, the screenshots and the reviewers see.
+   */
+  const slices = fixtures.filter(([name]) => name.endsWith('.jsonl'));
+  assert.ok(slices.length >= 3);
+
+  for (const [name, raw] of slices) {
+    for (const line of raw.split('\n').filter((l) => l.length > 0)) {
+      const entry = JSON.parse(line) as { type?: string; message?: { content?: unknown } };
+      if (entry.type !== 'user') continue;
+      const content = entry.message?.content;
+      if (content === undefined) continue;
+      // A bare string is the older shape of a typed turn, and it would be read
+      // verbatim, so it must not be the shape a fixture uses.
+      assert.notEqual(typeof content, 'string', `${name}: a user line carries loose text`);
+      for (const block of content as Array<Record<string, unknown>>) {
+        if (block['type'] !== 'text') continue;
+        assert.equal(block['text'], '[redacted]', `${name}: a user text block was not redacted`);
+      }
+    }
+  }
+});
+
+test('N-WP15a: every meta fixture carries the Agent tool description key', () => {
+  /*
+   * A shape check rather than a leak check, and it is here because the canvas
+   * depends on it: a subagent node shows `description` — the `Agent` tool's
+   * three-to-five-word label — in preference to the brief, because 156 px has
+   * room for a label and not for a sentence. If the key were absent from the
+   * meta files, every node would silently fall back to the brief and the choice
+   * would never be exercised by anything.
+   *
+   * The value is the placeholder the sanitizer put there, which the chain test
+   * below also asserts; what is pinned here is that the key is present at all,
+   * on every meta fixture rather than on one of them.
+   */
+  const metas = fixtures.filter(([name]) => name.endsWith('.meta.json'));
+  assert.ok(metas.length >= 5, 'the subagent meta fixtures are missing');
+  for (const [name, raw] of metas) {
+    const meta = JSON.parse(raw) as Record<string, unknown>;
+    assert.ok('description' in meta, `${name} has no description key`);
+    assert.equal(meta['description'], 'task placeholder', `${name} carries a real description`);
+  }
+});
+
 test('the parent slice carries the bridge and nothing else from toolUseResult', () => {
   const raw = readFileSync(path.join(fixturesDir, 'subagents', 'parent-slice.jsonl'), 'utf8');
   const results = raw

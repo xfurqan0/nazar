@@ -27,7 +27,27 @@
  * One string does leave by design: a **tool name**. It is the only content-block
  * field the hover card shows, and the leak test keeps a real tool name in the
  * poisoned line precisely so the exception stays visible.
+ *
+ * ## N-WP15a: the second string, and why it is not an exception
+ *
+ * A caller may now ask for one more thing — the **task text**, the human turn's
+ * own words on a `user` line — by passing `{ taskText: true }`. It is worth
+ * being precise about what that does and does not change:
+ *
+ * - It is **off unless asked for**, on every call in this package. The default
+ *   behaviour of this file is what it was, which is why the sentinel test above
+ *   still passes unchanged and why `nazar --no-task-text` can be a switch on a
+ *   code path rather than a filter over its output.
+ * - It reads the *human* turn only. `task-text.ts` holds the rules and the
+ *   reasoning; nothing about `assistant` lines moved, so the model's prose, its
+ *   thinking, every tool input and every tool result are as unreachable as they
+ *   were.
+ * - It widens nothing else. The task never enters the dedupe key, never reaches
+ *   `toolUseResult`, and is dropped again at the wire unless the browser asked
+ *   for it too.
  */
+import type { ExtractOptions } from './task-text.js';
+import { extractTaskText } from './task-text.js';
 
 /**
  * Longest string the extractor will carry out of a line. Every field it reads
@@ -102,6 +122,17 @@ export interface TranscriptEvent {
   /** Names of the `tool_use` blocks on this line, in order. Names only. */
   readonly toolNames?: readonly string[];
   readonly toolUseResult?: ExtractedToolUseResult;
+  /**
+   * N-WP15a. The human turn's own words, cleaned and capped by
+   * `task-text.ts` — **present only when the caller passed
+   * `{ taskText: true }`**, and only on a `user` line that carried something a
+   * person actually typed.
+   *
+   * It is the one prose field in this interface and it is absent by default,
+   * which is the whole of the guarantee: a reader that does not ask never has
+   * it to leak.
+   */
+  readonly taskText?: string;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -221,7 +252,10 @@ export function isCompletionResult(result: ExtractedToolUseResult): boolean {
  * Parse one JSONL line into a `TranscriptEvent`, or `undefined` when the line
  * is not JSON, not an object, or not a type we read. Never throws.
  */
-export function extractTranscriptLine(raw: string): TranscriptEvent | undefined {
+export function extractTranscriptLine(
+  raw: string,
+  options?: ExtractOptions,
+): TranscriptEvent | undefined {
   if (raw.length === 0) return undefined;
   let parsed: unknown;
   try {
@@ -229,11 +263,14 @@ export function extractTranscriptLine(raw: string): TranscriptEvent | undefined 
   } catch {
     return undefined;
   }
-  return extractTranscriptRecord(parsed);
+  return extractTranscriptRecord(parsed, options);
 }
 
 /** The same, for a value that has already been parsed. */
-export function extractTranscriptRecord(parsed: unknown): TranscriptEvent | undefined {
+export function extractTranscriptRecord(
+  parsed: unknown,
+  options?: ExtractOptions,
+): TranscriptEvent | undefined {
   if (!isRecord(parsed)) return undefined;
   const type = readLineType(parsed['type']);
   if (type === undefined) return undefined;
@@ -278,6 +315,20 @@ export function extractTranscriptRecord(parsed: unknown): TranscriptEvent | unde
 
   const toolUseResult = readToolUseResult(parsed['toolUseResult']);
   if (toolUseResult !== undefined) event.toolUseResult = toolUseResult;
+
+  /*
+   * N-WP15a, and it is the last thing this function does on purpose: the whole
+   * of the opt-in is one guarded call. With the flag absent — which is every
+   * caller in this package unless a CLI flag said otherwise — the extractor
+   * below never runs, so there is no text in the process to filter later.
+   *
+   * `user` only. An `assistant` line's text is the model's answer, which is not
+   * a task and is not something this product shows at any setting.
+   */
+  if (options?.taskText === true && type === 'user') {
+    const task = extractTaskText(parsed['message']);
+    if (task !== undefined) event.taskText = task;
+  }
 
   return event;
 }

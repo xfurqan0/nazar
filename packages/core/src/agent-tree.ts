@@ -34,6 +34,11 @@ export interface AgentActivity {
   readonly lastLineType?: 'assistant' | 'user';
   /** The transcript ends on an assistant line with an unanswered `tool_use`. */
   readonly pendingToolUse?: boolean;
+  /**
+   * N-WP15a: the brief this agent was launched with, from the **first** human
+   * turn of its own transcript. Absent unless task text was asked for.
+   */
+  readonly task?: string;
 }
 
 export interface BuildAgentTreeOptions {
@@ -212,6 +217,9 @@ export function buildAgentTree(options: BuildAgentTreeOptions): AgentTree {
     }
     if (meta.toolUseId !== undefined) agent.toolUseId = meta.toolUseId;
     if (meta.workflowRunId !== undefined) agent.workflowRunId = meta.workflowRunId;
+    // N-WP15a. Absent unless the transcript reader was asked for task text, so
+    // this line writes nothing on the default path.
+    if (stats?.task !== undefined) agent.task = stats.task;
     if (stats?.tokens !== undefined) agent.tokens = stats.tokens;
     if (stats?.effort !== undefined) agent.effort = stats.effort;
     if (stats?.currentTool !== undefined) agent.currentTool = stats.currentTool;

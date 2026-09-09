@@ -28,6 +28,7 @@ import path from 'node:path';
 import type { History, HistoryListOptions, HistoryListPage, StateSnapshot } from '@nazar/core';
 
 import type { RedactOptions } from './redact.js';
+import type { WireOptions } from './snapshot.js';
 import { toWireHistory, toWireHistoryPage, toWireState } from './snapshot.js';
 import { VERSION, VERSION_HEADER } from './version.js';
 
@@ -79,6 +80,20 @@ export interface NazarServerOptions {
   readonly port?: number;
   readonly heartbeatMs?: number;
   readonly redact?: RedactOptions;
+  /**
+   * N-WP15a: whether this server will *ever* answer with task text.
+   *
+   * Defaults to `true`, which means "the browser decides" — and the browser's
+   * default is off, so a fresh install shows none. `nazar --no-task-text` sets
+   * it `false`, and then no query string, no header and no stored preference
+   * can produce a `task` field: the flag is checked here **and** the readers in
+   * `@nazar/core` were built with it off, so there is nothing in the process to
+   * send in the first place. The two halves are deliberately not one check —
+   * a switch that only filtered the output would still have the text in memory,
+   * and "Nazar never read it" is the sentence this feature has to be able to
+   * keep.
+   */
+  readonly taskText?: boolean;
 }
 
 export interface NazarServer {
@@ -214,9 +229,25 @@ export function createRequestListener(
 ): (req: IncomingMessage, res: ServerResponse) => void {
   const heartbeatMs = options.heartbeatMs ?? DEFAULT_HEARTBEAT_MS;
   const redactOptions = options.redact;
+  /** N-WP15a: the hard switch. `false` here outranks every caller. */
+  const taskAllowed = options.taskText !== false;
 
-  const wire = (): string =>
-    JSON.stringify(toWireState(options.state.snapshot(), redactOptions));
+  /**
+   * The wire options for one request.
+   *
+   * `?task=1` is the whole protocol: a query parameter rather than a header
+   * because `EventSource` cannot set headers, and the SSE stream is the channel
+   * that matters. Anything other than the exact string `1` is "no", so a stale
+   * link carrying `?task=0` or `?task=true` reads as off rather than as
+   * something to guess at.
+   */
+  const wireOptionsFor = (query: URLSearchParams): WireOptions | undefined => {
+    if (!taskAllowed || query.get('task') !== '1') return redactOptions;
+    return { ...redactOptions, task: true };
+  };
+
+  const wire = (query: URLSearchParams): string =>
+    JSON.stringify(toWireState(options.state.snapshot(), wireOptionsFor(query)));
 
   const serveStatic = (req: IncomingMessage, res: ServerResponse, urlPath: string): void => {
     const file = resolveStaticPath(options.uiDir, urlPath);
@@ -254,7 +285,18 @@ export function createRequestListener(
     );
   };
 
-  const serveEvents = (req: IncomingMessage, res: ServerResponse): void => {
+  const serveEvents = (
+    req: IncomingMessage,
+    res: ServerResponse,
+    query: URLSearchParams,
+  ): void => {
+    // N-WP15a: read once, at subscription. A stream's shape is fixed by the URL
+    // that opened it, so a browser that changes the setting reconnects — which
+    // is also what makes the change visible on the very next frame rather than
+    // whenever the next snapshot happened to differ.
+    const wireOptions = wireOptionsFor(query);
+    const frame = (): string =>
+      JSON.stringify(toWireState(options.state.snapshot(), wireOptions));
     res.writeHead(200, {
       ...baseHeaders(),
       'Content-Type': 'text/event-stream; charset=utf-8',
@@ -265,10 +307,10 @@ export function createRequestListener(
     res.write(`retry: ${SSE_RETRY_MS}\n\n`);
     // The first frame is the whole state, so a reconnecting client is correct
     // immediately and never has to ask for a snapshot separately.
-    res.write(`event: state\ndata: ${wire()}\n\n`);
+    res.write(`event: state\ndata: ${frame()}\n\n`);
 
     const onChange = (): void => {
-      res.write(`event: state\ndata: ${wire()}\n\n`);
+      res.write(`event: state\ndata: ${frame()}\n\n`);
     };
     options.state.on('change', onChange);
 
@@ -320,7 +362,8 @@ export function createRequestListener(
       if (project !== null && project.length > 0) listOptions.project = project;
 
       void source.list(listOptions).then(
-        (page) => sendJson(req, res, 200, JSON.stringify(toWireHistoryPage(page, redactOptions))),
+        (page) =>
+          sendJson(req, res, 200, JSON.stringify(toWireHistoryPage(page, wireOptionsFor(query)))),
         failed,
       );
       return;
@@ -337,7 +380,7 @@ export function createRequestListener(
         sendText(res, 404, 'not found\n');
         return;
       }
-      sendJson(req, res, 200, JSON.stringify(toWireHistory(history, redactOptions)));
+      sendJson(req, res, 200, JSON.stringify(toWireHistory(history, wireOptionsFor(query))));
     }, failed);
   };
 
@@ -364,7 +407,7 @@ export function createRequestListener(
     }
 
     if (urlPath === '/api/state') {
-      sendJson(req, res, 200, wire());
+      sendJson(req, res, 200, wire(query));
       return;
     }
 
@@ -374,7 +417,7 @@ export function createRequestListener(
         res.end();
         return;
       }
-      serveEvents(req, res);
+      serveEvents(req, res, query);
       return;
     }
 

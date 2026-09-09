@@ -1636,6 +1636,19 @@ body {
   font-size: var(--nz-size-sm);
 }
 
+/*
+ * N-WP15a: the task line, under the folder path.
+ *
+ * Quiet on purpose — the secondary text colour, italic, and no heavier than the
+ * path above it. The card is a picture of *how much* and *how long*; the one
+ * line of *what* has to sit inside that picture rather than take it over.
+ */
+.nz-session__task {
+  fill: var(--nz-text-faint);
+  font-size: var(--nz-size-sm);
+  font-style: italic;
+}
+
 .nz-session__identity {
   fill: var(--nz-text-faint);
   font-size: var(--nz-size-sm);
@@ -1965,6 +1978,19 @@ body {
   font-size: var(--nz-size-xs);
 }
 
+/*
+ * N-WP15a: the brief, on the node's seventh line.
+ *
+ * The faintest text on the node, deliberately. It is the only thing here that
+ * is prose rather than a measurement, and a canvas whose loudest text was
+ * somebody's typing would stop being a monitor.
+ */
+.nz-agent__task {
+  fill: var(--nz-text-faint);
+  font-size: var(--nz-size-xs);
+  font-style: italic;
+}
+
 .nz-agent__tokens {
   fill: var(--nz-text-faint);
   font-family: var(--nz-mono-family);
@@ -2275,6 +2301,28 @@ body {
   word-break: break-all;
 }
 
+/*
+ * N-WP15a: the task, in full, on the hover card.
+ *
+ * Up to 300 characters, so it wraps — but never past four lines, because the
+ * card follows the cursor and one that grew to half the window would cover the
+ * canvas it is describing. `word-break` is deliberately *not* `break-all` the
+ * way the subtitle's is: a path has no spaces and a sentence does.
+ */
+.nz-card__task {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 4;
+  line-clamp: 4;
+  overflow: hidden;
+  margin-top: 8px;
+  color: var(--nz-text-muted);
+  font-size: var(--nz-size-xs);
+  font-style: italic;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .nz-card__body {
   margin-top: 10px;
   display: grid;
@@ -2563,6 +2611,17 @@ body {
   color: var(--nz-text-faint);
   font-size: var(--nz-size-xs);
   line-height: 1.45;
+}
+
+/*
+ * N-WP15a: the address under the link menu's two entries.
+ *
+ * A URL has no spaces to wrap at, so it is allowed to break anywhere rather
+ * than pushing the menu wider than the window it has to fit inside. It is there
+ * to be read, not clicked, so it stays a paragraph.
+ */
+.nz-menu__note--link {
+  overflow-wrap: anywhere;
 }
 
 /* ----------------------------------------------- sidebar: folder tabs */

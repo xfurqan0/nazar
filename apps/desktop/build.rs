@@ -25,6 +25,9 @@ fn main() {
             "jump_to_session",
             "get_autostart",
             "set_autostart",
+            // N-WP15a: recording mode, which the settings panel reads and writes.
+            "get_task_text_off",
+            "set_task_text_off",
         ]),
     ))
     .expect("failed to build the Tauri context");

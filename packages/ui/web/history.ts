@@ -29,6 +29,7 @@ import {
   groupByProject,
   shortSessionId,
 } from '../src/history-view.ts';
+import { withTaskQuery } from '../src/task-text.ts';
 import { clear, html, setClass, setText } from './dom.ts';
 
 /** Sessions asked for in one page. The panel scrolls; it does not paginate. */
@@ -59,8 +60,16 @@ export interface HistoryPanelOptions {
   readonly projectNameFor?: (project: string) => string | undefined;
 }
 
-/** Fetch over the local server. The only network this page ever does. */
-export function httpTransport(): HistoryTransport {
+/**
+ * Fetch over the local server. The only network this page ever does.
+ *
+ * N-WP15a: `taskText` is asked at each call rather than captured once, because
+ * the switch can be thrown while the drawer is open — and a frozen session
+ * opened after it was thrown has to answer the way the live canvas does. The
+ * *listing* deliberately does not carry it: a listing is `readdir` and `stat`
+ * and opens no transcript, so there is no task in one to ask for.
+ */
+export function httpTransport(taskText: () => boolean = () => false): HistoryTransport {
   return {
     list: async (limit) => {
       const response = await fetch(`/api/history?limit=${limit}`);
@@ -68,7 +77,9 @@ export function httpTransport(): HistoryTransport {
       return (await response.json()) as HistoryListPage;
     },
     open: async (sessionId) => {
-      const response = await fetch(`/api/history/${encodeURIComponent(sessionId)}`);
+      const response = await fetch(
+        withTaskQuery(`/api/history/${encodeURIComponent(sessionId)}`, taskText()),
+      );
       if (response.status === 404) return undefined;
       if (!response.ok) throw new Error(`history open failed: ${response.status}`);
       return (await response.json()) as History;
