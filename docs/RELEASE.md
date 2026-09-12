@@ -7,27 +7,41 @@ visibility are one-way doors, and they belong to a person.
 Read it top to bottom the first time. Steps 1 to 5 are reversible; step 6
 onwards is not.
 
-**A release has two artifacts in total, and they are cut from the same commit:**
+**A release has six artifacts, and every one of them is cut from the same
+commit:**
 
 | Artifact | Platforms | Built by | Goes to |
 |---|---|---|---|
 | `xfurqan0-nazar-<version>.tgz` | Windows, macOS, Linux | `npm pack` (through `prepack`) | npm, and attached to the GitHub Release |
-| `nazar-desktop_<version>_x64-setup.exe` | Windows only | `node scripts/build-desktop.mjs` (step 4b) | the GitHub Release only |
+| `nazar-desktop_<version>_x64-setup.exe` | Windows | `node scripts/build-desktop.mjs` on your own machine (step 4b) | the GitHub Release only |
+| `nazar-desktop-macos-arm64` — one `.dmg` | macOS, Apple silicon | the `desktop bundle` job in CI, on the `v*` tag (step 6) | the GitHub Release only |
+| `nazar-desktop-macos-x64` — one `.dmg` | macOS, Intel | the same job, cross-compiled on the same runner | the GitHub Release only |
+| `nazar-desktop-linux-x64` — an `.AppImage` and a `.deb` | Linux, x86-64 | the same job | the GitHub Release only |
 
-**Two artifacts for the release, not two per platform.** The tarball is pure
-JavaScript and is the same file on every platform — one `npm publish` covers all
-three. The desktop shell is Windows-only in v1 (`docs/PROJECT.md` §6, WP8), so
-there is no `.dmg`, no `.AppImage` and no `.deb`, and CI builds no bundle on
-macOS or Linux: what runs there is the pure crate's tests (`shell-core`) and the
-pack smoke, neither of which produces an artifact. **On macOS and Linux the
-release is the npm tarball and nothing else**, and browser mode is the whole
-product there — `npx @xfurqan0/nazar` opens the same canvas. When the shell is
-ported (v2), this table gains rows and this paragraph goes.
+**One tarball for all three platforms, and a desktop bundle per platform.** The
+tarball is pure JavaScript and is the same file everywhere — one `npm publish`
+covers all three, and `npx @xfurqan0/nazar` opens the same canvas on each. The
+desktop shell is a native application, so it is one bundle per platform and per
+architecture, and only one of them is built where you are standing: the Windows
+installer in step 4b, on your own machine. The other four come out of the
+`desktop bundle` job in `.github/workflows/ci.yml`, which runs on a `v*` tag and
+on `workflow_dispatch` and on nothing else — a macOS runner bills at ten times a
+Linux one and none of those four files decides whether a change is correct, so
+they are built at the moment a release actually needs them. You download them
+from the tag's own run with `gh run download` (step 6) and attach them in step 9.
+`docs/PLATFORMS.md` is the page that says what each platform gets, and it is the
+one to keep in step with this table.
 
-The installer ships the tarball's own contents as resources — the same
-`bin/nazar.mjs`, `dist/nazar.mjs` and `dist/web/` — so the two can never be
-built from different code. There is one version number and step 1 sets it for
-both.
+**Nothing here is signed by an authority a desktop trusts on sight**, and that
+is a fact about the release rather than a step: the Windows installer is
+unsigned, the two `.dmg` files are ad-hoc signed and not notarised, and the
+Linux bundles are not signed at all, which is ordinary for both formats. The
+release notes say each of those plainly instead of leaving people to guess.
+
+Every desktop bundle ships the tarball's own contents as resources — the same
+`bin/nazar.mjs`, `dist/nazar.mjs` and `dist/web/` — so the shell and the package
+can never be built from different code. There is one version number and step 1
+sets it for all of them.
 
 ---
 
@@ -116,8 +130,16 @@ Move the `## [0.1.0] — unreleased` heading in `CHANGELOG.md` to
 `## [0.1.0] — YYYY-MM-DD`, and set the README status line to the released
 wording (drop the "not yet published" sentence).
 
+Add them by name. A release commit is the one commit whose contents you can
+list before you make it, and `git add -A` is how a stray file rides along into
+the thing you are about to tag:
+
 ```bash
-git add -A
+git add package.json packages/core/package.json packages/server/package.json \
+        packages/ui/package.json packages/core/src/index.ts Cargo.toml \
+        apps/desktop/tauri.conf.json packages/ui/web/index.html \
+        CHANGELOG.md README.md package-lock.json Cargo.lock
+git status --porcelain          # read it: nothing staged that you did not name
 git commit -m "Release 0.1.0"
 ```
 
@@ -313,6 +335,28 @@ git push origin main
 git push origin v0.1.0
 ```
 
+**The tag is also what builds the macOS and Linux bundles.** Pushing it starts a
+full CI run, and in that run — and in no run an ordinary push ever starts — the
+`desktop bundle` job produces the two `.dmg` files, the `.AppImage` and the
+`.deb`. It is a release build on three runners, so it is tens of minutes; it is
+started here rather than in step 9 for that reason, and npm can be published
+while it runs.
+
+```bash
+gh run list --workflow ci.yml --branch v0.1.0 --limit 1   # the tag's own run
+gh run watch <run-id> --exit-status                       # every job green
+gh run download <run-id> --dir bundles                    # one directory per artifact
+ls bundles/nazar-desktop-macos-arm64 \
+   bundles/nazar-desktop-macos-x64 \
+   bundles/nazar-desktop-linux-x64
+```
+
+`gh run download` writes each artifact into a directory named after it, so the
+four files land under those three. GitHub delivers an artifact as a zip and a
+zip does not carry the executable bit, so the `.AppImage` arrives
+non-executable — a fact about the download rather than about the build, and the
+release notes tell the reader the `chmod +x` that answers it.
+
 ---
 
 ## 7. Publish to npm
@@ -363,19 +407,31 @@ gh api -X PUT repos/xfurqan0/nazar/vulnerability-alerts
 
 ## 9. GitHub Release
 
-Both artifacts go on the one release, and the installer is the second of them.
-There is nothing to attach for macOS or Linux: the tarball above is their
-release, and it is the same file.
+All six artifacts go on the one release: the tarball, the Windows installer you
+built in step 4b, and the four bundles you downloaded in step 6.
 
 ```bash
 gh release create v0.1.0 --title "Nazar 0.1.0" --notes-file docs/release-notes-0.1.0.md \
+  "xfurqan0-nazar-0.1.0.tgz" \
   "target/release/bundle/nsis/nazar-desktop_0.1.0_x64-setup.exe" \
-  "xfurqan0-nazar-0.1.0.tgz"
+  bundles/nazar-desktop-macos-arm64/*.dmg \
+  bundles/nazar-desktop-macos-x64/*.dmg \
+  bundles/nazar-desktop-linux-x64/*.AppImage \
+  bundles/nazar-desktop-linux-x64/*.deb
 ```
 
-The installer is unsigned, so Windows SmartScreen will warn on first run until
-the download builds reputation. That is a fact about the release rather than a
-step, and the release notes say so plainly instead of leaving people to guess.
+`gh release upload v0.1.0 <file>` adds one that was missed. Six downloads means
+six things a reader has to tell apart, so the notes name each one by the machine
+it is for: the two `.dmg` files differ by architecture and by nothing else, and
+the `.AppImage` and the `.deb` answer different questions on the same
+distribution.
+
+Three of them warn on first run, and none of the three warnings means anything
+is wrong with the file. Windows SmartScreen warns on the installer until the
+download builds reputation; Gatekeeper refuses a plain double-click on an
+ad-hoc signed `.dmg`, which a right-click · **Open** gets past; and the
+`.AppImage` needs its executable bit back after the zip. All three are facts
+about the release rather than steps, and the notes below say them plainly.
 
 Write `docs/release-notes-0.1.0.md` from this template — it is the CHANGELOG
 entry, shortened, with the limits kept rather than buried:
@@ -394,11 +450,26 @@ npx @xfurqan0/nazar
 Node 22 or newer. Nothing is installed into Claude Code, nothing is written
 anywhere, and nothing leaves the machine.
 
-Or, on Windows, `nazar-desktop_0.1.0_x64-setup.exe` below: the same canvas in a
-window with a tray icon, and one thing a browser tab cannot do — **double-click
-a session card and its terminal comes to the front**. It needs the same Node 22,
-which Claude Code already required, so no runtime is bundled. The installer is
-unsigned; SmartScreen will warn on first run.
+Or take a desktop bundle from the downloads below: the same canvas in a window
+with a tray icon, and one thing a browser tab cannot do — **double-click a
+session card and its terminal comes to the front**, which is Windows-only for
+now. It needs the same Node 22, which Claude Code already required, so no
+runtime is bundled.
+
+- **Windows** — `nazar-desktop_0.1.0_x64-setup.exe`. Unsigned, so SmartScreen
+  warns on first run: *More info · Run anyway*.
+- **macOS** — one `.dmg` for Apple silicon, one for Intel; take the one that
+  matches your machine. They are ad-hoc signed and not notarised, so Gatekeeper
+  will refuse a normal double-click: **right-click the application and choose
+  Open**, then Open again in the dialog, and macOS remembers the decision for
+  that copy.
+- **Linux** — an `.AppImage` that runs anywhere with a recent enough glibc, and
+  a `.deb` for Debian and Ubuntu that declares its dependencies. A download
+  arrives as a zip and a zip carries no executable bit, so the AppImage needs
+  it back: `chmod +x nazar-desktop_*.AppImage`.
+
+[docs/PLATFORMS.md](https://github.com/xfurqan0/nazar/blob/main/docs/PLATFORMS.md)
+says exactly what each of the three gets.
 
 ## What it does
 
@@ -426,13 +497,18 @@ unsigned; SmartScreen will warn on first run.
 - Transcript writes are asynchronous, so totals lag by seconds — the age of the
   last write is shown.
 - History reaches back only as far as Claude Code's own retention.
-- The desktop app is Windows-only. Its jump raises the terminal window and,
-  on Windows Terminal, selects the session's own tab within it; when several
-  windows could be the same session it raises nothing and says so rather than
-  guessing.
-- The desktop app is Windows-only, so on macOS and Linux the release is the npm
-  tarball alone and browser mode is the whole product.
-- The installer is unsigned, so SmartScreen warns on first run.
+- The jump to a terminal is Windows-only. It raises the window and, on Windows
+  Terminal, selects the session's own tab within it; when several windows could
+  be the same session it raises nothing and says so rather than guessing. The
+  macOS and Linux apps answer the same gesture with *not available on this
+  platform yet*.
+- On Linux the tray is a menu only — the desktop environment owns the click —
+  so *Open · Refresh · Quit* is the whole tray interaction and the window is
+  opened from the menu.
+- No bundle is signed the way a desktop trusts on sight: the Windows installer
+  is unsigned and SmartScreen warns on first run, and the `.dmg` files are
+  ad-hoc signed rather than notarised, so the first launch needs the
+  right-click · Open above.
 
 Full list in the [README](https://github.com/xfurqan0/nazar#known-limits).
 
@@ -456,8 +532,10 @@ MIT licensed.
   will get "it shows nothing" reports; `nazar doctor` output is the first thing
   to ask for.
 - Code signing: the npm package needs none — it is JavaScript through a
-  registry. **The desktop installer does**, eventually: it is an unsigned
-  executable, so Windows SmartScreen warns until the download builds enough
-  reputation, and every warning costs installs. It is not worth a certificate
-  for a pre-alpha with an unknown number of users; revisit it when the download
-  count says otherwise, and keep it out of the v1 gate until then.
+  registry. **The desktop bundles do**, eventually: the Windows installer is an
+  unsigned executable, so SmartScreen warns until the download builds enough
+  reputation, and the `.dmg` files are ad-hoc signed rather than notarised, so
+  Gatekeeper asks for a right-click · Open every first launch. Every warning
+  costs installs. Neither a certificate nor Apple's $99 a year is worth it for a
+  pre-alpha with an unknown number of users; revisit both when the download
+  count says otherwise, and keep them out of the v1 gate until then.

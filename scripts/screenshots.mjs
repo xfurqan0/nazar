@@ -412,7 +412,7 @@ const SCENARIOS = [
   {
     name: 'wp4f-resize-dark',
     what: 'A card dragged narrower from its corner: the tree re-wraps, the grips are drawn',
-    where: 'README, "Resize a card"',
+    where: 'README, "Themes and colours", fourth image',
     query: 'demo=1&theme=dark&sessions=2&agents=10',
     width: 1560,
     height: 800,
@@ -428,7 +428,7 @@ const SCENARIOS = [
   {
     name: 'wp4f-cleared-dark',
     what: 'The same card with its finished subagents hidden, and the chip that brings them back',
-    where: 'README, "Resize a card", second image',
+    where: 'README, "Clear finished subagents"',
     query: 'demo=1&theme=dark&sessions=2&agents=10',
     width: 1560,
     height: 800,
@@ -492,9 +492,8 @@ const SCENARIOS = [
    * New since the last hand-taken round: every one of them is a package
    * shipped after WP5 with nothing to show for it, which is exactly how
    * the last set went stale. Eight of the ten were placed in the README by
-   * N-WP22; `n-wp13` and `n-wp18` are still waiting for the paragraph that
-   * wants them, because an image costs an alt text and the alt texts here
-   * are hand-written sentences rather than captions.
+   * N-WP22, and the last two — `n-wp13` and `n-wp18` — by the release
+   * package, each with the hand-written sentence an image costs here.
    * ------------------------------------------------------------------ */
   {
     name: 'n-wp10-resize-dark',
@@ -533,7 +532,7 @@ const SCENARIOS = [
   {
     name: 'n-wp13-language-tr-dark',
     what: 'The whole canvas in Turkish, with the settings panel scrolled to the six-language picker',
-    where: 'new — N-WP13, not yet in the README',
+    where: 'README, "Six UI languages"',
     query: 'demo=1&theme=dark&sidebar=1&lang=tr',
     width: 1560,
     height: 980,
@@ -598,7 +597,7 @@ const SCENARIOS = [
   {
     name: 'n-wp18-codex-session-dark',
     what: 'A Codex thread on the canvas: its own badge, no pid, no subagents, no cost or context',
-    where: 'new — N-WP18, not yet in the README',
+    where: 'README, "Principles", the Codex entry',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,

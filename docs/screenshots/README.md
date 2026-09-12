@@ -84,8 +84,8 @@ Each shot is then taken twice and only accepted when the two agree.
 | `wp4e-notes-light.png` | The same three notes, light | PROJECT.md §8, WP4e |
 | `wp4e-popover-dark.png` | The usage-limits panel: six windows, every severity, two sources | **README**, *Usage limits, cost and context* |
 | `wp4e-popover-light.png` | The same panel, light | PROJECT.md §8, WP4e |
-| `wp4f-resize-dark.png` | A card dragged narrower from its corner: the tree re-wraps, the grips are drawn | **README**, *Resize a card* |
-| `wp4f-cleared-dark.png` | The same card with its finished subagents hidden, and the chip that brings them back | **README**, *Resize a card*, 2nd image |
+| `wp4f-resize-dark.png` | A card dragged narrower from its corner: the tree re-wraps, the grips are drawn | **README**, *Themes and colours*, 4th image |
+| `wp4f-cleared-dark.png` | The same card with its finished subagents hidden, and the chip that brings them back | **README**, *Clear finished subagents* |
 | `wp4g-projects-dark.png` | Two folder tabs, and the drawer listing each with its live and past counts | **README**, *Folder tabs are folders that own a tab* |
 | `wp4g-rename-dark.png` | Cards titled by their user, one with the inline name field open | **README**, *Name a card*, 2nd image |
 | `wp5-quota-dark.png` | The bead in the top bar on a machine with nazar-tray installed | PROJECT.md §8, WP5 |
@@ -93,21 +93,22 @@ Each shot is then taken twice and only accepted when the two agree.
 | `n-wp10-resize-dark.png` | All eight resize handles: a card dragged from its east edge | **README**, *Resize a card from any edge or corner* |
 | `n-wp11-folder-tab-dark.png` | A folder tab selected: only the sessions under that folder | **README**, *Folder tabs are folders that own a tab* |
 | `n-wp12-settings-dark.png` | The settings panel in the drawer's own place | **README**, *The sidebar* |
-| `n-wp13-language-tr-dark.png` | The whole canvas in Turkish, with the settings panel scrolled to the six-language picker | *new — not yet in the README* |
+| `n-wp13-language-tr-dark.png` | The whole canvas in Turkish, with the settings panel scrolled to the six-language picker | **README**, *Six UI languages* |
 | `n-wp15-quiet-cards-dark.png` | The quieter card: neutral frame, the pulse moved to the ring | **README**, *What it looks like*, 1st image |
 | `n-wp15a-task-text-dark.png` | Task text on the cards: one line per session saying what it was asked to do | **README**, *Task text* |
 | `n-wp16-sound-setting-dark.png` | The sound switches under Behaviour, with quiet hours open | **README**, *A sound when a session ends* |
-| `n-wp18-codex-session-dark.png` | A Codex thread: its own badge, no pid, no subagents, no cost | *new — not yet in the README* |
+| `n-wp18-codex-session-dark.png` | A Codex thread: its own badge, no pid, no subagents, no cost | **README**, *Principles*, the Codex entry |
 | `n-wp19-card-menu-dark.png` | The canvas's own right-click menu on a card | **README**, *Right-click anything* |
 | `n-wp21-needs-you-dark.png` | The Needs-you strip open: who is waiting, and for how long | **README**, *What it looks like*, 3rd image |
 
 Eight of the ten `n-wp*` files were placed in the README by N-WP22, which also
 retook seven shots whose window was too small for what the paragraph beside
-them claims. `n-wp13-language-tr-dark.png` and
-`n-wp18-codex-session-dark.png` are still unplaced: adding an image means
-writing the alt text that goes with it, and the alt texts in this project are
-hand-written sentences describing the picture, not captions. They are taken so
-that the pictures exist when the README paragraph does.
+them claims. The last two — `n-wp13-language-tr-dark.png` and
+`n-wp18-codex-session-dark.png` — went in with the release, each beside the
+paragraph that wanted it: adding an image means writing the alt text that goes
+with it, and the alt texts in this project are hand-written sentences
+describing the picture, not captions. Every file in this table is now used
+somewhere, and this column says where.
 
 Two of the older shots left the README in the same round.
 `wp4d-activity-{dark,light}.png` drew the four activity states on the card as

@@ -244,6 +244,8 @@ Numbers are not translated: durations, token counts, byte sizes and timestamps a
 one way everywhere, because a monitoring canvas is read next to other tools that print the
 same numbers.
 
+![The whole canvas drawn in Turkish — Seni bekliyor in the top bar, the waiting banner, çalışıyor and bitti on the cards — with the settings panel open beside it and scrolled to Dil, where the six languages are listed and Türkçe is the one chosen](docs/screenshots/n-wp13-language-tr-dark.png)
+
 ### Themes and colours
 
 Four themes, in the settings panel under **Appearance**: **Nazar** (the bead on navy), **Graphite** (neutral surfaces), **Sepia** (warm paper, for people who find white screens loud) and **Midnight** (near-black with saturated states, and a pure black-on-white light mode). Each has a light and a dark mode; the **light or dark** segment switches between them and *system* follows your OS. Every one of them goes through the same contrast gate: text at AA on the surface it is actually drawn on, and the frames at the 3:1 non-text minimum — working, idle, done and unknown measured against both the session card and the smaller agent card, waiting against the session card, which is the only card that ever carries it. Each theme also picks its own activity colours rather than reusing another theme's, and there is a test for that too, because a theme that only changes the background is not a theme.
@@ -257,8 +259,6 @@ Under **Appearance → Colours** you can override the five activity colours — 
 ![The Nazar theme with two activity colours overridden: working set to orange and idle to violet, both rows highlighted with a live reset link, the button below them reading reset to theme (2 changed), and the cards on the canvas already ringed in the new colours](docs/screenshots/wp4e-colours-dark.png)
 
 ![Two session cards on the dark canvas; the left one has been dragged narrower from its bottom-right corner, so its sixteen subagents have re-wrapped from three columns into two and the card has grown taller, with the four corner grips drawn at its corners](docs/screenshots/wp4f-resize-dark.png)
-
-![The same two cards; the left one now reads subagents · 10 instead of · 16, with a dashed 6 finished hidden · show chip on its rule, and the finished agents gone from the tree while every running one is still there](docs/screenshots/wp4f-cleared-dark.png)
 
 **Where it is kept:** in your browser's `localStorage`, under `nazar.layout.v1` (positions, card widths and heights, folded trees, cleared subagents, sidebar), `nazar.tabs.v1` (tabs, projects, which tab each session is on, which tab is active, and whether auto-create is on), `nazar.names.v1` (the names you gave cards), `nazar.notes.v1` (your notes), `nazar.colours.v1` (your frame colours), `nazar.usage.v1` (whether the usage panel is open), `nazar.locale.v1` (the language you chose, absent while you follow the machine), and two unversioned ones, `nazar.theme` (light, dark or system) and `nazar.palette` (which of the four themes) — on `http://127.0.0.1:<port>`, which is as local as the rest of the tool. Nazar writes nothing to disk, so there is nowhere else it could go; clearing your site data resets all of it and loses nothing else. Entries for sessions that are neither running nor still in history are dropped when the page loads.
 
@@ -357,6 +357,8 @@ Existing tools draw the inside of a *single* session, or give you a canvas you a
 - **Zero runtime dependencies.** Not one, the tree layout included. The build asserts it: after bundling, every import left in the shipped file is a Node builtin.
 - **Provider-agnostic data model.** Claude Code first; Codex next.
 - **Codex too.** Codex threads are drawn on the same canvas, read from the rollout store Codex already writes at `~/.codex/sessions`. Nothing is installed and nothing is configured; a machine without Codex is unchanged. `nazar --no-codex` turns the reader off entirely.
+
+  ![A Codex thread on the canvas beside four Claude Code sessions: its card carries the Codex badge, reads pid unknown · thread-e · busy and no subagents, and the hover card open next to it lists the model, the current tool and the exact token counts with the cost and context rows empty](docs/screenshots/n-wp18-codex-session-dark.png)
 
 ## Known limits
 
