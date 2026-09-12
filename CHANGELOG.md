@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **One tour instead of twenty-three screenshots.** The README opened with a
+  contact sheet: twenty-three inline pictures, each of them true, and a reader
+  scrolled past all of them before reaching the paragraph that says what the
+  program is. It now opens with a twenty-six second recording of the canvas
+  being used — running sessions and their subagent trees, the permission-wait
+  banner and the `Needs you` strip, a hover card, the History panel opening a
+  past run as a frozen tree, a theme change, a Codex thread — and keeps five
+  stills, each beside the paragraph it illustrates. Nothing was deleted: the
+  gallery in [`docs/screenshots/README.md`](docs/screenshots/README.md) embeds
+  every one of the thirty-nine, under the feature it belongs to, with its
+  hand-written alt text, and the README links to it.
+
+  `npm run tour` writes the recording, over the same demo canvas and through
+  the same driver `npm run screenshots` uses — Chrome's own screencast, a frame
+  per paint with the gap to the next one as its duration, and `ffmpeg` on the
+  PATH to encode `docs/media/tour.gif` for the README and `docs/media/tour.mp4`
+  for a release. No dependency was added for it. The recording is demo data by
+  the same three gates the stills are — `?demo=1`, `--no-task-text`, and a
+  search of the rendered page for a home directory or a user name before every
+  beat, which fails the run rather than publishing one.
+
 ## [0.1.0] — 2026-09-13
 
 First release. A local canvas that draws every running Claude Code session on

@@ -116,6 +116,19 @@ const SHOTS = path.join(REPO, 'docs', 'screenshots');
 const UI_DIR = path.join(REPO, 'packages', 'ui', 'dist', 'web');
 
 /**
+ * Whether this file was typed at a terminal rather than imported.
+ *
+ * `scripts/tour.mjs` records the same demo canvas with the same driver — the
+ * CDP client, the step vocabulary, the server launch — and a second copy of
+ * eight hundred lines is a second copy of every bug in them. So the pieces it
+ * needs are exported below and the command-line half of this file runs only
+ * when the file *is* the command, which is what this answers.
+ */
+const INVOKED_DIRECTLY =
+  process.argv[1] !== undefined &&
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+/**
  * The instant every shot is taken at, in UTC.
  *
  * Two days after `DEMO_HISTORY_EPOCH` (`packages/ui/src/demo-history.ts`), so
@@ -123,7 +136,7 @@ const UI_DIR = path.join(REPO, 'packages', 'ui', 'dist', 'web');
  * the group headings are not all today. Changing this number changes every
  * picture that shows an age, which is the whole point of it being a constant.
  */
-const CLOCK = Date.UTC(2026, 8, 8, 12, 0, 0);
+export const CLOCK = Date.UTC(2026, 8, 8, 12, 0, 0);
 
 /* ------------------------------------------------------------------ *
  * The scenarios
@@ -132,14 +145,17 @@ const CLOCK = Date.UTC(2026, 8, 8, 12, 0, 0);
 /**
  * Every picture, and how it is taken.
  *
- * - `name` is the file name without `.png`, and **the twenty-nine that already
- *   exist keep theirs**: the README refers to them by path and carries a
- *   hand-written alt text for each, so a rename is a broken image and a lost
- *   sentence.
- * - `what` is what the picture shows, and `where` is the paragraph it belongs
- *   to. Both are printed by `--list` and copied into
- *   `docs/screenshots/README.md`, which is the index a reader of the README
- *   needs when they want to know which shot to retake.
+ * - `name` is the file name without `.png`, and **every one that already exists
+ *   keeps theirs**: the gallery in `docs/screenshots/README.md` embeds all of
+ *   them by path and carries a hand-written alt text for each — as does the
+ *   README for the five it still shows inline — so a rename is a broken image
+ *   and a lost sentence.
+ * - `what` is what the picture shows, and `where` is the page it is on. Both
+ *   are printed by `--list`, which is how you find out whether a shot you are
+ *   about to change is one of the five in the README or one of the
+ *   thirty-four that live in the gallery. `where` went out of date the moment
+ *   the README stopped carrying twenty-three pictures, which is the argument
+ *   for keeping it next to the row rather than in a table somewhere else.
  * - `query` is everything after `?`. Reach for a URL parameter before reaching
  *   for `steps`: `app.ts` deliberately carries `sidebar`, `collapse`, `notes`,
  *   `projects`, `history`, `quota`, `usage`, `theme`, `palette` and `lang` as
@@ -161,7 +177,7 @@ const SCENARIOS = [
   {
     name: 'wp4-100-dark',
     what: 'The whole canvas, dark, at 1× device pixel ratio',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "three device pixel ratios"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 950,
@@ -170,7 +186,7 @@ const SCENARIOS = [
   {
     name: 'wp4-100-light',
     what: 'The whole canvas, light, at 1×',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "three device pixel ratios"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=light',
     width: 1500,
     height: 950,
@@ -179,7 +195,7 @@ const SCENARIOS = [
   {
     name: 'wp4-150-dark',
     what: 'The same canvas at 1.5×, where the SVG has to stay crisp',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "three device pixel ratios"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 950,
@@ -188,7 +204,7 @@ const SCENARIOS = [
   {
     name: 'wp4-150-light',
     what: 'The same canvas at 1.5×, light',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "three device pixel ratios"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=light',
     width: 1500,
     height: 950,
@@ -197,7 +213,7 @@ const SCENARIOS = [
   {
     name: 'wp4-200-dark',
     what: 'The same canvas at 2×',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "three device pixel ratios"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 950,
@@ -206,7 +222,7 @@ const SCENARIOS = [
   {
     name: 'wp4-200-light',
     what: 'The same canvas at 2×, light',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "three device pixel ratios"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=light',
     width: 1500,
     height: 950,
@@ -215,7 +231,7 @@ const SCENARIOS = [
   {
     name: 'wp4-empty-dark',
     what: 'The empty state: no session on the machine, and the four lines that say why',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "The canvas"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=dark&sessions=0',
     width: 1500,
     height: 950,
@@ -224,7 +240,7 @@ const SCENARIOS = [
   {
     name: 'wp4-hover-dark',
     what: 'The hover card over the first session: tokens, context window, the folder',
-    where: 'docs/PROJECT.md §8, WP4 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "The canvas"; docs/PROJECT.md §8, WP4',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 950,
@@ -239,7 +255,7 @@ const SCENARIOS = [
   {
     name: 'wp4b-history-dark',
     what: 'The History panel, past sessions grouped by project, one opened as a frozen tree',
-    where: 'README, "What it looks like", fourth image',
+    where: 'README, "A History panel", and the gallery',
     query: 'demo=1&theme=dark&history=1',
     width: 1440,
     height: 900,
@@ -250,7 +266,7 @@ const SCENARIOS = [
   {
     name: 'wp4c-overview-dark',
     what: 'Four sessions with their trees, the tab bar, the waiting banner, the drawer open',
-    where: 'README, "What it looks like", second image',
+    where: 'The gallery in docs/screenshots/README.md, "The canvas" (left the README with the tour)',
     query: 'demo=1&theme=dark&sidebar=1',
     width: 1500,
     height: 950,
@@ -259,7 +275,7 @@ const SCENARIOS = [
   {
     name: 'wp4c-overview-light',
     what: 'The same, light',
-    where: 'docs/PROJECT.md §8, WP4c (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "The canvas"; docs/PROJECT.md §8, WP4c',
     query: 'demo=1&theme=light&sidebar=1',
     width: 1500,
     height: 950,
@@ -268,7 +284,7 @@ const SCENARIOS = [
   {
     name: 'wp4c-sixty-agents-dark',
     what: 'One session with sixty subagents: the card grows, the tree wraps, connectors stay inside',
-    where: 'README, "Fold a big tree away"',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     // Six seeded agents on the first session plus fifty-four generated ones.
     // The count is written as a sum rather than as `60` so that a change to the
     // fixture is a visible arithmetic error here rather than a silent 58.
@@ -284,7 +300,7 @@ const SCENARIOS = [
   {
     name: 'wp4c-collapsed-dark',
     what: 'The same session folded away: one row of chips counting the tree',
-    where: 'README, "Fold a big tree away", second image',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     query: `demo=1&theme=dark&sessions=1&agents=${60 - 6}&collapse=1`,
     width: 1500,
     height: 950,
@@ -293,7 +309,7 @@ const SCENARIOS = [
   {
     name: 'wp4c-dragged-dark',
     what: 'A card dragged out of the grid, to show the arrangement is the user’s',
-    where: 'docs/PROJECT.md §8, WP4c (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "Cards"; docs/PROJECT.md §8, WP4c',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 950,
@@ -313,7 +329,7 @@ const SCENARIOS = [
     // N-WP22 gave the README's first image to `n-wp15-quiet-cards-dark`, which
     // draws the same four states on the quieter card. This pair stays as the
     // record of what WP4d shipped.
-    where: 'docs/PROJECT.md §8, WP4d (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "The canvas"; docs/PROJECT.md §8, WP4d',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 1240,
@@ -322,7 +338,7 @@ const SCENARIOS = [
   {
     name: 'wp4d-activity-light',
     what: 'The same four states, light',
-    where: 'docs/PROJECT.md §8, WP4d (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "The canvas"; docs/PROJECT.md §8, WP4d',
     query: 'demo=1&theme=light',
     width: 1500,
     height: 1240,
@@ -333,7 +349,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-themes-sepia',
     what: 'The Sepia palette in light mode, with the settings panel open on Appearance',
-    where: 'README, "Themes"',
+    where: 'The gallery in docs/screenshots/README.md, "Themes and colours" (left the README with the tour)',
     query: 'demo=1&theme=light&palette=sepia&sidebar=1&quota=limits',
     width: 1560,
     height: 980,
@@ -343,7 +359,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-themes-midnight',
     what: 'The Midnight palette in dark mode, settings open on Appearance',
-    where: 'README, "Themes"',
+    where: 'The gallery in docs/screenshots/README.md, "Themes and colours" — the palette the tour switches to',
     query: 'demo=1&theme=dark&palette=midnight&sidebar=1&quota=limits',
     width: 1560,
     height: 980,
@@ -353,7 +369,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-colours-dark',
     what: 'Two activity colours overridden — WORKING orange, IDLE violet — with the cards already reframed',
-    where: 'README, "Themes", third image',
+    where: 'The gallery in docs/screenshots/README.md, "Themes and colours" (left the README with the tour)',
     query: 'demo=1&theme=dark&sidebar=1',
     width: 1560,
     height: 980,
@@ -372,7 +388,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-notes-dark',
     what: 'Three sticky notes on the canvas under the cards, one per colour that has something to say',
-    where: 'README, "Sticky notes"',
+    where: 'README, "Sticky notes", and the gallery',
     query: 'demo=1&theme=dark&notes=1',
     width: 1560,
     // The notes sit in a row of their own below the second row of cards, so
@@ -383,7 +399,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-notes-light',
     what: 'The same three notes, light',
-    where: 'docs/PROJECT.md §8, WP4e (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "Sticky notes"; docs/PROJECT.md §8, WP4e',
     query: 'demo=1&theme=light&notes=1',
     width: 1560,
     height: 1180,
@@ -392,7 +408,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-popover-dark',
     what: 'The usage-limits panel open under its bead: six windows, every severity, two sources',
-    where: 'README, "Usage limits, cost and context"',
+    where: 'The gallery in docs/screenshots/README.md, "Usage limits" (left the README with the tour)',
     query: 'demo=1&theme=dark&quota=limits&usage=1',
     width: 1560,
     height: 980,
@@ -401,7 +417,7 @@ const SCENARIOS = [
   {
     name: 'wp4e-popover-light',
     what: 'The same panel, light',
-    where: 'docs/PROJECT.md §8, WP4e (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "Usage limits"; docs/PROJECT.md §8, WP4e',
     query: 'demo=1&theme=light&quota=limits&usage=1',
     width: 1560,
     height: 980,
@@ -412,7 +428,7 @@ const SCENARIOS = [
   {
     name: 'wp4f-resize-dark',
     what: 'A card dragged narrower from its corner: the tree re-wraps, the grips are drawn',
-    where: 'README, "Themes and colours", fourth image',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     query: 'demo=1&theme=dark&sessions=2&agents=10',
     width: 1560,
     height: 800,
@@ -428,7 +444,7 @@ const SCENARIOS = [
   {
     name: 'wp4f-cleared-dark',
     what: 'The same card with its finished subagents hidden, and the chip that brings them back',
-    where: 'README, "Clear finished subagents"',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     query: 'demo=1&theme=dark&sessions=2&agents=10',
     width: 1560,
     height: 800,
@@ -443,7 +459,7 @@ const SCENARIOS = [
   {
     name: 'wp4g-projects-dark',
     what: 'Two folder tabs, and the drawer listing each with its live and past counts',
-    where: 'README, "Folder tabs are folders that own a tab"',
+    where: 'The gallery in docs/screenshots/README.md, "Folder tabs" (left the README with the tour)',
     query: 'demo=1&theme=dark&projects=1&sidebar=1',
     width: 1560,
     // 800 cut the second row of cards in half. The tab bar adds a row to the
@@ -455,7 +471,7 @@ const SCENARIOS = [
   {
     name: 'wp4g-rename-dark',
     what: 'Two cards titled by their user, one with the inline name field open, three still by their folder',
-    where: 'README, "Name a card", second image',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     query: 'demo=1&theme=dark&projects=1',
     width: 1560,
     height: 1020,
@@ -472,7 +488,7 @@ const SCENARIOS = [
   {
     name: 'wp5-quota-dark',
     what: 'The bead in the top bar with a machine that has nazar-tray installed',
-    where: 'docs/PROJECT.md §8, WP5 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "Usage limits"; docs/PROJECT.md §8, WP5',
     query: 'demo=1&theme=dark&quota=limits',
     width: 1600,
     height: 1000,
@@ -481,7 +497,7 @@ const SCENARIOS = [
   {
     name: 'wp5-quota-light',
     what: 'The same bead, light',
-    where: 'docs/PROJECT.md §8, WP5 (not in the README)',
+    where: 'The gallery in docs/screenshots/README.md, "Usage limits"; docs/PROJECT.md §8, WP5',
     query: 'demo=1&theme=light&quota=limits',
     width: 1600,
     height: 1000,
@@ -494,11 +510,19 @@ const SCENARIOS = [
    * the last set went stale. Eight of the ten were placed in the README by
    * N-WP22, and the last two — `n-wp13` and `n-wp18` — by the release
    * package, each with the hand-written sentence an image costs here.
+   *
+   * Placing all ten is also what took the README to twenty-three inline
+   * pictures, which turned out to be a contact sheet rather than an
+   * introduction. Three of these ten are still in the README; the other seven
+   * moved to the gallery in `docs/screenshots/README.md` with their sentences,
+   * and the tour at the top of the README does in twenty-six seconds what the
+   * wall of stills was trying to do. Not one of them was deleted: an image
+   * nobody can reach is the same as an image nobody took.
    * ------------------------------------------------------------------ */
   {
     name: 'n-wp10-resize-dark',
     what: 'All eight resize handles: a card dragged from its east edge rather than a corner',
-    where: 'README, "Resize a card from any edge or corner"',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     query: 'demo=1&theme=dark&sessions=2&agents=10',
     width: 1560,
     height: 800,
@@ -512,7 +536,7 @@ const SCENARIOS = [
   {
     name: 'n-wp11-folder-tab-dark',
     what: 'A folder tab selected: the canvas showing only the sessions under that folder',
-    where: 'README, "Folder tabs are folders that own a tab"',
+    where: 'The gallery in docs/screenshots/README.md, "Folder tabs" (left the README with the tour)',
     query: 'demo=1&theme=dark&projects=1',
     width: 1560,
     height: 800,
@@ -522,7 +546,7 @@ const SCENARIOS = [
   {
     name: 'n-wp12-settings-dark',
     what: 'The settings panel in the drawer’s own place: Appearance, Behaviour, Language, Usage, About',
-    where: 'README, "The sidebar"',
+    where: 'The gallery in docs/screenshots/README.md, "The sidebar and the settings panel" (left the README with the tour)',
     query: 'demo=1&theme=dark&sidebar=1&quota=limits',
     width: 1560,
     height: 980,
@@ -532,7 +556,7 @@ const SCENARIOS = [
   {
     name: 'n-wp13-language-tr-dark',
     what: 'The whole canvas in Turkish, with the settings panel scrolled to the six-language picker',
-    where: 'README, "Six UI languages"',
+    where: 'The gallery in docs/screenshots/README.md, "The sidebar and the settings panel" (left the README with the tour)',
     query: 'demo=1&theme=dark&sidebar=1&lang=tr',
     width: 1560,
     height: 980,
@@ -545,7 +569,7 @@ const SCENARIOS = [
   {
     name: 'n-wp15a-task-text-dark',
     what: 'Task text on the cards: one line per session saying what it was asked to do',
-    where: 'README, "Task text"',
+    where: 'The gallery in docs/screenshots/README.md, "Task text" (left the README with the tour)',
     query: 'demo=1&theme=dark&sidebar=1',
     width: 1560,
     height: 980,
@@ -569,7 +593,7 @@ const SCENARIOS = [
   {
     name: 'n-wp15-quiet-cards-dark',
     what: 'The quieter card: a neutral frame, the pulse moved to the ring, working and idle and waiting side by side',
-    where: 'README, "What it looks like", first image',
+    where: 'README, the canvas under the tour, and the gallery',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -578,7 +602,7 @@ const SCENARIOS = [
   {
     name: 'n-wp16-sound-setting-dark',
     what: 'The sound switches under Behaviour: an ending, a permission prompt, and quiet hours',
-    where: 'README, "A sound when a session ends"',
+    where: 'The gallery in docs/screenshots/README.md, "The sidebar and the settings panel" (left the README with the tour)',
     query: 'demo=1&theme=dark&sidebar=1',
     width: 1560,
     height: 980,
@@ -597,7 +621,7 @@ const SCENARIOS = [
   {
     name: 'n-wp18-codex-session-dark',
     what: 'A Codex thread on the canvas: its own badge, no pid, no subagents, no cost or context',
-    where: 'README, "Principles", the Codex entry',
+    where: 'README, "Principles", the Codex entry, and the gallery',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -609,7 +633,7 @@ const SCENARIOS = [
   {
     name: 'n-wp19-card-menu-dark',
     what: 'The canvas’s own right-click menu on a card, rather than the browser’s',
-    where: 'README, "Right-click anything"',
+    where: 'The gallery in docs/screenshots/README.md, "Cards" (left the README with the tour)',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -619,7 +643,7 @@ const SCENARIOS = [
   {
     name: 'n-wp21-needs-you-dark',
     what: 'The Needs-you strip open: who is waiting for you, for how long, and a way to jump there',
-    where: 'README, "What it looks like", third image',
+    where: 'README, "A Needs you badge in the top bar", and the gallery',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -642,7 +666,7 @@ const SCENARIOS = [
  * `Math.random` is seeded defensively — the UI has no call to it today, and a
  * screenshot run is exactly where a new one would be noticed a week late.
  */
-const PREAMBLE = `(() => {
+export const PREAMBLE = `(() => {
   const FIXED = ${CLOCK};
   const Real = Date;
   const Fake = function Date(...args) {
@@ -703,7 +727,7 @@ const FREEZE = `(() => {
 })()`;
 
 /** Two frames of quiet, which is what the draw scheduler needs to have run. */
-const SETTLE = `new Promise((resolve) => {
+export const SETTLE = `new Promise((resolve) => {
   requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)));
 })`;
 
@@ -719,7 +743,7 @@ const SETTLE = `new Promise((resolve) => {
  * is one connection, one message loop and one place where a protocol error
  * turns into a rejected promise.
  */
-class Cdp {
+export class Cdp {
   #socket;
   #next = 0;
   #pending = new Map();
@@ -766,6 +790,25 @@ class Cdp {
     });
   }
 
+  /**
+   * Call `handler` for every `method` from `sessionId`, until the returned
+   * function is called.
+   *
+   * {@link once} is this with a timeout and a self-removal attached, which is
+   * all a screenshot ever needs. `scripts/tour.mjs` subscribes to
+   * `Page.screencastFrame`, and a screencast is a stream rather than a single
+   * event, so it needs the version that stays.
+   */
+  on(method, sessionId, handler) {
+    const watcher = (message) => {
+      if (message.method !== method) return;
+      if (sessionId !== undefined && message.sessionId !== sessionId) return;
+      handler(message.params);
+    };
+    this.#watchers.add(watcher);
+    return () => this.#watchers.delete(watcher);
+  }
+
   static async connect(url) {
     const socket = new WebSocket(url);
     await new Promise((resolve, reject) => {
@@ -799,7 +842,7 @@ class Cdp {
  * because a step that silently did nothing is the failure mode this whole file
  * exists to avoid: the picture would still be written, and it would be wrong.
  */
-async function evaluate(cdp, session, expression, { awaitPromise = false } = {}) {
+export async function evaluate(cdp, session, expression, { awaitPromise = false } = {}) {
   const result = await cdp.send(
     'Runtime.evaluate',
     { expression, returnByValue: true, awaitPromise },
@@ -852,7 +895,7 @@ const WINDOW = {
  * nor panning; the card stays put and the release opens the name field instead,
  * which is exactly the picture `wp4c-dragged-dark` used to be.
  */
-async function centreOf(cdp, session, selector, index = 0, at = { x: 0.5, y: 0.5 }) {
+export async function centreOf(cdp, session, selector, index = 0, at = { x: 0.5, y: 0.5 }) {
   const box = await evaluate(
     cdp,
     session,
@@ -874,7 +917,7 @@ async function centreOf(cdp, session, selector, index = 0, at = { x: 0.5, y: 0.5
 }
 
 /** A real press-and-release, so the page sees pointer events and not a synthetic click. */
-async function mouse(cdp, session, type, x, y, button = 'left', clickCount = 1) {
+export async function mouse(cdp, session, type, x, y, button = 'left', clickCount = 1) {
   await cdp.send(
     'Input.dispatchMouseEvent',
     {
@@ -897,7 +940,7 @@ async function mouse(cdp, session, type, x, y, button = 'left', clickCount = 1) 
  * page already listens for. Anything that needs a fifteenth verb probably
  * wants a URL parameter instead, and `app.ts` has been happy to grow those.
  */
-async function runStep(cdp, session, step) {
+export async function runStep(cdp, session, step) {
   if (step.wait !== undefined) {
     await new Promise((resolve) => setTimeout(resolve, step.wait));
     return;
@@ -1187,7 +1230,7 @@ const BROWSERS = {
   ],
 };
 
-function findBrowser(override) {
+export function findBrowser(override) {
   if (override !== undefined) {
     if (!existsSync(override)) throw new Error(`no browser at ${override}`);
     return override;
@@ -1203,7 +1246,7 @@ function findBrowser(override) {
 }
 
 /** A port nothing is listening on, asked of the operating system rather than guessed. */
-function freePort() {
+export function freePort() {
   return new Promise((resolve, reject) => {
     const probe = createServer();
     probe.on('error', reject);
@@ -1223,7 +1266,7 @@ function freePort() {
  * `DEMO_TASKS` in the browser, so the flag costs the pictures nothing and
  * removes the one path by which a real sentence could reach one.
  */
-async function startServer(port) {
+export async function startServer(port) {
   const child = spawn(
     process.execPath,
     [path.join(REPO, 'bin', 'nazar.mjs'), '--port', String(port), '--no-open', '--no-task-text'],
@@ -1521,12 +1564,16 @@ async function main(argv) {
   return failed.length > 0 || different.length > 0 ? 1 : 0;
 }
 
-main(process.argv.slice(2)).then(
-  (code) => {
-    process.exitCode = code;
-  },
-  (error) => {
-    process.stderr.write(`screenshots: ${error instanceof Error ? error.message : String(error)}\n`);
-    process.exitCode = 1;
-  },
-);
+if (INVOKED_DIRECTLY) {
+  main(process.argv.slice(2)).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error) => {
+      process.stderr.write(
+        `screenshots: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
+      process.exitCode = 1;
+    },
+  );
+}
