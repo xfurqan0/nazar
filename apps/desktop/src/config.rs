@@ -654,13 +654,22 @@ mod tests {
             vec!["box".to_owned(), "build-box".to_owned()],
             "a login, an option and a path are dropped; the same host twice is one"
         );
-        assert!(read.autostart, "one bad entry does not cost the other settings");
+        assert!(
+            read.autostart,
+            "one bad entry does not cost the other settings"
+        );
     }
 
     #[test]
     fn setting_a_host_that_is_not_an_alias_is_refused_with_a_sentence() {
         let mut config = Config::default();
-        for bad in ["root@box", "-oProxyCommand=x", "../etc/hosts", "box host", ""] {
+        for bad in [
+            "root@box",
+            "-oProxyCommand=x",
+            "../etc/hosts",
+            "box host",
+            "",
+        ] {
             let error = config
                 .set_remotes(&[bad.to_owned()])
                 .expect_err("refused")
@@ -672,10 +681,14 @@ mod tests {
 
     #[test]
     fn setting_the_list_to_what_it_already_is_writes_nothing() {
-        let mut config = Config::default();
-        config.remotes = vec!["box".to_owned()];
+        let mut config = Config {
+            remotes: vec!["box".to_owned()],
+            ..Config::default()
+        };
         assert!(
-            !config.set_remotes(&["box".to_owned()]).expect("no write needed"),
+            !config
+                .set_remotes(&["box".to_owned()])
+                .expect("no write needed"),
             "a list set to what it already was changes nothing on disk"
         );
     }
@@ -689,7 +702,10 @@ mod tests {
         };
         config.write(&scratch.file()).expect("written");
         let read = Config::read(&scratch.file()).expect("read back");
-        assert_eq!(read.remotes(), vec!["box".to_owned(), "build-box".to_owned()]);
+        assert_eq!(
+            read.remotes(),
+            vec!["box".to_owned(), "build-box".to_owned()]
+        );
     }
 
     /// The collision this module exists to avoid, asserted rather than described.
