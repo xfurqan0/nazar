@@ -5,7 +5,7 @@ Internal project notes. Kept in English so the repo is readable by everyone.
 > **Nazar keeps a watchful eye on your agents.**
 > A local, open-source **monitoring** canvas for AI coding agents. Every running Claude Code session is a node on one live canvas; its subagents hang beneath it as a tree; hover shows model, effort, elapsed time, current tool and exact token usage; your quota sits in a strip on top. **It watches. It does not launch, control, or answer permission prompts.**
 
-- Folder: `C:\nazar` · Repo: `github.com/xfurqan0/nazar` — private until the first release · License: MIT
+- Folder: `C:\nazar` · Repo: `github.com/xfurqan0/nazar` — public since 2026-09-08 · License: MIT
 - Siblings: [nazar-tray](https://github.com/xfurqan0/nazar-tray) (quota tray, writes `limits.json`), Dile (dictation). Same repo policy (English everywhere), same rule: **quality over schedule, no deadline; ordered work packages, one finishes before the next starts.**
 - Research phase closed 2026-09-07 05:00: market study (6 competitors in depth, 114 cited sources, pain-point clusters, stack and distribution analysis) + data-layer audit on the maintainer's machine (Claude Code 2.1.263, Windows 11). Internal notes hold the full reports.
 - Order: **first of the three projects to start coding** (maintainer decision 2026-09-07). Nazar is the CV piece, and its stack is Node/TS, so it needs neither the new machine nor a Tauri/Rust toolchain: it can start on the current PC today. nazar-tray is second, Dile third (its engine experiment needs the new machine). Code starts when the maintainer says go.

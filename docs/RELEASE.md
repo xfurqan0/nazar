@@ -126,9 +126,17 @@ grep -n 'nazar-desktop_' README.md CHANGELOG.md
 `packages/server/bin/nazar.mjs`). `npm ci` in step 2 installs strictly from it,
 so regenerate it *before* the release commit, not after.
 
-Move the `## [0.1.0] — unreleased` heading in `CHANGELOG.md` to
-`## [0.1.0] — YYYY-MM-DD`, and set the README status line to the released
-wording (drop the "not yet published" sentence).
+In `CHANGELOG.md`, fold everything under `## [Unreleased]` into the release
+entry and date it — `## [0.1.0] — YYYY-MM-DD`, with one `### Added` rather than
+two and the newer entries first — leaving an empty `## [Unreleased]` on top,
+which is what Keep a Changelog asks for and what the next change lands under.
+The date is the day you tag: if the tag slips to another day, amend it. Then set
+the README status line to the released wording (drop the "not yet published"
+sentence), and sweep for the rest of it:
+
+```bash
+grep -ni "not yet\|not on npm\|first release\|unreleased" README.md docs/*.md
+```
 
 Add them by name. A release commit is the one commit whose contents you can
 list before you make it, and `git add -A` is how a stray file rides along into

@@ -7,128 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Fixed
+## [0.1.0] — 2026-09-13
 
-- **What the canvas shows is true: pruning, dead sessions, history paging and
-  races, subagent totals, same-size rewrites** (N-WP20). An independent review
-  of `4827ca1` produced six reproducible findings, and they are one bug wearing
-  six coats: *the screen was confident about something it had not checked*.
-
-  - **A machine with more than 200 past sessions lost the customisations of
-    every session past the 200th.** On the first frame the canvas asks the
-    transcript store what it still has and forgets the rest — the card position,
-    the card size, the tab a session was moved to, and the name typed on it. It
-    asked with `history.list(200)`, and treated one page as the whole store. So
-    on a machine with 201 transcripts, the 201st was pruned as *gone* while
-    sitting openable in the drawer two clicks away. The question now goes to a
-    new unpaged route, **`GET /api/history/ids`**, which answers with session ids
-    and nothing else; and if that request fails, **nothing is pruned at all** and
-    the next frame tries again. Forgetting nothing is recoverable. Forgetting the
-    wrong thing is not.
-  - **A session that had ended came back, every few seconds, forever.** A crash
-    leaves `~/.claude/sessions/<pid>.json` behind. The registry probed the pid,
-    found nothing, held the session at `unknown` for one liveness gate and
-    dropped it — and dropped the record of *having* dropped it at the same
-    moment, so the next scan of the same untouched file added it straight back:
-    `1 → 0 → 1 → 0`, for as long as the file sat there. The verdict is now
-    remembered against the **identity of the file it was made about**, so a
-    leftover stays gone while a file that actually changes gets a fresh hearing
-    — which is what keeps a **reused pid** from being buried forever.
-  - **The history drawer could not reach past its own first page.** It asked for
-    200 rows and stopped, on a store the server was already reporting a
-    `nextOffset` for. It printed *200 of 1 340* and offered no route to the other
-    1 140. There is now a **load more** button under the list, in all six
-    languages and counting what is left, and reaching the end of the list loads
-    the next page on its own. Pages are appended, so a project split across a
-    page boundary is one heading and not two.
-  - **Clicking one past session and then another showed whichever finished
-    last.** A transcript can take a second to parse, so selecting A and then B
-    left two requests in flight and drew whichever the disk happened to return
-    second — with the *other* row marked as the selected one. Worse, an answer
-    arriving after the drawer was closed re-opened it onto a frozen tree whose
-    back button no longer led anywhere. Every selection now carries a sequence
-    number, closing the drawer invalidates whatever is in flight, and a stale
-    answer is dropped rather than drawn.
-  - **A session's token total ignored its subagents changing.** The headline
-    number on a past session is `treeTokens` — the session **plus** every
-    subagent under it — but the parse cache was keyed on the parent transcript
-    alone. Append one line to a child and the same scanner went on reporting the
-    total from before it, while a freshly built one over the same directory
-    reported the new one: 11 against 31, one question and two answers. The key
-    now includes the shape of the `subagents/` directory. Still a `readdir` and
-    a `stat` each; still never an `open`.
-  - **A transcript replaced by a file of exactly the same length was never
-    read.** The tailer's only rule for *this is not the file I had* was that it
-    had shrunk, so a rotation landing on the same byte count left it reading at
-    an offset into a file that no longer existed — silently, and for good. It now
-    tracks the file's identity as well (`ino` and `birthtimeMs`, falling back to
-    a hash of a fixed window at the head where the platform's inode cannot be
-    trusted), and appended bytes deliberately do not move it.
-
-- **An empty canvas says why it is empty, and what to do about it** (N-WP20).
-  The first five minutes of Nazar, on a machine that is not already running
-  Claude Code, were a blank rectangle and the words *no sessions found* — with
-  one piece of advice, *start `claude` in a terminal*, which is correct for
-  exactly one of the three ways the canvas can be empty. `nazar doctor` has
-  always been able to tell them apart, so the server now sends the same verdict
-  and the page shows it: **the sessions directory does not exist** (check
-  `CLAUDE_CONFIG_DIR`), **there is no live session right now** (start one), or
-  **the session files are all leftovers from runs that ended**. Two quieter notes
-  ride under it when they are true and never as the reason: `claude agents` not
-  answering, and the status-line wrapper not being installed — the second being
-  why cost and context stay unknown rather than why the canvas is empty.
-  All of it comes from the catalogues, so it is in all six languages.
-
-- **A disconnected canvas says how old what it is showing is.** When the event
-  stream drops, the canvas deliberately keeps the last snapshot on screen —
-  blanking it would throw away the only thing left that is true — but the top bar
-  said only *disconnected · retrying*, which left a stale reading looking exactly
-  like a live one. It now reads **disconnected · last data 12s ago**, and the
-  number keeps moving.
-
-- **`nazar doctor` names the shell instead of blaming a turn that has not
-  happened** (T-WP8). On Windows Claude Code runs `statusLine.command` through
-  Git Bash, where a backslash outside quotes is the escape character — so a
-  status-line wrapper installed at `C:\…\nazar-statusline.exe` is never spawned
-  at all, no capture is written, and every card shows no cost and no context
-  window. Doctor reported that as *no status-line tick yet*, which is what a
-  session sitting at a prompt honestly looks like, so the report told a person
-  to wait rather than to fix it. It is now a fifth reason, ranked **above** the
-  install-date reason, because that one ends "restart it and the capture
-  appears" and a restart changes nothing here. A project override still outranks
-  it, being the only reason that explains one session and not its neighbour.
-  Two lines that contradicted the new one were corrected with it: the `captures`
-  row no longer says "the status-line wrapper is not installed" about a wrapper
-  that *is* the user-level status line, and the machine-wide sentence under it
-  now names the shell. The rewrite is nazar-tray's own installer's job; doctor
-  prints its dry run and, as ever, runs nothing.
-
-- **The task line gets a row of its own, and the switch redraws the canvas it is
-  measuring** (N-WP15b). N-WP15a put the session card's task line at `pad + 46`
-  on the strength of *the header already has a 28 px gap between the folder path
-  and the identity line, so no card changes size*. That 28 px is not spare room:
-  it is the header's ordinary leading, the same step it puts between the
-  identity line and the model line. The task therefore landed 12 px above the
-  identity line, and at 11.5 px type two rows of glyphs touched — the line was
-  drawn *on* the identity row rather than in one of its own. The header pays for
-  the row now, exactly as a subagent node has always paid for its own through
-  `AGENT.taskLine`: `CARD_TASK_LINE` is 16 px, the task keeps the place under
-  the folder path where it belongs, and the identity line and everything below
-  it drop by that one line. A card the user placed keeps its corner — a position
-  is stored per card and read back unchanged, and a dragged height is a floor,
-  so a sized card grows by the line rather than clipping its own header.
-
-  The second half is why it looked like a switch that only half worked. Every
-  conditional row was positioned in `createSession`, which runs the first time a
-  card is drawn and never again, so an element born on a frame with the setting
-  off kept that geometry for ever: the page was only right if it had been
-  *loaded* with the setting already on. The rows live in one table now and are
-  written on every frame, and moving the switch runs a full pass — measure,
-  place, draw — as though a snapshot had just landed. Both card geometries come
-  from one function each, `treeSpecFor` for the tree and `cardSpecFor` for the
-  card, so the measure pass and the drawing cannot disagree about how tall a
-  card is. With the setting off nothing moves by a pixel: the canvas renders
-  byte-identically to the one before this change.
+First release. A local canvas that draws every running Claude Code session on
+this machine, its subagent tree, and every past session Claude Code still keeps
+a transcript for.
 
 ### Added
 
@@ -274,106 +157,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the demo canvas, in one command, byte-identically, and without adding a
   dependency to build or to develop with.
 
-### Changed
-
-- **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's
-  menu away everywhere was right for a canvas and wrong for the three links on
-  it — all of them in the sidebar, all of them answering a right-click with
-  nothing at all since the last release. They now open a small menu of their own:
-  **Open in browser** and **Copy address**, which are the only two things anybody
-  wants from a link. *Open in browser* rather than *Open in new tab*, because
-  that is the true sentence in both places this page runs: a browser opens a new
-  tab, and the desktop window has no tabs and hands the address to the machine's
-  browser, which is where an external link was always meant to go. Same keyboard
-  behaviour as the other three menus — it takes focus when it opens, `Esc` closes
-  it, and a press anywhere else closes it — and a text field still keeps the
-  browser's own menu, links included.
-
-- **The right-click is the page's, everywhere, and a note answers it with its
-  own menu** (N-WP14). Right-clicking the top bar, the sidebar, the tab bar or a
-  frozen history tree used to hand over the browser's menu — *Reload*, *View
-  page source*, *Save image as* — none of which has anything to say about a
-  canvas you arrange. It is gone from all of them: a card still opens its **⋯**
-  menu at the pointer and empty canvas still offers **Add note here · Arrange ·
-  Fit**, and everywhere else the gesture now simply does nothing rather than
-  producing the wrong menu, because a page that answers it in four places out of
-  five looks broken in the fifth. **A sticky note answers it too**, with the
-  same **⋯** menu the button opens — the four colours and *Delete* — placed at
-  the pointer instead of under the button. It is the same element and the same
-  entries, opened two ways: the menu takes the keyboard when it opens, `Esc`
-  closes it, and focus goes back to the note's **⋯**. **The one exception is a
-  text field.** An `<input>`, a `<textarea>` and a note you are typing into keep
-  the browser's own menu, because that is where Cut, Copy, Paste, Undo and the
-  spell-checker live and no menu this canvas draws could carry them — a
-  browser's menu is the only one allowed to touch the clipboard unasked. What
-  makes a note a text field is the **caret**, not the pointer: a note being
-  typed into is being edited, and a note merely under the pointer is an object
-  on a canvas. Press `Esc` to leave its text box and the right-click is the
-  note's own again.
-
-- **The left menu is three sections and a gear** (N-WP12). The drawer behind the hamburger keeps only what you use while you work — **Sessions**, **Folder tabs**, **View** — and a bar at its foot, outside the scrolling area, carries a gear and the version. The gear opens a **settings panel in the drawer's own place**: same width, no overlay, no dimmed canvas, so the sessions behind it stay visible and stay updating while you pick a colour. The panel holds **Appearance** (light/dark, the four palettes, the five frame colours), **Behaviour**, **Language** (arriving next), **Usage limits** and **About**. `Esc` or the arrow at its head goes back; `a`, `0` and `h` keep working while it is open. Four controls that said their own state in their label — `demo data: off`, `start with Windows: off`, `auto-create projects for new folders: on`, `light or dark: system` — are now switches and a three-way light/dark segment, announced to a screen reader as the controls they are. **Nothing changed meaning**: every setting does exactly what it did, in the same place in storage, and the panel itself remembers nothing — the drawer always opens on the menu.
-
-- **A folder tab is opened from a session you can see, and the typed project
-  form is gone** (N-WP11). The sidebar's **Sessions** section now lists the
-  sessions on the canvas, one row each, with the folder that session is running
-  in and a button reading *Open a tab for `app`* — or *Go to tab app*, when that
-  folder already has one. Right-clicking a row opens the card's own menu at the
-  pointer, where **Open a tab for** (formerly *Make project from*) offers every
-  folder up the tree, and a folder that already has a tab now takes you to it
-  instead of sitting there disabled. **The tab is named after the folder and
-  nobody is asked**: `app`, with the parent folder added only when another tab
-  already has that name (`api · srv`, `api · web`); renaming by double-click is
-  unchanged. The **new project…** button and the field you typed a path into are
-  removed — a path typed at a card that reads `~/proj/app` could be written a
-  way no card ever writes it and then own nothing for ever, which is the mistake
-  a row on screen cannot make. The sidebar section is now called **Folder tabs**
-  and the word *project* leaves the interface with it; the stored schema,
-  `nazar.tabs.v1`, is untouched, and every tab saved before this reads and
-  behaves exactly as it did. The ownership rules are unchanged: the deepest
-  folder wins, a card dragged onto a tab is still pinned, and **Follow project**
-  still hands it back. **auto-create projects for new folders** stays where it
-  was, still off by default.
-- **Cards resize from all eight handles, not just the four corners** (N-WP10).
-  Each edge moves one dimension and holds the edge opposite it — top and bottom
-  set the height, left and right the width — and each corner scales the card
-  on the aspect ratio it had at the press, holding the corner opposite it. The
-  height is a card's own for the first time: `nazar.layout.v1` gained a
-  `heights` map beside `widths`, read as a floor under the height the subagent
-  tree needs and never as a value in place of it, so a card can be given room
-  under its tree but can never be made to hide it. Layouts written before this
-  have no `heights` key, read as none, and go on sizing their own height. The
-  ⋯ menu's *Reset width* is now *Reset size* and clears both axes.
-- **The cards say less, and mean more by it** (N-WP15). One fact, one signal:
-  the card answers, the hover card explains, and colour is spent only where it
-  means something. **The state is back on the ring**, which now carries the
-  activity rather than the narrower question of whether the process answers a
-  probe — green working, blue idle, grey-blue done, dashed grey unknown — and
-  **exactly one card on the canvas has a coloured border**: the one waiting for
-  you, which is the only state you can act on. A subagent's node has no coloured
-  border in any state; its dot and its last line carry it. Nothing breathes any
-  more: the working frame's 1.6 s pulse is gone, and the only motion left is the
-  halo on a waiting session. **The card's body is one line** —
-  `2h 17m · 214 tool calls · Grep · 34k tokens` — where it was a line plus two
-  rows of token counters; the four exact counters are on the hover card, which
-  is unchanged to the row. The total is input plus output (never cache) and is
-  the one rounded figure in the product, because a card carries a magnitude and
-  a hover card carries the number. **A subagent node is three lines** instead of
-  six and 61 px instead of 106, so a card with sixteen of them is half the
-  height it was; `done · 12m 03s` is text on its third line rather than a pill.
-  **No pill is left on a card at rest**: the model and effort chips are ordinary
-  secondary text, the `permission prompt` chip is the card's own status label in
-  amber, and the two chips that remain are the folded tree's summary row and the
-  pressable *N finished hidden · show*. **Nothing is uppercase** — eight
-  `text-transform` rules went, and the labels read as the sentences the six
-  catalogues always wrote. The provider badge is 16 px on the name line rather
-  than 30 px beside two, the *watches, does not drive* tagline is the browser tab
-  title and the brand's tooltip rather than a line of the top bar, the
-  `demo data` badge is a caption rather than an outlined pill, and **the tab
-  strip is not drawn until there is a second tab**. Card names (WP4g) and task
-  text (N-WP15a) are untouched; this package took the noise underneath them.
-
-### Added
-
 - **Codex sessions on the canvas** (N-WP18). Nazar draws Codex threads beside
   Claude Code sessions, from the rollout store Codex already writes at
   `~/.codex/sessions`. Nothing is installed, nothing is configured, and a
@@ -484,14 +267,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mode uses, and for the same reason: what the canvas is reading should be
   visible on a command line rather than hidden in a file. New page:
   [docs/REMOTE.md](docs/REMOTE.md).
-
-## [0.1.0] — unreleased
-
-First release. A local canvas that draws every running Claude Code session on
-this machine, its subagent tree, and every past session Claude Code still keeps
-a transcript for.
-
-### Added
 
 - **Session registry.** A two-second poll of `~/.claude/sessions` that always
   runs, with `fs.watch` and a 100 ms debounce on top of it as the fast path,
@@ -947,7 +722,226 @@ a transcript for.
   read: the static gate still fails the build on any shipped source that could
   write anything, anywhere.
 
+### Changed
+
+- **A right-click on a link opens a menu again** (N-WP15a). Taking the browser's
+  menu away everywhere was right for a canvas and wrong for the three links on
+  it — all of them in the sidebar, all of them answering a right-click with
+  nothing at all since the last release. They now open a small menu of their own:
+  **Open in browser** and **Copy address**, which are the only two things anybody
+  wants from a link. *Open in browser* rather than *Open in new tab*, because
+  that is the true sentence in both places this page runs: a browser opens a new
+  tab, and the desktop window has no tabs and hands the address to the machine's
+  browser, which is where an external link was always meant to go. Same keyboard
+  behaviour as the other three menus — it takes focus when it opens, `Esc` closes
+  it, and a press anywhere else closes it — and a text field still keeps the
+  browser's own menu, links included.
+
+- **The right-click is the page's, everywhere, and a note answers it with its
+  own menu** (N-WP14). Right-clicking the top bar, the sidebar, the tab bar or a
+  frozen history tree used to hand over the browser's menu — *Reload*, *View
+  page source*, *Save image as* — none of which has anything to say about a
+  canvas you arrange. It is gone from all of them: a card still opens its **⋯**
+  menu at the pointer and empty canvas still offers **Add note here · Arrange ·
+  Fit**, and everywhere else the gesture now simply does nothing rather than
+  producing the wrong menu, because a page that answers it in four places out of
+  five looks broken in the fifth. **A sticky note answers it too**, with the
+  same **⋯** menu the button opens — the four colours and *Delete* — placed at
+  the pointer instead of under the button. It is the same element and the same
+  entries, opened two ways: the menu takes the keyboard when it opens, `Esc`
+  closes it, and focus goes back to the note's **⋯**. **The one exception is a
+  text field.** An `<input>`, a `<textarea>` and a note you are typing into keep
+  the browser's own menu, because that is where Cut, Copy, Paste, Undo and the
+  spell-checker live and no menu this canvas draws could carry them — a
+  browser's menu is the only one allowed to touch the clipboard unasked. What
+  makes a note a text field is the **caret**, not the pointer: a note being
+  typed into is being edited, and a note merely under the pointer is an object
+  on a canvas. Press `Esc` to leave its text box and the right-click is the
+  note's own again.
+
+- **The left menu is three sections and a gear** (N-WP12). The drawer behind the hamburger keeps only what you use while you work — **Sessions**, **Folder tabs**, **View** — and a bar at its foot, outside the scrolling area, carries a gear and the version. The gear opens a **settings panel in the drawer's own place**: same width, no overlay, no dimmed canvas, so the sessions behind it stay visible and stay updating while you pick a colour. The panel holds **Appearance** (light/dark, the four palettes, the five frame colours), **Behaviour**, **Language** (arriving next), **Usage limits** and **About**. `Esc` or the arrow at its head goes back; `a`, `0` and `h` keep working while it is open. Four controls that said their own state in their label — `demo data: off`, `start with Windows: off`, `auto-create projects for new folders: on`, `light or dark: system` — are now switches and a three-way light/dark segment, announced to a screen reader as the controls they are. **Nothing changed meaning**: every setting does exactly what it did, in the same place in storage, and the panel itself remembers nothing — the drawer always opens on the menu.
+
+- **A folder tab is opened from a session you can see, and the typed project
+  form is gone** (N-WP11). The sidebar's **Sessions** section now lists the
+  sessions on the canvas, one row each, with the folder that session is running
+  in and a button reading *Open a tab for `app`* — or *Go to tab app*, when that
+  folder already has one. Right-clicking a row opens the card's own menu at the
+  pointer, where **Open a tab for** (formerly *Make project from*) offers every
+  folder up the tree, and a folder that already has a tab now takes you to it
+  instead of sitting there disabled. **The tab is named after the folder and
+  nobody is asked**: `app`, with the parent folder added only when another tab
+  already has that name (`api · srv`, `api · web`); renaming by double-click is
+  unchanged. The **new project…** button and the field you typed a path into are
+  removed — a path typed at a card that reads `~/proj/app` could be written a
+  way no card ever writes it and then own nothing for ever, which is the mistake
+  a row on screen cannot make. The sidebar section is now called **Folder tabs**
+  and the word *project* leaves the interface with it; the stored schema,
+  `nazar.tabs.v1`, is untouched, and every tab saved before this reads and
+  behaves exactly as it did. The ownership rules are unchanged: the deepest
+  folder wins, a card dragged onto a tab is still pinned, and **Follow project**
+  still hands it back. **auto-create projects for new folders** stays where it
+  was, still off by default.
+- **Cards resize from all eight handles, not just the four corners** (N-WP10).
+  Each edge moves one dimension and holds the edge opposite it — top and bottom
+  set the height, left and right the width — and each corner scales the card
+  on the aspect ratio it had at the press, holding the corner opposite it. The
+  height is a card's own for the first time: `nazar.layout.v1` gained a
+  `heights` map beside `widths`, read as a floor under the height the subagent
+  tree needs and never as a value in place of it, so a card can be given room
+  under its tree but can never be made to hide it. Layouts written before this
+  have no `heights` key, read as none, and go on sizing their own height. The
+  ⋯ menu's *Reset width* is now *Reset size* and clears both axes.
+- **The cards say less, and mean more by it** (N-WP15). One fact, one signal:
+  the card answers, the hover card explains, and colour is spent only where it
+  means something. **The state is back on the ring**, which now carries the
+  activity rather than the narrower question of whether the process answers a
+  probe — green working, blue idle, grey-blue done, dashed grey unknown — and
+  **exactly one card on the canvas has a coloured border**: the one waiting for
+  you, which is the only state you can act on. A subagent's node has no coloured
+  border in any state; its dot and its last line carry it. Nothing breathes any
+  more: the working frame's 1.6 s pulse is gone, and the only motion left is the
+  halo on a waiting session. **The card's body is one line** —
+  `2h 17m · 214 tool calls · Grep · 34k tokens` — where it was a line plus two
+  rows of token counters; the four exact counters are on the hover card, which
+  is unchanged to the row. The total is input plus output (never cache) and is
+  the one rounded figure in the product, because a card carries a magnitude and
+  a hover card carries the number. **A subagent node is three lines** instead of
+  six and 61 px instead of 106, so a card with sixteen of them is half the
+  height it was; `done · 12m 03s` is text on its third line rather than a pill.
+  **No pill is left on a card at rest**: the model and effort chips are ordinary
+  secondary text, the `permission prompt` chip is the card's own status label in
+  amber, and the two chips that remain are the folded tree's summary row and the
+  pressable *N finished hidden · show*. **Nothing is uppercase** — eight
+  `text-transform` rules went, and the labels read as the sentences the six
+  catalogues always wrote. The provider badge is 16 px on the name line rather
+  than 30 px beside two, the *watches, does not drive* tagline is the browser tab
+  title and the brand's tooltip rather than a line of the top bar, the
+  `demo data` badge is a caption rather than an outlined pill, and **the tab
+  strip is not drawn until there is a second tab**. Card names (WP4g) and task
+  text (N-WP15a) are untouched; this package took the noise underneath them.
+
 ### Fixed
+
+- **What the canvas shows is true: pruning, dead sessions, history paging and
+  races, subagent totals, same-size rewrites** (N-WP20). An independent review
+  of `4827ca1` produced six reproducible findings, and they are one bug wearing
+  six coats: *the screen was confident about something it had not checked*.
+
+  - **A machine with more than 200 past sessions lost the customisations of
+    every session past the 200th.** On the first frame the canvas asks the
+    transcript store what it still has and forgets the rest — the card position,
+    the card size, the tab a session was moved to, and the name typed on it. It
+    asked with `history.list(200)`, and treated one page as the whole store. So
+    on a machine with 201 transcripts, the 201st was pruned as *gone* while
+    sitting openable in the drawer two clicks away. The question now goes to a
+    new unpaged route, **`GET /api/history/ids`**, which answers with session ids
+    and nothing else; and if that request fails, **nothing is pruned at all** and
+    the next frame tries again. Forgetting nothing is recoverable. Forgetting the
+    wrong thing is not.
+  - **A session that had ended came back, every few seconds, forever.** A crash
+    leaves `~/.claude/sessions/<pid>.json` behind. The registry probed the pid,
+    found nothing, held the session at `unknown` for one liveness gate and
+    dropped it — and dropped the record of *having* dropped it at the same
+    moment, so the next scan of the same untouched file added it straight back:
+    `1 → 0 → 1 → 0`, for as long as the file sat there. The verdict is now
+    remembered against the **identity of the file it was made about**, so a
+    leftover stays gone while a file that actually changes gets a fresh hearing
+    — which is what keeps a **reused pid** from being buried forever.
+  - **The history drawer could not reach past its own first page.** It asked for
+    200 rows and stopped, on a store the server was already reporting a
+    `nextOffset` for. It printed *200 of 1 340* and offered no route to the other
+    1 140. There is now a **load more** button under the list, in all six
+    languages and counting what is left, and reaching the end of the list loads
+    the next page on its own. Pages are appended, so a project split across a
+    page boundary is one heading and not two.
+  - **Clicking one past session and then another showed whichever finished
+    last.** A transcript can take a second to parse, so selecting A and then B
+    left two requests in flight and drew whichever the disk happened to return
+    second — with the *other* row marked as the selected one. Worse, an answer
+    arriving after the drawer was closed re-opened it onto a frozen tree whose
+    back button no longer led anywhere. Every selection now carries a sequence
+    number, closing the drawer invalidates whatever is in flight, and a stale
+    answer is dropped rather than drawn.
+  - **A session's token total ignored its subagents changing.** The headline
+    number on a past session is `treeTokens` — the session **plus** every
+    subagent under it — but the parse cache was keyed on the parent transcript
+    alone. Append one line to a child and the same scanner went on reporting the
+    total from before it, while a freshly built one over the same directory
+    reported the new one: 11 against 31, one question and two answers. The key
+    now includes the shape of the `subagents/` directory. Still a `readdir` and
+    a `stat` each; still never an `open`.
+  - **A transcript replaced by a file of exactly the same length was never
+    read.** The tailer's only rule for *this is not the file I had* was that it
+    had shrunk, so a rotation landing on the same byte count left it reading at
+    an offset into a file that no longer existed — silently, and for good. It now
+    tracks the file's identity as well (`ino` and `birthtimeMs`, falling back to
+    a hash of a fixed window at the head where the platform's inode cannot be
+    trusted), and appended bytes deliberately do not move it.
+
+- **An empty canvas says why it is empty, and what to do about it** (N-WP20).
+  The first five minutes of Nazar, on a machine that is not already running
+  Claude Code, were a blank rectangle and the words *no sessions found* — with
+  one piece of advice, *start `claude` in a terminal*, which is correct for
+  exactly one of the three ways the canvas can be empty. `nazar doctor` has
+  always been able to tell them apart, so the server now sends the same verdict
+  and the page shows it: **the sessions directory does not exist** (check
+  `CLAUDE_CONFIG_DIR`), **there is no live session right now** (start one), or
+  **the session files are all leftovers from runs that ended**. Two quieter notes
+  ride under it when they are true and never as the reason: `claude agents` not
+  answering, and the status-line wrapper not being installed — the second being
+  why cost and context stay unknown rather than why the canvas is empty.
+  All of it comes from the catalogues, so it is in all six languages.
+
+- **A disconnected canvas says how old what it is showing is.** When the event
+  stream drops, the canvas deliberately keeps the last snapshot on screen —
+  blanking it would throw away the only thing left that is true — but the top bar
+  said only *disconnected · retrying*, which left a stale reading looking exactly
+  like a live one. It now reads **disconnected · last data 12s ago**, and the
+  number keeps moving.
+
+- **`nazar doctor` names the shell instead of blaming a turn that has not
+  happened** (T-WP8). On Windows Claude Code runs `statusLine.command` through
+  Git Bash, where a backslash outside quotes is the escape character — so a
+  status-line wrapper installed at `C:\…\nazar-statusline.exe` is never spawned
+  at all, no capture is written, and every card shows no cost and no context
+  window. Doctor reported that as *no status-line tick yet*, which is what a
+  session sitting at a prompt honestly looks like, so the report told a person
+  to wait rather than to fix it. It is now a fifth reason, ranked **above** the
+  install-date reason, because that one ends "restart it and the capture
+  appears" and a restart changes nothing here. A project override still outranks
+  it, being the only reason that explains one session and not its neighbour.
+  Two lines that contradicted the new one were corrected with it: the `captures`
+  row no longer says "the status-line wrapper is not installed" about a wrapper
+  that *is* the user-level status line, and the machine-wide sentence under it
+  now names the shell. The rewrite is nazar-tray's own installer's job; doctor
+  prints its dry run and, as ever, runs nothing.
+
+- **The task line gets a row of its own, and the switch redraws the canvas it is
+  measuring** (N-WP15b). N-WP15a put the session card's task line at `pad + 46`
+  on the strength of *the header already has a 28 px gap between the folder path
+  and the identity line, so no card changes size*. That 28 px is not spare room:
+  it is the header's ordinary leading, the same step it puts between the
+  identity line and the model line. The task therefore landed 12 px above the
+  identity line, and at 11.5 px type two rows of glyphs touched — the line was
+  drawn *on* the identity row rather than in one of its own. The header pays for
+  the row now, exactly as a subagent node has always paid for its own through
+  `AGENT.taskLine`: `CARD_TASK_LINE` is 16 px, the task keeps the place under
+  the folder path where it belongs, and the identity line and everything below
+  it drop by that one line. A card the user placed keeps its corner — a position
+  is stored per card and read back unchanged, and a dragged height is a floor,
+  so a sized card grows by the line rather than clipping its own header.
+
+  The second half is why it looked like a switch that only half worked. Every
+  conditional row was positioned in `createSession`, which runs the first time a
+  card is drawn and never again, so an element born on a frame with the setting
+  off kept that geometry for ever: the page was only right if it had been
+  *loaded* with the setting already on. The rows live in one table now and are
+  written on every frame, and moving the switch runs a full pass — measure,
+  place, draw — as though a snapshot had just landed. Both card geometries come
+  from one function each, `treeSpecFor` for the tree and `cardSpecFor` for the
+  card, so the measure pass and the drawing cannot disagree about how tall a
+  card is. With the setting off nothing moves by a pixel: the canvas renders
+  byte-identically to the one before this change.
 
 - **`nazar doctor -v` runs doctor instead of printing the version, and an
   unknown flag is refused** (N-WP9). `-v` was the short form of `--version`, and
@@ -1108,11 +1102,13 @@ The usage-limits bead, cost and context window need
 [nazar-tray](https://github.com/xfurqan0/nazar-tray) or its status-line wrapper
 installed; with neither, all three are hidden entirely — nothing is drawn as `0`
 and nothing stands in as a placeholder, because a number Nazar does not have is
-a number it does not show. The desktop app and its jump are Windows-only; macOS
-and Linux say "not supported yet" rather than doing nothing. The jump refuses
-rather than guessing when several windows could still be one session, and says
-how many it could not choose between. The desktop installer is unsigned, so
-Windows SmartScreen warns on first run. Claude Desktop and VS Code sessions are
+a number it does not show. The jump to a terminal is Windows-only; the macOS and
+Linux apps answer the same gesture with "not available on this platform yet"
+rather than doing nothing. The jump refuses rather than guessing when several
+windows could still be one session, and says how many it could not choose
+between. The Windows installer is unsigned, so SmartScreen warns on first run,
+and the `.dmg` files are ad-hoc signed rather than notarised, so the first
+launch needs a right-click · Open. Claude Desktop and VS Code sessions are
 invisible to `claude agents --json`; a subagent's node appears when its
 transcript starts; transcript writes are asynchronous, so totals lag by seconds
 and the age of the last write is shown; history reaches back only as far as

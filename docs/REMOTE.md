@@ -53,8 +53,9 @@ Four consequences worth stating on their own:
 
 ## Installing Nazar on the far end
 
-The package is **not on npm yet**, so `npx @xfurqan0/nazar` does not work on the remote
-machine. Two ways to put it there, and both end with `nazar` on the remote `PATH`.
+The far end needs Nazar on it, and the package is on npm, so the shortest way is one
+line — `ssh build-box 'npm i -g @xfurqan0/nazar && nazar --version'`. The two below put
+it there without the registry, from a tarball you built or from a clone.
 
 ### From a tarball
 
