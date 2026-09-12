@@ -159,13 +159,18 @@ A stale `dist/` is the classic way to publish something that does not match the
 source. Start from nothing.
 
 ```bash
-npm run clean
 rm -rf dist node_modules            # PowerShell: Remove-Item -Recurse -Force dist, node_modules
 npm ci
+npm run clean
 npm run build
 npm run typecheck
 npm test
 ```
+
+`npm run clean` is `tsc --build --clean`, so it comes after `npm ci` rather
+than before it: on a clone that starts from nothing there is no `tsc` to run
+yet, and it is the stale `*.tsbuildinfo` of an existing tree it is there to
+clear.
 
 ---
 
@@ -191,14 +196,16 @@ dist/nazar.mjs
 dist/web/index.html
 dist/web/bundle.js
 dist/web/styles.css
-dist/web/assets/*            (provider badges + LICENSE-lobehub.txt)
+dist/web/assets/*            (bead-tick.wav, claude-color.png,
+                              claudecode-color.png, codex-color.png,
+                              nazar.svg, LICENSE-lobehub.txt)
 ```
 
 Anything else — a source file, a fixture, a screenshot, a `.map`, a
 `node_modules` entry — means the `files` whitelist has drifted. Fix it before
 continuing.
 
-Check the numbers too: about 165 kB packed, about 584 kB unpacked, 15 files. A
+Check the numbers too: about 300 kB packed, about 1.1 MB unpacked, 16 files. A
 jump of an order of magnitude means something got in. The canvas is most of it —
 `dist/web/bundle.js` and `dist/web/styles.css` together are over half the
 unpacked size, and they grow with every package that adds to the UI, so compare
@@ -237,13 +244,20 @@ curl -s http://127.0.0.1:4699/api/state | head -c 200
 Needs the Rust toolchain `rust-toolchain.toml` pins and `cargo install
 tauri-cli`. The NSIS toolchain is downloaded by the Tauri bundler on first use.
 
+The staging step comes first because `bundle.resources` names `resources/server`
+and `tauri-build` checks that the path exists while the crate *compiles* —
+`apps/desktop/resources/` is not in the repository, so on a fresh clone every
+`cargo` command below fails with `resource path 'resources\server' doesn't
+exist` until the package has been built and staged.
+
 ```powershell
-node scripts/check-licenses.mjs     # every Rust and npm dependency, permissive only
+node scripts/build-desktop.mjs --stage   # the resources the crate compiles against
+node scripts/check-licenses.mjs          # every Rust and npm dependency, permissive only
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 
-node scripts/build-desktop.mjs      # npm build + stage + release bundle
+node scripts/build-desktop.mjs           # npm build + stage + release bundle
 ```
 
 The artifact is `target/release/bundle/nsis/nazar-desktop_<version>_x64-setup.exe`.
