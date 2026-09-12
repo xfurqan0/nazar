@@ -69,43 +69,51 @@ Each shot is then taken twice and only accepted when the two agree.
 | `wp4-200-light.png` | The same canvas at 2×, light | PROJECT.md §8, WP4 |
 | `wp4-empty-dark.png` | The empty state: no session on the machine, and the lines that say why | PROJECT.md §8, WP4 |
 | `wp4-hover-dark.png` | The hover card over a session: tokens, context window, the folder | PROJECT.md §8, WP4 |
-| `wp4b-history-dark.png` | The History panel, past sessions grouped by project, one opened as a frozen tree | **README**, *What it looks like*, 5th image |
+| `wp4b-history-dark.png` | The History panel, past sessions grouped by project, one opened as a frozen tree | **README**, *What it looks like*, 4th image |
 | `wp4c-overview-dark.png` | Sessions with their trees, the tab bar, the waiting banner, the drawer open | **README**, *What it looks like*, 2nd image |
 | `wp4c-overview-light.png` | The same, light | PROJECT.md §8, WP4c |
-| `wp4c-sixty-agents-dark.png` | One session with sixty subagents: the card grows, the tree wraps | **README**, *What it looks like*, 3rd image |
-| `wp4c-collapsed-dark.png` | The same session folded away: one row of chips counting the tree | **README**, *What it looks like*, 4th image |
+| `wp4c-sixty-agents-dark.png` | One session with sixty subagents: the card grows, the tree wraps | **README**, *Fold a big tree away* |
+| `wp4c-collapsed-dark.png` | The same session folded away: one row of chips counting the tree | **README**, *Fold a big tree away*, 2nd image |
 | `wp4c-dragged-dark.png` | A card dragged out of the grid, to show the arrangement is the user's | PROJECT.md §8, WP4c |
-| `wp4d-activity-dark.png` | Sessions in four states — working, idle, waiting, unknown — framed and labelled | **README**, *What it looks like*, 1st image |
-| `wp4d-activity-light.png` | The same four states, light | **README**, *The frame says whether it is working* |
+| `wp4d-activity-dark.png` | Sessions in four states — working, idle, waiting, unknown — framed and labelled | PROJECT.md §8, WP4d |
+| `wp4d-activity-light.png` | The same four states, light | PROJECT.md §8, WP4d |
 | `wp4e-themes-sepia.png` | The Sepia palette in light mode, settings open on Appearance | **README**, *Themes* |
 | `wp4e-themes-midnight.png` | The Midnight palette in dark mode, settings open on Appearance | **README**, *Themes* |
 | `wp4e-colours-dark.png` | Two activity colours overridden, with the cards already reframed | **README**, *Themes*, 3rd image |
-| `wp4e-notes-dark.png` | Three sticky notes beside the cards, one per colour | **README**, *Notes* |
+| `wp4e-notes-dark.png` | Three sticky notes on the canvas under the cards, one per colour | **README**, *Sticky notes* |
 | `wp4e-notes-light.png` | The same three notes, light | PROJECT.md §8, WP4e |
 | `wp4e-popover-dark.png` | The usage-limits panel: six windows, every severity, two sources | **README**, *Usage limits, cost and context* |
 | `wp4e-popover-light.png` | The same panel, light | PROJECT.md §8, WP4e |
 | `wp4f-resize-dark.png` | A card dragged narrower from its corner: the tree re-wraps, the grips are drawn | **README**, *Resize a card* |
 | `wp4f-cleared-dark.png` | The same card with its finished subagents hidden, and the chip that brings them back | **README**, *Resize a card*, 2nd image |
-| `wp4g-projects-dark.png` | Two project tabs, the drawer listing each project live and past | **README**, *Folder tabs and card names* |
-| `wp4g-rename-dark.png` | Cards titled by their user, one with the inline name field open | **README**, *Folder tabs and card names*, 2nd image |
+| `wp4g-projects-dark.png` | Two folder tabs, and the drawer listing each with its live and past counts | **README**, *Folder tabs are folders that own a tab* |
+| `wp4g-rename-dark.png` | Cards titled by their user, one with the inline name field open | **README**, *Name a card*, 2nd image |
 | `wp5-quota-dark.png` | The bead in the top bar on a machine with nazar-tray installed | PROJECT.md §8, WP5 |
 | `wp5-quota-light.png` | The same bead, light | PROJECT.md §8, WP5 |
-| `n-wp10-resize-dark.png` | All eight resize handles: a card dragged from its east edge | *new — not yet in the README* |
-| `n-wp11-folder-tab-dark.png` | A folder tab selected: only the sessions under that folder | *new — not yet in the README* |
-| `n-wp12-settings-dark.png` | The settings panel in the drawer's own place | *new — not yet in the README* |
-| `n-wp13-language-tr-dark.png` | The whole canvas in Turkish, with the language picker open | *new — not yet in the README* |
-| `n-wp15-quiet-cards-dark.png` | The quieter card: neutral frame, the pulse moved to the ring | *new — not yet in the README* |
-| `n-wp15a-task-text-dark.png` | Task text on the cards: one line per session saying what it was asked to do | *new — not yet in the README* |
-| `n-wp16-sound-setting-dark.png` | The sound switches under Behaviour, with quiet hours open | *new — not yet in the README* |
+| `n-wp10-resize-dark.png` | All eight resize handles: a card dragged from its east edge | **README**, *Resize a card from any edge or corner* |
+| `n-wp11-folder-tab-dark.png` | A folder tab selected: only the sessions under that folder | **README**, *Folder tabs are folders that own a tab* |
+| `n-wp12-settings-dark.png` | The settings panel in the drawer's own place | **README**, *The sidebar* |
+| `n-wp13-language-tr-dark.png` | The whole canvas in Turkish, with the settings panel scrolled to the six-language picker | *new — not yet in the README* |
+| `n-wp15-quiet-cards-dark.png` | The quieter card: neutral frame, the pulse moved to the ring | **README**, *What it looks like*, 1st image |
+| `n-wp15a-task-text-dark.png` | Task text on the cards: one line per session saying what it was asked to do | **README**, *Task text* |
+| `n-wp16-sound-setting-dark.png` | The sound switches under Behaviour, with quiet hours open | **README**, *A sound when a session ends* |
 | `n-wp18-codex-session-dark.png` | A Codex thread: its own badge, no pid, no subagents, no cost | *new — not yet in the README* |
-| `n-wp19-card-menu-dark.png` | The canvas's own right-click menu on a card | *new — not yet in the README* |
-| `n-wp21-needs-you-dark.png` | The Needs-you strip open: who is waiting, and for how long | *new — not yet in the README* |
+| `n-wp19-card-menu-dark.png` | The canvas's own right-click menu on a card | **README**, *Right-click anything* |
+| `n-wp21-needs-you-dark.png` | The Needs-you strip open: who is waiting, and for how long | **README**, *What it looks like*, 3rd image |
 
-The ten `n-wp*` files are new and **deliberately not linked from the README
-yet**: adding an image means writing the alt text that goes with it, and the
-alt texts in this project are hand-written sentences describing the picture, not
-captions. They are taken so that the pictures exist when the README paragraph
-does.
+Eight of the ten `n-wp*` files were placed in the README by N-WP22, which also
+retook seven shots whose window was too small for what the paragraph beside
+them claims. `n-wp13-language-tr-dark.png` and
+`n-wp18-codex-session-dark.png` are still unplaced: adding an image means
+writing the alt text that goes with it, and the alt texts in this project are
+hand-written sentences describing the picture, not captions. They are taken so
+that the pictures exist when the README paragraph does.
+
+Two of the older shots left the README in the same round.
+`wp4d-activity-{dark,light}.png` drew the four activity states on the card as
+WP4d shipped it; `n-wp15-quiet-cards-dark.png` draws the same four on the
+quieter card and took the first image with it. They stay here as the record of
+what WP4d looked like.
 
 ## Adding one
 

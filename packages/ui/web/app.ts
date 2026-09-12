@@ -25,7 +25,13 @@ import type { ColourOverrides } from '../src/colours.ts';
 import { readColours, writeColours } from '../src/colours.ts';
 import { contextActionOf } from '../src/contextmenu.ts';
 import { DEMO_HISTORY_IDS, makeDemoHistory } from '../src/demo-history.ts';
-import { DEMO_NOTES, DEMO_PROJECT_ROOTS, DEMO_CARD_NAMES, makeDemoState } from '../src/demo.ts';
+import {
+  DEMO_NOTES,
+  DEMO_PROJECT_ROOTS,
+  DEMO_CARD_NAMES,
+  demoNeedsYou,
+  makeDemoState,
+} from '../src/demo.ts';
 import { emptyStateLines } from '../src/empty.ts';
 import {
   basename,
@@ -3141,6 +3147,10 @@ function start(): void {
       ...(demoQuota === undefined ? {} : { quota: demoQuota }),
     });
     setConnection('demo');
+    // N-WP21. The strip's clocks start at the first frame, and the demo's clock
+    // never moves, so without this the Needs-you row reads `0s` beside a
+    // question nobody has answered — the one number it exists to show.
+    needsYou.seed(demoNeedsYou(state));
     // Two switches the screenshots need, so a shot of a folded card or an open
     // sidebar is a URL rather than a script of clicks.
     if (params.get('sidebar') === '1') sidebar.set(true, false);

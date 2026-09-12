@@ -239,7 +239,7 @@ const SCENARIOS = [
   {
     name: 'wp4b-history-dark',
     what: 'The History panel, past sessions grouped by project, one opened as a frozen tree',
-    where: 'README, "What it looks like", fifth image',
+    where: 'README, "What it looks like", fourth image',
     query: 'demo=1&theme=dark&history=1',
     width: 1440,
     height: 900,
@@ -268,19 +268,23 @@ const SCENARIOS = [
   {
     name: 'wp4c-sixty-agents-dark',
     what: 'One session with sixty subagents: the card grows, the tree wraps, connectors stay inside',
-    where: 'README, "What it looks like", third image',
+    where: 'README, "Fold a big tree away"',
     // Six seeded agents on the first session plus fifty-four generated ones.
     // The count is written as a sum rather than as `60` so that a change to the
     // fixture is a visible arithmetic error here rather than a silent 58.
     query: `demo=1&theme=dark&sessions=1&agents=${60 - 6}`,
     width: 1500,
-    height: 950,
+    // Taller than every other scenario because the card is: sixty subagents
+    // wrap into nine rows and the point of the picture is that the card grew to
+    // hold all of them. At 950 the card ran off the bottom of the window, which
+    // is a picture of a crop rather than of a card.
+    height: 1900,
     scale: 1,
   },
   {
     name: 'wp4c-collapsed-dark',
     what: 'The same session folded away: one row of chips counting the tree',
-    where: 'README, "What it looks like", fourth image',
+    where: 'README, "Fold a big tree away", second image',
     query: `demo=1&theme=dark&sessions=1&agents=${60 - 6}&collapse=1`,
     width: 1500,
     height: 950,
@@ -294,14 +298,22 @@ const SCENARIOS = [
     width: 1500,
     height: 950,
     scale: 1,
-    steps: [{ drag: { from: '.nz-session .nz-session__handle', dx: 150, dy: 90 } }],
+    // Low in the handle, under the rename strip that covers its top 20 px —
+    // see `centreOf`. The grab point is the difference between a dragged card
+    // and a card standing still with its name field open.
+    steps: [
+      { drag: { from: '.nz-session .nz-session__handle', at: { y: 0.8 }, dx: 150, dy: 90 } },
+    ],
   },
 
   /* --- WP4d: activity frames ----------------------------------------- */
   {
     name: 'wp4d-activity-dark',
     what: 'Four sessions in four states — working, idle, waiting, unknown — framed and labelled',
-    where: 'README, "What it looks like", first image',
+    // N-WP22 gave the README's first image to `n-wp15-quiet-cards-dark`, which
+    // draws the same four states on the quieter card. This pair stays as the
+    // record of what WP4d shipped.
+    where: 'docs/PROJECT.md §8, WP4d (not in the README)',
     query: 'demo=1&theme=dark',
     width: 1500,
     height: 1240,
@@ -310,7 +322,7 @@ const SCENARIOS = [
   {
     name: 'wp4d-activity-light',
     what: 'The same four states, light',
-    where: 'README, "The frame says whether it is working"',
+    where: 'docs/PROJECT.md §8, WP4d (not in the README)',
     query: 'demo=1&theme=light',
     width: 1500,
     height: 1240,
@@ -359,11 +371,13 @@ const SCENARIOS = [
   },
   {
     name: 'wp4e-notes-dark',
-    what: 'Three sticky notes beside the cards, one per colour that has something to say',
-    where: 'README, "Notes"',
+    what: 'Three sticky notes on the canvas under the cards, one per colour that has something to say',
+    where: 'README, "Sticky notes"',
     query: 'demo=1&theme=dark&notes=1',
     width: 1560,
-    height: 980,
+    // The notes sit in a row of their own below the second row of cards, so
+    // this pair is taller than the plain canvas: see `DEMO_NOTES`.
+    height: 1180,
     scale: 1,
   },
   {
@@ -372,7 +386,7 @@ const SCENARIOS = [
     where: 'docs/PROJECT.md §8, WP4e (not in the README)',
     query: 'demo=1&theme=light&notes=1',
     width: 1560,
-    height: 980,
+    height: 1180,
     scale: 1,
   },
   {
@@ -428,20 +442,23 @@ const SCENARIOS = [
   /* --- WP4g: projects and card names ---------------------------------- */
   {
     name: 'wp4g-projects-dark',
-    what: 'Two project tabs with folder icons, the drawer listing each project live and past',
-    where: 'README, "Folder tabs and card names"',
+    what: 'Two folder tabs, and the drawer listing each with its live and past counts',
+    where: 'README, "Folder tabs are folders that own a tab"',
     query: 'demo=1&theme=dark&projects=1&sidebar=1',
     width: 1560,
-    height: 800,
+    // 800 cut the second row of cards in half. The tab bar adds a row to the
+    // top of every `projects=1` shot, so these two are taller than the plain
+    // canvas rather than the same height as it.
+    height: 1020,
     scale: 1,
   },
   {
     name: 'wp4g-rename-dark',
-    what: 'Two cards titled by their user, one with the inline name field open, one still by its folder',
-    where: 'README, "Folder tabs and card names", second image',
+    what: 'Two cards titled by their user, one with the inline name field open, three still by their folder',
+    where: 'README, "Name a card", second image',
     query: 'demo=1&theme=dark&projects=1',
     width: 1560,
-    height: 800,
+    height: 1020,
     scale: 1,
     steps: [
       // The third card is the one still titled by its folder, so the field is
@@ -472,15 +489,17 @@ const SCENARIOS = [
   },
 
   /* ------------------------------------------------------------------ *
-   * New since the last hand-taken round. None of these is in the README
-   * yet — the README is edited in the picture round, not here — but every
-   * one of them is a package shipped after WP5 with nothing to show for
-   * it, which is exactly how the last set went stale.
+   * New since the last hand-taken round: every one of them is a package
+   * shipped after WP5 with nothing to show for it, which is exactly how
+   * the last set went stale. Eight of the ten were placed in the README by
+   * N-WP22; `n-wp13` and `n-wp18` are still waiting for the paragraph that
+   * wants them, because an image costs an alt text and the alt texts here
+   * are hand-written sentences rather than captions.
    * ------------------------------------------------------------------ */
   {
     name: 'n-wp10-resize-dark',
     what: 'All eight resize handles: a card dragged from its east edge rather than a corner',
-    where: 'new — N-WP10, not yet in the README',
+    where: 'README, "Resize a card from any edge or corner"',
     query: 'demo=1&theme=dark&sessions=2&agents=10',
     width: 1560,
     height: 800,
@@ -494,7 +513,7 @@ const SCENARIOS = [
   {
     name: 'n-wp11-folder-tab-dark',
     what: 'A folder tab selected: the canvas showing only the sessions under that folder',
-    where: 'new — N-WP11, not yet in the README',
+    where: 'README, "Folder tabs are folders that own a tab"',
     query: 'demo=1&theme=dark&projects=1',
     width: 1560,
     height: 800,
@@ -504,7 +523,7 @@ const SCENARIOS = [
   {
     name: 'n-wp12-settings-dark',
     what: 'The settings panel in the drawer’s own place: Appearance, Behaviour, Language, Usage, About',
-    where: 'new — N-WP12, not yet in the README',
+    where: 'README, "The sidebar"',
     query: 'demo=1&theme=dark&sidebar=1&quota=limits',
     width: 1560,
     height: 980,
@@ -513,18 +532,21 @@ const SCENARIOS = [
   },
   {
     name: 'n-wp13-language-tr-dark',
-    what: 'The whole canvas in Turkish, with the language picker open on its six entries',
+    what: 'The whole canvas in Turkish, with the settings panel scrolled to the six-language picker',
     where: 'new — N-WP13, not yet in the README',
     query: 'demo=1&theme=dark&sidebar=1&lang=tr',
     width: 1560,
     height: 980,
     scale: 1,
-    steps: [{ click: '#settings-toggle' }],
+    // Language is the fifth section of a panel that scrolls, so opening the
+    // panel is not the same as showing the picker: without this the shot was
+    // a Turkish canvas beside Appearance, which is a picture of the theme.
+    steps: [{ click: '#settings-toggle' }, { scroll: '[data-nz-t="settings.language"]' }],
   },
   {
     name: 'n-wp15a-task-text-dark',
     what: 'Task text on the cards: one line per session saying what it was asked to do',
-    where: 'new — N-WP15a, not yet in the README',
+    where: 'README, "Task text"',
     query: 'demo=1&theme=dark&sidebar=1',
     width: 1560,
     height: 980,
@@ -536,12 +558,19 @@ const SCENARIOS = [
       { click: '#settings-toggle' },
       { click: '#task-text-toggle' },
       { click: '#settings-back' },
+      // And then *Arrange*, which is not decoration. Switching task text on
+      // makes every card one line taller and cards are never re-packed under
+      // somebody who placed them, so a canvas that was packed edge to edge
+      // overlaps by that line until it is asked to re-pack — documented
+      // behaviour, and a picture of it reads as a rendering fault. `43664f2`
+      // says *Arrange* is the answer; this shot presses it.
+      { click: '#arrange' },
     ],
   },
   {
     name: 'n-wp15-quiet-cards-dark',
     what: 'The quieter card: a neutral frame, the pulse moved to the ring, working and idle and waiting side by side',
-    where: 'new — N-WP15, not yet in the README',
+    where: 'README, "What it looks like", first image',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -550,7 +579,7 @@ const SCENARIOS = [
   {
     name: 'n-wp16-sound-setting-dark',
     what: 'The sound switches under Behaviour: an ending, a permission prompt, and quiet hours',
-    where: 'new — N-WP16, not yet in the README',
+    where: 'README, "A sound when a session ends"',
     query: 'demo=1&theme=dark&sidebar=1',
     width: 1560,
     height: 980,
@@ -581,7 +610,7 @@ const SCENARIOS = [
   {
     name: 'n-wp19-card-menu-dark',
     what: 'The canvas’s own right-click menu on a card, rather than the browser’s',
-    where: 'new — N-WP19, not yet in the README',
+    where: 'README, "Right-click anything"',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -591,7 +620,7 @@ const SCENARIOS = [
   {
     name: 'n-wp21-needs-you-dark',
     what: 'The Needs-you strip open: who is waiting for you, for how long, and a way to jump there',
-    where: 'new — N-WP21, not yet in the README',
+    where: 'README, "What it looks like", third image',
     query: 'demo=1&theme=dark',
     width: 1560,
     height: 980,
@@ -814,8 +843,17 @@ const WINDOW = {
  * `index` picks among matches, because several of the things worth clicking —
  * a tab, a card's rename control — have no id of their own and are identified
  * by their position in a list the renderer controls.
+ *
+ * `at` is a fraction of the box, and it exists for exactly one element: the
+ * card's drag handle, whose middle is *not* a place you can start a drag. The
+ * handle is the whole width of the header and 62 px tall, and the rename target
+ * — a transparent strip over the title, appended after it so it takes the press
+ * first — covers the top 20 px of it. A press at the handle's centre therefore
+ * lands on `[data-action="rename"]`, which `app.ts` answers by neither dragging
+ * nor panning; the card stays put and the release opens the name field instead,
+ * which is exactly the picture `wp4c-dragged-dark` used to be.
  */
-async function centreOf(cdp, session, selector, index = 0) {
+async function centreOf(cdp, session, selector, index = 0, at = { x: 0.5, y: 0.5 }) {
   const box = await evaluate(
     cdp,
     session,
@@ -829,7 +867,7 @@ async function centreOf(cdp, session, selector, index = 0) {
       if (rect.width === 0 && rect.height === 0) {
         return { error: ${JSON.stringify(selector)} + ' has no box on screen' };
       }
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      return { x: rect.left + rect.width * ${at.x ?? 0.5}, y: rect.top + rect.height * ${at.y ?? 0.5} };
     })()`,
   );
   if (box.error) throw new Error(box.error);
@@ -966,7 +1004,8 @@ async function runStep(cdp, session, step) {
   }
 
   if (step.drag !== undefined) {
-    await pointerDrag(cdp, session, await centreOf(cdp, session, step.drag.from), step.drag);
+    const from = await centreOf(cdp, session, step.drag.from, 0, step.drag.at ?? { x: 0.5, y: 0.5 });
+    await pointerDrag(cdp, session, from, step.drag);
     return;
   }
 

@@ -131,6 +131,20 @@ export class NeedsYouStrip {
     options.panel.addEventListener('keydown', (event) => this.onKey(event));
   }
 
+  /**
+   * Start from a memory rather than from nothing. `?demo=1` only.
+   *
+   * The clocks in this strip start at the frame that first sees a wait, which
+   * on a canvas whose clock is pinned means they never leave zero. The demo
+   * canvas therefore says how long its waiting session has been waiting —
+   * `demoNeedsYou` in `src/demo.ts` — and the live canvas never calls this: a
+   * real page genuinely does not know what happened before it opened, and
+   * saying otherwise would be the guess this whole module refuses to make.
+   */
+  seed(memory: NeedsYouState): void {
+    this.memory = memory;
+  }
+
   /** True while the panel is on screen. */
   get isOpen(): boolean {
     return this.open;

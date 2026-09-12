@@ -27,8 +27,10 @@ import type {
   StateSnapshot,
 } from '@nazar/core';
 
+import { isWaiting } from './activity.js';
 import type { DemoQuotaSource } from './demo-quota.js';
 import { makeDemoQuota } from './demo-quota.js';
+import type { NeedsYouState, WaitSince } from './needs-you.js';
 
 const MINUTE = 60_000;
 
@@ -700,6 +702,53 @@ export function makeDemoState(options: DemoOptions = {}): StateSnapshot {
 }
 
 /* ------------------------------------------------------------------ *
+ * N-WP21 on a canvas whose clock does not move
+ * ------------------------------------------------------------------ */
+
+/**
+ * How long the demo's waiting session has already been waiting.
+ *
+ * The Needs-you strip keeps its clocks in memory and starts them at the frame
+ * it first sees a wait — a deliberate limit, and the reason a freshly loaded
+ * page reads `0s` beside a question that was asked before it opened. On a real
+ * canvas that number climbs while you look at it. On the demo, whose clock is a
+ * constant so that two screenshot runs agree byte for byte, it never does: the
+ * strip started counting at `generatedAt` and is being read at `generatedAt`,
+ * so every picture of it showed `0s` — the one number the strip exists to make
+ * legible, and the only one it could not show.
+ *
+ * So the demo hands the strip a memory instead of letting it start from
+ * nothing. Four minutes, measured from the snapshot's own `generatedAt` rather
+ * than from a real clock, which keeps the picture as fixed as the rest of the
+ * canvas.
+ */
+export const DEMO_WAITED_MS = 4 * MINUTE;
+
+/**
+ * The strip's memory as the demo canvas starts with it.
+ *
+ * Only `waiting` is filled. `active` and `finished` are left empty on purpose:
+ * `observeSessions` builds the *while you were away* cluster out of a
+ * transition — work in flight on the previous frame and none on this one — so a
+ * seeded `active` would invent one and announce sessions as having just
+ * finished that the demo never ran.
+ */
+export function demoNeedsYou(state: StateSnapshot): NeedsYouState {
+  const waiting = new Map<string, WaitSince>();
+  for (const session of state.sessions) {
+    if (!isWaiting(session)) continue;
+    waiting.set(session.id, {
+      // The raw value and not a translated one: `observeSessions` compares this
+      // against the session's own `waitingFor` to decide whether this is still
+      // the same wait, and a mismatch would reset the clock on the next frame.
+      waitingFor: session.waitingFor ?? '',
+      since: state.generatedAt - DEMO_WAITED_MS,
+    });
+  }
+  return { waiting, active: new Set(), finished: new Map() };
+}
+
+/* ------------------------------------------------------------------ *
  * The fixtures the demo canvas dresses itself with (moved here by N-WP13)
  *
  * They used to sit in `web/app.ts`, where the i18n sweep found them and was
@@ -725,18 +774,24 @@ export interface DemoNote {
  * of thing a note on this canvas is actually for — a reminder attached to a
  * place on a map — rather than lorem ipsum, which would prove nothing about the
  * width the text has to survive.
+ *
+ * They sit **under** the cards rather than beside them. Their first home was
+ * the empty column to the right of the second row, which stopped being empty
+ * the day N-WP18 put a fifth card there: the screenshot then showed three
+ * sticky notes covering a session, which is a picture of an accident. A row of
+ * its own cannot be taken by a sixth.
  */
 export const DEMO_NOTES: readonly DemoNote[] = [
   {
-    x: 790,
-    y: 500,
+    x: 30,
+    y: 840,
     colour: 1,
     text: 'the long one on the left is the release build — leave it alone until the installer is signed',
   },
-  { x: 1035, y: 500, colour: 3, text: 'weekly window resets Sunday 04:00' },
+  { x: 275, y: 840, colour: 3, text: 'weekly window resets Sunday 04:00' },
   {
-    x: 1280,
-    y: 500,
+    x: 520,
+    y: 840,
     colour: 4,
     text: 'waiting on a permission prompt again: check the sandbox rule before answering',
   },

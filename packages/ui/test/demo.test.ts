@@ -13,8 +13,9 @@ import assert from 'node:assert/strict';
 import '../test/catalogs.ts';
 import test from 'node:test';
 
-import { agentActivity, sessionActivity } from '../src/activity.ts';
-import { forestOf, makeDemoState } from '../src/demo.ts';
+import { agentActivity, isWaiting, sessionActivity } from '../src/activity.ts';
+import { DEMO_WAITED_MS, demoNeedsYou, forestOf, makeDemoState } from '../src/demo.ts';
+import { observeSessions, waitingRows } from '../src/needs-you.ts';
 
 const NOW = 1_788_756_000_000;
 
@@ -155,4 +156,28 @@ test('zero sessions is a legal demo canvas, so the empty state is reachable', ()
   const state = makeDemoState({ now: NOW, sessions: 0 });
   assert.deepEqual(state.sessions, []);
   assert.equal(state.generatedAt, NOW);
+});
+
+test('N-WP21: the strip starts with the demo wait already four minutes old', () => {
+  const state = makeDemoState({ now: NOW });
+  const seeded = demoNeedsYou(state);
+
+  const waiting = state.sessions.filter(isWaiting);
+  assert.equal(waiting.length, 1, 'one waiting session, or the picture proves nothing');
+  assert.equal(seeded.waiting.size, waiting.length);
+  assert.equal(seeded.active.size, 0, 'a seeded `active` would invent a finished run');
+  assert.equal(seeded.finished.size, 0);
+
+  const [session] = waiting;
+  assert.ok(session !== undefined);
+  const since = seeded.waiting.get(session.id);
+  assert.ok(since !== undefined);
+  assert.equal(since.since, NOW - DEMO_WAITED_MS);
+  // Raw and not translated, so `observeSessions` reads it as the same wait and
+  // keeps the clock rather than restarting it on the next frame.
+  assert.equal(since.waitingFor, session.waitingFor);
+
+  // The number the strip actually draws, against the demo's own fixed clock.
+  const rows = waitingRows(observeSessions(seeded, state.sessions, NOW), state.sessions, NOW);
+  assert.equal(rows[0]?.waited, '4m 00s');
 });
