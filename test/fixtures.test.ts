@@ -380,8 +380,15 @@ const CODEX_WET_LISTS = new Set(['command', 'queries']);
 /** The placeholder task text, which is the one readable string on purpose. */
 const CODEX_PLACEHOLDER = /task placeholder$/;
 
+/**
+ * The Codex rollouts, as text.
+ *
+ * `rollout-compressed.jsonl.zst` is left out on purpose: it is a zstd frame, so
+ * every test below that parses a line would be parsing binary. It has a gate of
+ * its own, immediately after theirs.
+ */
 function codexFixtures(): Array<[string, string]> {
-  return fixtures.filter(([name]) => name.startsWith('codex/'));
+  return fixtures.filter(([name]) => name.startsWith('codex/') && name.endsWith('.jsonl'));
 }
 
 function sweepWet(value: unknown, at: string, report: (where: string, what: string) => void): void {
@@ -403,6 +410,26 @@ function sweepWet(value: unknown, at: string, report: (where: string, what: stri
     sweepWet(child, where, report);
   }
 }
+
+test('N-WP-L6: the compressed rollout fixture is a zstd frame and carries no data', () => {
+  const name = 'codex/rollout-compressed.jsonl.zst';
+  const raw = readFileSync(path.join(fixturesDir, 'codex', 'rollout-compressed.jsonl.zst'));
+  assert.ok(
+    fixtures.some(([each]) => each === name),
+    'the fixture that pins "Codex compressed this one" has to exist',
+  );
+
+  // The zstd magic number, so the fixture is the thing it claims to be rather
+  // than a few bytes named after one.
+  assert.deepEqual([...raw.subarray(0, 4)], [0x28, 0xb5, 0x2f, 0xfd]);
+
+  // Small on purpose: nothing reads it, and a fixture nobody decompresses has
+  // no business being large. It is one placeholder line compressed.
+  assert.ok(raw.length < 512, `${raw.length} bytes is more than a name needs`);
+
+  // It is not swept by the rollout tests below, and must not be.
+  assert.ok(!codexFixtures().some(([each]) => each === name));
+});
 
 test('N-WP18: the Codex fixtures are there, and are rollouts', () => {
   const found = codexFixtures();

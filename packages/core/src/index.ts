@@ -188,6 +188,7 @@ export type { SessionRegistryEvents, SessionRegistryOptions } from './session-re
 
 export {
   CODEX_LOCK_SUFFIX,
+  CODEX_ROLLOUT_COMPRESSED_SUFFIX,
   CODEX_ROLLOUT_PREFIX,
   CODEX_ROLLOUT_SUFFIX,
   CodexRollout,
@@ -197,6 +198,7 @@ export {
   MAX_CODEX_STRING,
   codexInstalled,
   extractCodexLine,
+  isCompressedRolloutName,
   readCodexStore,
   threadIdFromLockName,
   threadIdFromRolloutName,

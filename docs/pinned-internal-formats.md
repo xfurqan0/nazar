@@ -260,7 +260,36 @@ this is the row to change.
 |---|---|---|---|---|
 | `~/.codex/sessions` | directory listing only: `<year>/<month>/<day>` names | 0.153.4 | none needed | Walked newest-first by **name**, not by `stat`. Only the newest 7 day directories are listed, which bounds a store that gains a directory a day for as long as Codex is installed. |
 | `~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl` | `timestamp`, `type`, `payload.type`, and per record: `id`, `cwd`, `cli_version`, `source`, `parent_thread_id`, `base_instructions.provenance.model`, `model`, `effort`, `turn_id`, `thread_token_usage`, `info.total_token_usage`, `thread_settings.{model, reasoning_effort, cwd}`, `item.{type, status, tool}`, `name`, `role` | 0.153.4 | `fixtures/codex/rollout-{open,closed,subagent}.jsonl` | Append-only; tailed by byte offset with the same `TranscriptTailer` the Claude Code side uses. A name that does not match `rollout-*.jsonl` is not opened. |
+| `~/.codex/sessions/<year>/<month>/<day>/rollout-*.jsonl.zst` | **the name only.** Counted, never opened | 0.154.0, measured 2026-09-15 | `fixtures/codex/rollout-compressed.jsonl.zst` (a zstd frame of one placeholder line) | Codex's own compression of an old rollout — see the note below. Recognised so that a store of compressed history is not reported as an empty store; a compressed rollout is never a live thread, because Codex will not compress a file younger than seven days. |
 | `~/.codex/thread-writer-locks` | directory listing only: one `~/.codex/thread-writer-locks/<thread_id>.lock` per open thread | 0.153.4 | none — a lock is a zero-byte file whose *existence* is the datum | The liveness signal, and the only one there is. The listing is read and the file is **never opened**: it is held open by its writer, and on Windows opening it fails with `EBUSY`. `.coordination.lock` is Codex's own global lock and is skipped by its leading dot. |
+
+### Compression: the day this reader goes quiet without saying so
+
+Codex 0.154.0 carries `local_thread_store_compression`, a feature flag. With it on, a
+sweep — roughly every six hours, serialised on `codex_home/.tmp/rollout-compression.lock` —
+rewrites every rollout whose mtime is **more than seven days old**, under `sessions/` and
+`archived_sessions/` alike, as `<name>.jsonl.zst` (zstd level 3, mtime and permissions
+preserved) and **deletes the plain file**.
+
+Measured on 2026-09-15 with `codex features list` on 0.154.0: the flag is *under
+development* and **false** by default, so nothing has moved yet. The breakage does not
+arrive with a version number; it arrives the day OpenAI turns the flag on, or the day a
+user turns it on themselves.
+
+**Nazar does not read a `.jsonl.zst`, and says so rather than saying nothing.** Reading one
+means a zstd decoder, which means a runtime dependency, which this package does not have.
+What it does instead is recognise the name, count the files, and report them as
+*compressed, not readable yet* — because "the store is empty" and "the store is full of
+files I cannot open" are different answers, and only the second one is true on such a
+machine. `nazar doctor` prints the count.
+
+The live canvas is unaffected and is expected to stay unaffected: a thread that is alive
+wrote its rollout seconds ago, and the compressor's floor is seven days. A compressed
+rollout is therefore never a session, which is arithmetic rather than policy.
+
+`codex migrate-rollouts --apply` (`legacy_to_paginated_v1`) is the same class of risk under
+a different name: it moves old rollouts into the paginated thread history and publishes the
+result by renaming over the rollout path. It is not read either.
 
 ### Not read, on purpose
 
@@ -273,6 +302,7 @@ this is the row to change.
 | `response_item/reasoning`, `response_item/agent_message`, `payload.last_agent_message` | The model's own prose and its private reasoning. Not read at any setting, including with task text on: that switch reads the **human** turn and nothing else. |
 | `payload.rate_limits` on `token_count` | Codex's own usage windows. They reach the canvas already, through `~/.nazar/limits.json`, which nazar-tray builds from Codex's API — one reader per fact, and it is not this one. |
 | `world_state`, `realtime_item`, `inter_agent_communication_metadata`, `payload.item.questions` | Whole record types Nazar has no use for. Only the eleven `payload.type` values in the table above are read at all. |
+| the *contents* of `rollout-*.jsonl.zst` | A zstd frame, and decoding one needs a decompressor this package will not take as a dependency. The name is read; the bytes never are. |
 | `~/.codex/sessions/**` for **writing**, and `~/.codex/thread-writer-locks/*.lock` for **opening** | Nazar writes nothing here and takes no lock. `test/no-writes.test.ts` is the static gate; the lock is decided by the directory listing precisely so that no handle is ever taken on a file another process owns. |
 
 ## Hermes (N-WP17a)

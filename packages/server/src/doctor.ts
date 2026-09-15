@@ -753,8 +753,14 @@ async function checkFormats(
       detail: !codex.configured
         ? 'not validated: no rollout store, so Codex is not installed'
         : codex.rollouts === 0
-          ? 'not validated: the store exists and holds no rollout in the days scanned'
-          : `${plural(codex.rollouts, 'rollout')} listed, ${plural(codex.warnings, 'unreadable file')}, ${plural(codex.sessions, 'open thread')}`,
+          ? // N-WP-L6. "Empty" and "full of files I cannot open" are different
+            // answers, and only one of them is true on a machine where Codex has
+            // compressed its history. Saying the wrong one confidently is worse
+            // than saying the right one apologetically.
+            codex.compressed > 0
+            ? `not validated: the store holds ${plural(codex.compressed, 'rollout')} compressed to .jsonl.zst and not one plain rollout in the days scanned; compressed, not readable yet`
+            : 'not validated: the store exists and holds no rollout in the days scanned'
+          : `${plural(codex.rollouts, 'rollout')} listed, ${plural(codex.warnings, 'unreadable file')}, ${plural(codex.sessions, 'open thread')}${codex.compressed > 0 ? `, ${plural(codex.compressed, 'rollout')} compressed and not readable yet` : ''}`,
     });
     checks.push({
       name: CODEX_THREAD_LOCKS_DIR,
@@ -1231,7 +1237,7 @@ function codexSection(
 
   const lines: string[] = [];
   lines.push(
-    `  rollout store   ${show(paths.sessionsDir)} - ${plural(scan.rollouts, 'rollout')} in the last ${plural(DEFAULT_CODEX_DAYS, 'day')}, ${plural(scan.warnings, 'unreadable file')}`,
+    `  rollout store   ${show(paths.sessionsDir)} - ${plural(scan.rollouts, 'rollout')} in the last ${plural(DEFAULT_CODEX_DAYS, 'day')}, ${plural(scan.warnings, 'unreadable file')}, ${plural(scan.compressed, 'compressed rollout')}`,
   );
   lines.push(
     `  thread locks    ${show(paths.locksDir)} - ${

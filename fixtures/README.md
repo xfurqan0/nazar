@@ -253,6 +253,20 @@ concurrent sessions overwrite each other.
 - **Updating it** is a two-repository change, in nazar-tray's order: its `limits.rs` and
   its sample first, then this copy, then run `npm test` here.
 
+### `codex/rollout-compressed.jsonl.zst` (N-WP-L6)
+
+- **Origin:** built here, not captured. `zstd -3` over a single line holding nothing but
+  the placeholder thread id and `C:/proj/example`, which is the same working directory
+  every other fixture names.
+- **What it is for:** Codex 0.154.0 can rewrite a rollout older than seven days as
+  `.jsonl.zst` and delete the plain file. Nazar does not read one — that would need a
+  decompressor, and this package has no runtime dependencies — but it recognises the name
+  and counts it, so a store of compressed history is not reported as an empty store. The
+  fixture pins the name and the zstd magic number; nothing decompresses it.
+- **Why it is binary and that is fine:** it is excluded from the rollout sweeps in
+  `test/fixtures.test.ts`, which parse each line as JSON, and has a gate of its own that
+  checks the magic number and the size. It is 101 bytes.
+
 ### `codex/rollout-{open,closed,subagent}.jsonl` (N-WP18)
 
 Three Codex rollouts, and the first fixtures here that are **synthetic rather than

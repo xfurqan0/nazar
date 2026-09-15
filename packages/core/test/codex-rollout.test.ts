@@ -17,16 +17,18 @@
  * `test/no-writes.test.ts` is what proves the shipped code cannot write to it.
  */
 import assert from 'node:assert/strict';
-import { appendFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { appendFile, copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 import {
+  CODEX_ROLLOUT_COMPRESSED_SUFFIX,
   CodexRollout,
   CodexSessions,
   extractCodexLine,
+  isCompressedRolloutName,
   readCodexStore,
   threadIdFromLockName,
   threadIdFromRolloutName,
@@ -68,6 +70,13 @@ async function put(dayDir: string, name: string, fixtureName: string): Promise<s
   return file;
 }
 
+/** The compressed fixture, copied byte for byte: it is not text. */
+async function putCompressed(dayDir: string, name: string): Promise<string> {
+  const file = path.join(dayDir, name);
+  await copyFile(path.join(fixturesDir, 'rollout-compressed.jsonl.zst'), file);
+  return file;
+}
+
 async function lock(locksDir: string, threadId: string): Promise<void> {
   await writeFile(path.join(locksDir, `${threadId}.lock`), '', 'utf8');
 }
@@ -87,6 +96,20 @@ test('a rollout name gives up the thread id, and a forked one gives up the child
   assert.equal(threadIdFromRolloutName('rollout-nothing-uuid-shaped.jsonl'), undefined);
   assert.equal(threadIdFromRolloutName('auth.json'), undefined);
   assert.equal(threadIdFromRolloutName(`${THREAD}.jsonl`), undefined);
+});
+
+test('N-WP-L6: a compressed rollout is recognised by name and gives up no thread id', () => {
+  const compressed = `rollout-2026-09-09T04-00-00-${THREAD}${CODEX_ROLLOUT_COMPRESSED_SUFFIX}`;
+  assert.equal(isCompressedRolloutName(compressed), true);
+
+  // The id has to stay `undefined`. A compressed file that answered with a
+  // thread id would put a card on the canvas for a thread nothing can read.
+  assert.equal(threadIdFromRolloutName(compressed), undefined);
+
+  // And the predicate is about rollouts, not about the extension.
+  assert.equal(isCompressedRolloutName(`rollout-2026-09-09T04-00-00-${THREAD}.jsonl`), false);
+  assert.equal(isCompressedRolloutName('auth.json.zst'), false);
+  assert.equal(isCompressedRolloutName('notes.jsonl.zst'), false);
 });
 
 test('a lock name gives up the thread id, and the global lock is skipped', () => {
@@ -429,6 +452,59 @@ test('the scan counts what doctor prints', async () => {
     assert.equal(scan.rollouts, 2);
     assert.equal(scan.locks, 1);
     assert.equal(scan.warnings, 0);
+    assert.equal(scan.compressed, 0);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+/**
+ * N-WP-L6. Codex 0.154.0 ships `local_thread_store_compression`, off by default
+ * as measured on 2026-09-15. Turned on, it rewrites every rollout older than
+ * seven days as `.jsonl.zst` and deletes the plain file.
+ *
+ * Two claims, and the second is the one worth having:
+ *
+ * 1. A compressed rollout is never a live thread. The compressor will not touch
+ *    a file younger than seven days and a live thread's rollout is seconds old,
+ *    so this costs the canvas nothing.
+ * 2. A store full of compressed history is not an empty store. A reader that
+ *    only knows `.jsonl` would report five hundred threads as none — the wrong
+ *    answer, stated confidently.
+ */
+test('N-WP-L6: a compressed rollout is no session, and is not counted as nothing either', async () => {
+  const { root, sessionsDir, locksDir, dayDir } = await store();
+  try {
+    // One live thread, plainly stored, and one Codex has compressed.
+    await put(dayDir, `rollout-2026-09-09T04-00-00-${THREAD}.jsonl`, 'rollout-open.jsonl');
+    await lock(locksDir, THREAD);
+    await putCompressed(dayDir, `rollout-2026-09-01T04-00-00-${CHILD}.jsonl.zst`);
+
+    const codex = new CodexSessions({ sessionsDir, locksDir, watch: false, now: () => NOW });
+    await codex.refresh();
+
+    const ids = codex.snapshot().map((session) => session.id);
+    assert.deepEqual(ids, [THREAD], 'the plain rollout is a card and the compressed one is not');
+
+    const scan = codex.scan();
+    assert.equal(scan.rollouts, 1, 'a compressed file is not a rollout this reader listed');
+    assert.equal(scan.compressed, 1, 'but it is counted, so the report can say why');
+    assert.equal(scan.warnings, 0, 'and it is not an error: nothing failed to be read');
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test('N-WP-L6: a store of nothing but compressed rollouts is not reported as empty', async () => {
+  const { root, sessionsDir, locksDir, dayDir } = await store();
+  try {
+    await putCompressed(dayDir, `rollout-2026-09-01T04-00-00-${THREAD}.jsonl.zst`);
+    await putCompressed(dayDir, `rollout-2026-09-01T05-00-00-${CHILD}.jsonl.zst`);
+
+    const { scan } = await readCodexStore({ sessionsDir, locksDir, now: () => NOW });
+    assert.equal(scan.configured, true, 'Codex is installed; the store is right there');
+    assert.equal(scan.rollouts, 0);
+    assert.equal(scan.compressed, 2);
   } finally {
     await rm(root, { recursive: true, force: true });
   }

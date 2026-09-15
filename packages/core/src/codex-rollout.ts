@@ -72,6 +72,32 @@ import type { Session, SessionStatus, SessionTokens } from './types.js';
 export const CODEX_ROLLOUT_PREFIX = 'rollout-';
 export const CODEX_ROLLOUT_SUFFIX = '.jsonl';
 
+/**
+ * Name shape of a rollout Codex has compressed and Nazar cannot read.
+ *
+ * Codex 0.154.0 ships `local_thread_store_compression`. With the flag on, a
+ * sweep every six hours or so rewrites every rollout whose mtime is more than
+ * seven days old as `<name>.jsonl.zst` — zstd, level 3 — and **deletes the plain
+ * file**. The flag was measured *off* by default on 2026-09-15 (`codex features
+ * list`, 0.154.0), so nothing has moved yet; the day it goes stable, a store
+ * full of history turns into a directory of files this reader does not open.
+ *
+ * Two things follow, and only the second one is new:
+ *
+ * - **A compressed rollout is never a live thread**, and that is not a policy,
+ *   it is arithmetic: the compressor will not touch a file younger than seven
+ *   days, and a live thread's rollout was written seconds ago. So skipping them
+ *   costs the canvas nothing at all.
+ * - **"Nothing here" and "nothing here I can read" are different answers.** A
+ *   reader that only knows `.jsonl` reports a store of five hundred compressed
+ *   threads as empty, which is the wrong answer stated confidently. These are
+ *   counted, named as compressed, and never opened.
+ *
+ * Reading them is a separate decision with a dependency attached, and this
+ * repository ships none — see the zero-dependency rule in CONTRIBUTING.md.
+ */
+export const CODEX_ROLLOUT_COMPRESSED_SUFFIX = '.jsonl.zst';
+
 /** Name shape of a thread lock. Listed by name; never opened. */
 export const CODEX_LOCK_SUFFIX = '.lock';
 
@@ -610,6 +636,20 @@ export function threadIdFromRolloutName(name: string): string | undefined {
   return match?.[0];
 }
 
+/**
+ * Whether a name is a rollout Codex has compressed.
+ *
+ * Deliberately *not* wired into {@link threadIdFromRolloutName}: that function
+ * answers "which thread is this file", and the answer for a compressed file has
+ * to stay `undefined` or a thread nobody can read would reach the canvas as a
+ * session. This one answers the other question — "is that why I cannot see it".
+ */
+export function isCompressedRolloutName(name: string): boolean {
+  return (
+    name.startsWith(CODEX_ROLLOUT_PREFIX) && name.endsWith(CODEX_ROLLOUT_COMPRESSED_SUFFIX)
+  );
+}
+
 /** The thread id a `<id>.lock` name encodes, or `undefined`. */
 export function threadIdFromLockName(name: string): string | undefined {
   if (!name.endsWith(CODEX_LOCK_SUFFIX) || name.startsWith('.')) return undefined;
@@ -678,6 +718,12 @@ export interface CodexScan {
   readonly sessions: number;
   /** Rollout files that could not be read on the last pass. */
   readonly warnings: number;
+  /**
+   * Rollouts Codex has compressed to `.jsonl.zst`, which this reader does not
+   * open. Never zero and `rollouts` zero without the report saying so: a store
+   * of compressed history is not an empty store.
+   */
+  readonly compressed: number;
 }
 
 /** Everything except `lastSeenAt`, which moves on every pass by design. */
@@ -739,6 +785,8 @@ export class CodexSessions extends EventEmitter<CodexSessionsEvents> {
 
   private rolloutCount = 0;
 
+  private compressedCount = 0;
+
   private lockCount = 0;
 
   private warningCount = 0;
@@ -783,6 +831,7 @@ export class CodexSessions extends EventEmitter<CodexSessionsEvents> {
       locksConfigured: !this.locksMissing,
       sessions: this.sessions.size,
       warnings: this.warningCount,
+      compressed: this.compressedCount,
     };
   }
 
@@ -995,6 +1044,7 @@ export class CodexSessions extends EventEmitter<CodexSessionsEvents> {
   private async listRollouts(): Promise<string[]> {
     const days = await this.listDayDirs();
     const files: string[] = [];
+    let compressed = 0;
     for (const day of days) {
       let names: string[];
       try {
@@ -1003,11 +1053,20 @@ export class CodexSessions extends EventEmitter<CodexSessionsEvents> {
         continue;
       }
       for (const name of names) {
+        // Counted and then left alone. A compressed rollout is at least seven
+        // days old by the time Codex rewrites it, so it is never a live thread
+        // and skipping it loses the canvas nothing; what would be lost is the
+        // ability to say why the store looks emptier than the disk does.
+        if (isCompressedRolloutName(name)) {
+          compressed += 1;
+          continue;
+        }
         if (!name.startsWith(CODEX_ROLLOUT_PREFIX) || !name.endsWith(CODEX_ROLLOUT_SUFFIX)) continue;
         files.push(path.join(day, name));
       }
     }
     this.rolloutCount = files.length;
+    this.compressedCount = compressed;
     return files;
   }
 
@@ -1022,6 +1081,7 @@ export class CodexSessions extends EventEmitter<CodexSessionsEvents> {
     } catch {
       this.storeMissing = true;
       this.rolloutCount = 0;
+      this.compressedCount = 0;
       return [];
     }
     this.storeMissing = false;
