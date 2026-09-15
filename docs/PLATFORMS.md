@@ -17,6 +17,7 @@ to find out by installing.
 | **Desktop bundle** | `.exe` (NSIS, per-user install) | `.dmg` — one for Apple silicon, one for Intel | `.AppImage` and `.deb` (x86-64) |
 | **Tray icon** | yes; left click shows the window, right click opens the menu | yes, in the menu bar, drawn as a template icon so it follows light and dark | yes, as an AppIndicator **menu only** — see below |
 | **Close minimises to the tray** | yes | yes | yes |
+| **No server left behind** | yes, a job object | yes, the child watches its parent | yes, `PR_SET_PDEATHSIG` and the same watch |
 | **Start at login** | yes, *start with Windows* | yes, *start with macOS* (a LaunchAgent) | yes, *start at login* (a `.desktop` entry in `~/.config/autostart`) |
 | **Jump to the terminal** | yes, including the right tab in Windows Terminal | **not yet** | **not yet** |
 | **Signed** | no | ad-hoc only, **not** notarised | not applicable |
@@ -77,19 +78,92 @@ for everybody, and the CI matrix produces both from the same runner either way.
   `libwebkit2gtk-4.1-0`, `libgtk-3-0`, `libayatana-appindicator3-1` — so `apt` will tell
   you what is missing instead of the application failing to start. WebKitGTK **4.1** is
   what Tauri v2 links against; a distribution old enough to ship only 4.0 will not
-  satisfy it.
+  satisfy it. There is no `.rpm`: on Fedora the `.AppImage` is the download, and building
+  from source is the other option — see below.
 
 **The tray is a menu, not a panel.** The status-notifier protocol every modern Linux
 desktop uses has no concept of a left click reaching the application — the desktop
 environment owns the click and opens the menu. So *Open · Refresh · Quit* is the whole
 tray interaction on Linux, and the window is opened from the menu rather than by clicking
-the bead. On a desktop that shows no tray at all (GNOME, without an extension for it) the
-icon is registered and simply never drawn: the application runs, and closing the window
-still hides it. Starting it a second time is what brings the window back — the shell is
-single-instance, and a second launch shows the first one's window instead of starting
-another server.
+the bead. On a desktop that shows no tray at all the icon is registered and simply never
+drawn: the application runs, and closing the window still hides it. Starting it a second
+time is what brings the window back — the shell is single-instance, and a second launch
+shows the first one's window instead of starting another server.
+
+**On GNOME, installing the extension is not the same as enabling it.** GNOME Shell has no
+status-notifier host of its own, and without one there is no `StatusNotifierWatcher` on
+the session bus for the icon to register with. The extension that provides it is
+`gnome-shell-extension-appindicator`, and it has to be switched on as well as installed:
+
+```sh
+sudo dnf install gnome-shell-extension-appindicator     # or your distribution's name for it
+gnome-extensions enable appindicatorsupport@rgcjonas.gmail.com
+```
+
+Under Wayland the Shell has to be restarted for that to take effect, which means logging
+out and back in. Measured on Fedora 44 with GNOME Shell 50.4, with the package installed
+and the extension left disabled: `gnome-extensions info` reports *Enabled: no*,
+`busctl --user list` shows no `StatusNotifierWatcher`, and the shell's own icon is
+registered against nothing. Nothing in the application is wrong in that state and nothing
+in it can be fixed — the desktop simply has nobody to draw the icon.
 
 **No ARM build yet.** The matrix builds x86-64 only.
+
+### Fedora, and the AppIndicator it does not have
+
+Fedora does not package `libayatana-appindicator`, which is the library the `.deb`
+depends on and the one `docs/PLATFORMS.md` used to name as though it were the only
+option. It is not: the shell builds against the older `libappindicator-gtk3` instead,
+because `libappindicator-sys` looks for either.
+
+Measured on Fedora 44: `pkg-config --modversion ayatana-appindicator3-0.1` finds nothing,
+`appindicator3-0.1` answers `12.10.0`, and `cargo build -p nazar-desktop` completes with
+no missing system library at all. Ubuntu's `libayatana-appindicator3-dev` and Fedora's
+`libappindicator-gtk3-devel` are interchangeable here, and CI uses the first only because
+CI runs on Ubuntu.
+
+What that machine already had, and what was enough:
+
+```sh
+sudo dnf install gcc gcc-c++ make file \
+  webkit2gtk4.1-devel gtk3-devel librsvg2-devel openssl-devel \
+  libappindicator-gtk3-devel
+```
+
+`libxdo-dev` has no counterpart in that list, and it is not needed: it is on the Debian
+list for the jump, which does not exist on Linux yet.
+
+Bundling is a separate question and needs more. `cargo tauri` is not a Fedora package —
+`cargo install tauri-cli --locked` — and the AppImage bundler wants `patchelf` while the
+`.deb` bundler wants `dpkg` and `dpkg-dev`. None of that is needed to build or run the
+shell; it is needed to package it.
+
+**Built and smoke-tested on Fedora 44**, GNOME Shell 50.4 on Wayland, with Node 22 and
+rustc 1.98: the crate compiles, the binary starts, the webview renders, the node server
+comes up as a child and the canvas is served. That is a smoke test on one machine and one
+distribution, not a claim that Nazar is tested on Linux.
+
+## Closing the shell, and what it takes with it
+
+The desktop shell runs the same server the browser mode runs, as a child process. Quitting
+kills it, and that is the easy half; the hard half is a shell that never gets to quit —
+killed from a task manager, crashed, or a desktop session ending underneath it. Each
+platform answers that differently, and until recently only one of them answered at all:
+
+- **Windows**: the child is in a job object marked kill-on-close. The kernel closes the
+  handle as it tears the process down and the job takes the child with it.
+- **Linux**: `prctl(PR_SET_PDEATHSIG, SIGTERM)`, set in the child between the fork and the
+  exec. The same guarantee from a different kernel.
+- **macOS and Linux both**: the server is started with `--exit-with-parent`, and watches
+  its own parent id. When an orphan is handed to a reaper the id changes, and the server
+  exits. It is about a second slower than a signal from the kernel and it is the only
+  answer macOS has, so Linux carries both.
+- **Every unix**: the child leads its own process group, so stopping the server also stops
+  the `ssh` processes a `--remote` session started underneath it.
+
+Before this, killing the shell on Linux left a node process holding the port it had been
+given, and the next launch found that port busy. If you are running an older build and see
+that, `pkill -f nazar.mjs` is the one-line answer.
 
 ## The jump, and why it stops at Windows
 
@@ -140,6 +214,15 @@ The Tauri prerequisites are the standard ones. On Debian and Ubuntu:
 sudo apt install build-essential curl file wget \
   libayatana-appindicator3-dev librsvg2-dev libssl-dev \
   libwebkit2gtk-4.1-dev libxdo-dev patchelf
+```
+
+On Fedora, with `libappindicator-gtk3-devel` standing in for the Ayatana package that
+Fedora does not carry — see above:
+
+```sh
+sudo dnf install gcc gcc-c++ make file \
+  webkit2gtk4.1-devel gtk3-devel librsvg2-devel openssl-devel \
+  libappindicator-gtk3-devel
 ```
 
 On macOS, Xcode command line tools. On Windows, the MSVC build tools and WebView2 — which
