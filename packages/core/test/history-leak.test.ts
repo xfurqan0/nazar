@@ -552,6 +552,36 @@ function findProseLeaks(
   return leaks;
 }
 
+/**
+ * Probe 4's account-name check: does this text name the account, or does it
+ * merely contain the letters?
+ *
+ * The first version asked `serialised.includes(account)`, and on a machine
+ * whose account is `ada` and whose project folder is `adaOS` it fired on the
+ * folder name. That is a fact about the folder, not a leak: the home directory
+ * had already collapsed to `~`, the probe above it passed, and what reached the
+ * output was `~/2-notes-adaOS` — a label the user themselves chose and the one
+ * thing a history listing is *for*. An account whose name is a common short
+ * word makes this the normal case rather than the unlucky one, and a gate that
+ * cries wolf on every such machine is a gate people learn to skip.
+ *
+ * So the account name has to stand as its own token to count. A letter or a
+ * digit on either side means a longer identifier and is passed over; anything
+ * else — a separator, a quote, a slash, an end of string — is a boundary, and
+ * the name between two of them is the account. That keeps every shape a real
+ * leak arrives in: `/home/ada/projects`, `C:\Users\ada`, the slug
+ * `-home-ada-notes`, and the bare `"ada"` of a git identity.
+ *
+ * Deliberately conservative in one direction: `ada_backup` matches, because `_`
+ * is not a letter. A leak gate is allowed to be loud about something that turns
+ * out to be a folder; it is not allowed to be quiet about a home path.
+ */
+function mentionsAccount(text: string, account: string): boolean {
+  if (account === '') return false;
+  const escaped = account.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  return new RegExp(`(?<![A-Za-z0-9])${escaped}(?![A-Za-z0-9])`, 'iu').test(text);
+}
+
 interface SessionCandidate {
   readonly sessionId: string;
   readonly file: string;
@@ -704,7 +734,7 @@ test(`no content from ${SAMPLE_SESSIONS} real transcripts reaches the history bu
     const serialised = JSON.stringify(history);
     assert.ok(!serialised.includes(home), `${label}: the home directory reached the output`);
     assert.ok(
-      !serialised.toLowerCase().includes(account.toLowerCase()),
+      !mentionsAccount(serialised, account),
       `${label}: the account name reached the output`,
     );
     assert.ok(
@@ -863,6 +893,50 @@ test('probe 1 bites: a string under an unknown key fails whatever it says', () =
     if (!ALLOWED_STRING_KEYS.has(key)) description = true;
   });
   assert.ok(description, 'description must not be whitelisted back onto the history object');
+});
+
+/**
+ * Probe 4, both ways round. The account name is `ada` throughout, and nothing
+ * here comes off a real machine.
+ *
+ * The second half is the regression: a home directory that collapsed to `~`
+ * correctly, leaving a project label that merely *starts with* the account
+ * name, used to fail this gate. The first half is what keeps that fix honest —
+ * every shape a real home path reaches an output in still fires.
+ */
+test('probe 4 bites on the account name and not on a folder that contains its letters', () => {
+  const account = 'ada';
+
+  // Leaks. A path, a Windows path, the slug the project directory is named
+  // with, and a bare identity field.
+  for (const leaked of [
+    '{"project":"/home/ada/notes"}',
+    '{"project":"C:\\Users\\ada\\notes"}',
+    '{"project":"-home-ada-notes"}',
+    '{"project":"~/notes","author":"ada"}',
+    '{"project":"ada"}',
+  ]) {
+    assert.ok(mentionsAccount(leaked, account), `${leaked} names the account and must fail`);
+  }
+
+  // Not leaks. The letters turn up inside a longer name every time, which is a
+  // fact about the name and not about the home directory.
+  for (const clean of [
+    '{"project":"~/2-notes-adaOS"}',
+    '{"project":"~/adaptive-layout"}',
+    '{"project":"-home-~-nomada-src"}',
+    '{"project":"~/ADAPTER"}',
+  ]) {
+    assert.ok(!mentionsAccount(clean, account), `${clean} is a folder name, not a leak`);
+  }
+
+  // Case does not rescue a leak: `Ada` is the same account as `ada`.
+  assert.ok(mentionsAccount('{"project":"/home/Ada/notes"}', account));
+
+  // An account name with a regular-expression character in it is matched
+  // literally rather than compiled into a pattern.
+  assert.ok(mentionsAccount('{"project":"/home/a.b/notes"}', 'a.b'));
+  assert.ok(!mentionsAccount('{"project":"/home/axb/notes"}', 'a.b'));
 });
 
 /**

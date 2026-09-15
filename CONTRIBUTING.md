@@ -10,12 +10,17 @@ Node 22 or newer, and nothing else.
 ```
 npm ci
 npm run build     # compile packages/{core,server,ui}, then bundle the canvas
-npm test          # every workspace's tests, then the four repository-wide gates
+npm test          # every workspace's tests, then the repository-wide gates
 npm run typecheck # sources, tests and browser code, no emit
 ```
 
 Build before you test: the tests resolve `@nazar/core` through the workspace
 link, and that link points at build output.
+
+`npm test` is `scripts/run-tests.mjs`, and it runs **every** suite before it
+reports. A failing workspace does not stop the workspaces after it or the
+repository-wide gates; the summary at the end names each suite and the exit code
+counts all of them.
 
 The desktop shell is the one part that needs more than Node. It is a Cargo
 workspace beside the npm one (`apps/desktop`, the Tauri crate; `crates/nazar-shell`,
