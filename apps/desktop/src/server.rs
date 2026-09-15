@@ -57,10 +57,26 @@
 //! `GET /api/state` answering says the application behind it is assembled. Waiting for
 //! only the first would navigate the webview at a socket that is not yet serving.
 //!
-//! **Not leaving it behind.** [`ServerHandle::stop`] kills the child on Quit, and on
-//! Windows the child is also assigned to a job object marked kill-on-close, so a shell
-//! that is itself killed — Task Manager, a crash, a debugger detaching — takes its server
-//! with it instead of leaving a listener on a port nobody remembers.
+//! **Not leaving it behind.** [`ServerHandle::stop`] kills the child on Quit, and that is
+//! the easy half. The hard half is a shell that never reaches `stop` at all — Task
+//! Manager, a crash, a debugger detaching, a desktop session ending — and each platform
+//! answers it differently:
+//!
+//! * **Windows**: the child is assigned to a job object marked kill-on-close. The kernel
+//!   closes the handle when this process is torn down, and the job takes the child with
+//!   it.
+//! * **Linux**: `prctl(PR_SET_PDEATHSIG, SIGTERM)`, set in the forked child before it
+//!   execs. Same guarantee, same instant, different kernel. Measured on Fedora 44: before
+//!   this existed, killing the shell left a node process holding the port, and the next
+//!   launch found its own port busy.
+//! * **Every unix**: the child leads a process group of its own, so `stop` can take the
+//!   server's own children — an `ssh` per `--remote` host — with it rather than leaving
+//!   them connected.
+//! * **macOS**, which has no `PR_SET_PDEATHSIG`: the child watches its own parent id and
+//!   exits when it changes, which is `--exit-with-parent` and
+//!   `packages/server/src/orphan.ts`. The shell passes that flag on every unix, so Linux
+//!   has both — the kernel's answer is instant, this one is a second late, and a belt is
+//!   not an argument against braces.
 
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -133,7 +149,17 @@ impl ServerHandle {
     /// `nazar --port`. Quitting a window must not end somebody else's process.
     pub fn stop(&mut self) {
         if let Some(child) = self.child.as_mut() {
+            // On unix the child leads a process group of its own — see [`confine_unix`] —
+            // and the group is what is signalled, not the one process: a server started
+            // with `--remote` has an `ssh` per host under it, and killing only the node
+            // would leave those holding connections. Both signals go out *before* the
+            // child is reaped, because the group id is the child's pid and a reaped pid
+            // can be reused by somebody else.
+            #[cfg(unix)]
+            signal_group(child.id(), libc::SIGTERM);
             let _ = child.kill();
+            #[cfg(unix)]
+            signal_group(child.id(), libc::SIGKILL);
             let _ = child.wait();
         }
     }
@@ -374,6 +400,11 @@ fn attempt_start(
         .arg("--no-open")
         .arg("--port")
         .arg(port.to_string());
+    // N-WP-L2. The portable half of not leaving a listener behind: the child watches its
+    // own parent id and exits when it changes. Not passed on Windows, where the job
+    // object is both instant and exact and a parent id never changes anyway.
+    #[cfg(not(windows))]
+    command.arg("--exit-with-parent");
     // N-WP15a. Recording mode is passed to the child as the CLI flag rather
     // than as a setting the server would have to read for itself: the flag is
     // already the documented way to say this, `desktop.json` is the shell's
@@ -390,12 +421,20 @@ fn attempt_start(
     if !remotes.is_empty() {
         command.arg("--remote").arg(remotes.join(","));
     }
-    let mut child = command
+    command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|error| format!("could not start node: {error}"))?;
+        .stderr(Stdio::piped());
+
+    // On a unix the spawn goes through [`spawn_confined`], which is where the process
+    // group and the death signal are set — both of them things that happen between the
+    // fork and the exec, and so neither of them something that can be done to a `Child`.
+    #[cfg(unix)]
+    let spawned = spawn_confined(command);
+    #[cfg(not(unix))]
+    let spawned = command.spawn();
+
+    let mut child = spawned.map_err(|error| format!("could not start node: {error}"))?;
 
     #[cfg(windows)]
     let job = JobObject::confine(&child)?;
@@ -695,9 +734,308 @@ impl Drop for JobObject {
     }
 }
 
+/* ------------------------------------------------------------------ *
+ * Unix: the child does not outlive the shell either
+ * ------------------------------------------------------------------ */
+
+/// Confine the child the way the job object confines it on Windows.
+///
+/// Two mechanisms, answering two different halves of the question.
+///
+/// **Its own process group**, on every unix. [`ServerHandle::stop`] then signals the group
+/// rather than the single process, which matters because the server is allowed to have
+/// children of its own: `--remote <alias>` is one `ssh` per host, started by the node
+/// process. Killing only the node would leave those behind holding connections. It also
+/// takes the child out of the launching terminal's group, so a Ctrl-C aimed at a shell
+/// that started the application does not arrive at the server by a second route.
+///
+/// **`PR_SET_PDEATHSIG`**, on Linux only, because only Linux has it. It is the closest
+/// thing there is to the job object: the kernel signals the child the moment its parent
+/// dies, whatever killed the parent and whether or not the parent ever ran another
+/// instruction. Without it a shell killed outright left a node holding its port, which is
+/// what was measured on Fedora 44 before this existed.
+///
+/// macOS has neither an equivalent nor a need for one here: the portable half does that
+/// work, in `packages/server/src/orphan.ts`, reached by the `--exit-with-parent` the
+/// caller passes on every unix.
+#[cfg(unix)]
+fn confine_unix(command: &mut std::process::Command) {
+    use std::os::unix::process::CommandExt;
+
+    command.process_group(0);
+
+    #[cfg(target_os = "linux")]
+    {
+        let parent = libc::pid_t::try_from(std::process::id()).unwrap_or(0);
+        // SAFETY: the closure runs in the forked child, between `fork` and `exec`, where
+        // only async-signal-safe calls are allowed. `prctl` and `getppid` are both on
+        // POSIX's list of those; neither allocates, neither takes a lock, and neither
+        // touches memory shared with the parent.
+        unsafe {
+            command.pre_exec(move || {
+                if libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM) == -1 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                if !still_the_parent(parent, libc::getppid()) {
+                    return Err(std::io::Error::from_raw_os_error(libc::ESRCH));
+                }
+                Ok(())
+            });
+        }
+    }
+}
+
+/// Spawn the child with all of that applied. **The only sanctioned way to start it on a
+/// unix**, because half of [`confine_unix`] is wrong unless the fork happens here.
+///
+/// On Linux the work is handed to a thread that never ends. That is not a flourish; it is
+/// the fix for a bug this code shipped with for an afternoon.
+///
+/// `PR_SET_PDEATHSIG` says "signal me when my parent dies", and the parent the kernel
+/// watches is **the thread that created the process**, not the process. The shell starts
+/// its server from a boot thread — `boot_up`, spawned in `main.rs` — and that thread
+/// finishes as soon as the canvas is up. The kernel then did exactly what it had been
+/// asked to do and sent the server its death signal. Measured on Fedora 44: the node child
+/// was a zombie eleven seconds in, with the window still on screen and the port already
+/// unserved. It is a worse failure than the one the signal was added to fix.
+///
+/// So the fork is performed by a thread created once and parked on a channel for the rest
+/// of the process's life. A thread that only ever ends when the process ends is a thread
+/// whose death means what `PR_SET_PDEATHSIG` is supposed to mean.
+#[cfg(unix)]
+fn spawn_confined(mut command: std::process::Command) -> std::io::Result<Child> {
+    confine_unix(&mut command);
+
+    #[cfg(target_os = "linux")]
+    {
+        let (answer, replies) = std::sync::mpsc::channel();
+        forker()
+            .send((command, answer))
+            .map_err(|_| std::io::Error::other("the fork thread has gone"))?;
+        replies
+            .recv()
+            .map_err(|_| std::io::Error::other("the fork thread answered nothing"))?
+    }
+    #[cfg(not(target_os = "linux"))]
+    {
+        command.spawn()
+    }
+}
+
+/// One `Command` to fork, and where to send the result.
+#[cfg(target_os = "linux")]
+type ForkRequest = (
+    std::process::Command,
+    std::sync::mpsc::Sender<std::io::Result<Child>>,
+);
+
+/// The immortal thread, created on first use.
+///
+/// It costs one parked thread for the life of the application and buys the death signal
+/// its meaning back. The channel is never closed, so the loop never ends and the thread
+/// never exits — which is the entire specification.
+#[cfg(target_os = "linux")]
+fn forker() -> &'static std::sync::mpsc::Sender<ForkRequest> {
+    static FORKER: std::sync::OnceLock<std::sync::mpsc::Sender<ForkRequest>> =
+        std::sync::OnceLock::new();
+
+    FORKER.get_or_init(|| {
+        let (jobs, queue) = std::sync::mpsc::channel::<ForkRequest>();
+        std::thread::Builder::new()
+            .name("nazar-fork".to_owned())
+            .spawn(move || {
+                while let Ok((mut command, answer)) = queue.recv() {
+                    // A caller that gave up before the answer arrived is not an error
+                    // worth reporting; the child it asked for is reaped by `ServerHandle`
+                    // or by nobody, exactly as it would have been.
+                    let _ = answer.send(command.spawn());
+                }
+            })
+            .expect("a thread to fork from");
+        jobs
+    })
+}
+
+/// The race `PR_SET_PDEATHSIG` has and the job object does not.
+///
+/// The death signal is armed against whoever the parent is *at the moment it is set*, so
+/// a parent that died in the window between the fork and that line will never send it —
+/// the child would be armed against a process that no longer exists and would run for
+/// ever. Checking the parent id immediately afterwards is the only moment the child can
+/// notice, and refusing to exec is how it says so.
+///
+/// An `expected` of 0 means this process could not name its own pid, which is not a
+/// reason to refuse to start a server.
+#[cfg(target_os = "linux")]
+const fn still_the_parent(expected: libc::pid_t, actual: libc::pid_t) -> bool {
+    expected == 0 || actual == expected
+}
+
+/// Send one signal to the child's whole process group.
+///
+/// The group id is the child's pid, because [`confine_unix`] made the child the leader of
+/// its own group. That is true only for as long as the pid has not been reaped and reused,
+/// which is why every caller signals before `wait` and never after.
+#[cfg(unix)]
+fn signal_group(pid: u32, signal: libc::c_int) {
+    let Ok(group) = libc::pid_t::try_from(pid) else {
+        return;
+    };
+    // SAFETY: `killpg` takes two integers by value and touches no memory of ours. A group
+    // that has already gone is an `ESRCH` return rather than undefined behaviour, and the
+    // return is ignored deliberately: there is nothing to do about it.
+    unsafe {
+        libc::killpg(group, signal);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /* ---- N-WP-L2: the child does not outlive the shell --------------- */
+
+    /// The property [`ServerHandle::stop`] relies on, checked against a real child
+    /// rather than against the documentation for `process_group`.
+    ///
+    /// The assertion has to come before the kill, and not only for tidiness: if the
+    /// grouping had silently not happened, the child would still be in *this test
+    /// runner's* group and `signal_group` would take the whole run down with it. The
+    /// assertion is what stops that from being discovered the hard way.
+    #[cfg(unix)]
+    #[test]
+    fn the_child_leads_its_own_process_group_and_the_group_can_be_killed() {
+        let mut command = std::process::Command::new("sh");
+        command
+            .arg("-c")
+            .arg("sleep 30")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = spawn_confined(command).expect("every unix has a shell");
+
+        let pid = libc::pid_t::try_from(child.id()).expect("a pid fits in a pid_t");
+        // SAFETY: `getpgid` takes a pid by value and returns a group id or -1.
+        let group = unsafe { libc::getpgid(pid) };
+        assert_eq!(
+            group, pid,
+            "the child must lead its own group; signalling the group is how the tree dies"
+        );
+
+        signal_group(child.id(), libc::SIGKILL);
+        let status = child.wait().expect("the child is reaped");
+        assert!(!status.success(), "a killed child does not exit cleanly");
+    }
+
+    /// A group that has already gone is not an error worth reporting, and above all is
+    /// not a panic. `stop` signals twice on purpose and the second one usually lands on
+    /// nothing.
+    #[cfg(unix)]
+    #[test]
+    fn signalling_a_group_that_is_gone_does_nothing_at_all() {
+        let mut command = std::process::Command::new("sh");
+        command
+            .arg("-c")
+            .arg("exit 0")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        let mut child = spawn_confined(command).expect("every unix has a shell");
+        let pid = child.id();
+        let _ = child.wait();
+        signal_group(pid, libc::SIGTERM);
+    }
+
+    /// The bug the fork thread exists for, reproduced as a test.
+    ///
+    /// `PR_SET_PDEATHSIG` watches the *thread* that forked, not the process. Arm it from
+    /// a worker thread, let that thread finish, and the kernel kills a perfectly healthy
+    /// child. That is what the shell did on its first Linux build: the boot thread
+    /// started the server, returned, and the server died with it.
+    ///
+    /// Everything here is a real process and a real thread, because the failure was
+    /// invisible to anything less — the code was correct, the call succeeded, and the
+    /// child was a zombie anyway.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_child_outlives_the_thread_that_asked_for_it() {
+        let mut child = std::thread::spawn(|| {
+            let mut command = std::process::Command::new("sh");
+            command
+                .arg("-c")
+                .arg("sleep 30")
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null());
+            spawn_confined(command).expect("every unix has a shell")
+        })
+        .join()
+        .expect("the requesting thread finished, which is the point");
+
+        // The thread that asked for it is now gone. Under the first version of this code
+        // the child was already a zombie by here.
+        std::thread::sleep(Duration::from_millis(500));
+        assert!(
+            child.try_wait().expect("the child can be asked").is_none(),
+            "the child was killed by the death of the thread that spawned it"
+        );
+
+        let pid = libc::pid_t::try_from(child.id()).expect("a pid fits in a pid_t");
+        // SAFETY: `getpgid` takes a pid by value and returns a group id or -1.
+        assert_eq!(
+            unsafe { libc::getpgid(pid) },
+            pid,
+            "still its own group leader"
+        );
+        signal_group(child.id(), libc::SIGKILL);
+        let _ = child.wait();
+    }
+
+    /// The exact `prctl` call [`confine_unix`] makes in the forked child, made here
+    /// instead, so that its option, argument and return value are checked against this
+    /// kernel rather than assumed from a manual page.
+    ///
+    /// `PR_SET_PDEATHSIG` is per-thread and is read back and cleared immediately, so the
+    /// test thread leaves the process exactly as it found it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_death_signal_is_a_call_this_kernel_accepts() {
+        let mut armed: libc::c_int = -1;
+        // SAFETY: three `prctl` calls. The first and third pass integers; the second
+        // writes one `c_int` through a pointer to a live local that outlives the call.
+        unsafe {
+            assert_eq!(libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGTERM), 0);
+            assert_eq!(libc::prctl(libc::PR_GET_PDEATHSIG, &raw mut armed), 0);
+            assert_eq!(libc::prctl(libc::PR_SET_PDEATHSIG, 0), 0);
+        }
+        assert_eq!(
+            armed,
+            libc::SIGTERM,
+            "the kernel armed the signal we asked for"
+        );
+    }
+
+    /// The fork race, as arithmetic. A parent that died between the fork and the `prctl`
+    /// leaves a child armed against nothing, and the id check is the only way it can
+    /// find out.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_parent_that_died_during_the_fork_stops_the_child_from_execing() {
+        assert!(
+            still_the_parent(4242, 4242),
+            "the ordinary case: nothing happened"
+        );
+        assert!(
+            !still_the_parent(4242, 1),
+            "reparented to init while forking"
+        );
+        assert!(
+            !still_the_parent(4242, 3284),
+            "reparented to a systemd user manager, which is not pid 1"
+        );
+        // A process that cannot name its own pid still gets a server.
+        assert!(still_the_parent(0, 1));
+    }
 
     #[test]
     fn a_free_port_is_actually_free() {

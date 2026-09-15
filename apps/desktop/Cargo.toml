@@ -46,6 +46,14 @@ tauri-plugin-single-instance = "2"
 # `Win32_System_Ole` as well, so all three are named or the type is not there. They add no
 # crate to the dependency graph: the `windows` crate is one crate with feature-gated
 # modules, which is why `cargo deny` has nothing new to say about them.
+# The unix half of "the child does not outlive the shell": `prctl(PR_SET_PDEATHSIG)` on
+# Linux, `killpg` on both. No new crate — `libc` is already in this binary's dependency
+# graph on every unix, by way of `tauri` → `tray-icon` → `libappindicator` → `gtk` → `atk`,
+# and naming it here only makes a transitive dependency a direct one. The same argument the
+# `windows` features below rest on, and `cargo deny` has nothing new to say about either.
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
 [target.'cfg(windows)'.dependencies.windows]
 version = "0.62"
 features = [

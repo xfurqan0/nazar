@@ -45,6 +45,7 @@ import { runDoctor } from './doctor.js';
 import { startNazarServer } from './http.js';
 import { CompositeState, DEFAULT_REMOTE_COMMAND, RemoteHosts, isAlias, parseAliases } from './remote.js';
 import { openInBrowser } from './open.js';
+import { watchParent } from './orphan.js';
 import type { OpenOutcome } from './open.js';
 import { resolveUiDir } from './ui-assets.js';
 import { VERSION } from './version.js';
@@ -88,6 +89,11 @@ Options:
                    started by this process; there is no port, no token and
                    nothing left running when Nazar exits. See docs/REMOTE.md.
   --remote-cmd <c> What to run on the far end instead of the default above.
+  --exit-with-parent
+                   Exit when the process that started this one is gone. For a
+                   parent that starts Nazar as a child and wants no listener
+                   left behind if it dies ungracefully; the desktop shell passes
+                   it. Off by default, because a terminal is a parent too.
   -h, --help       Show this help
   -V, --version    Print the version
 
@@ -140,6 +146,7 @@ const SERVE_FLAGS = [
   '--no-codex',
   '--remote',
   '--remote-cmd',
+  '--exit-with-parent',
 ];
 
 /**
@@ -671,6 +678,17 @@ export async function main(
   };
   process.once('SIGINT', shutdown);
   process.once('SIGTERM', shutdown);
+
+  // The same shutdown, reached the other way round: not a signal, but the
+  // parent that asked for this server having gone without sending one. See
+  // `orphan.ts` for why that case exists and why it is opt-in.
+  if (argv.includes('--exit-with-parent')) {
+    watchParent({
+      parent: process.ppid,
+      read: () => process.ppid,
+      onGone: shutdown,
+    });
+  }
 
   return 0;
 }

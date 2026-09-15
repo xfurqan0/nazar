@@ -2114,6 +2114,7 @@ dependencies = [
 name = "nazar-desktop"
 version = "0.1.0"
 dependencies = [
+ "libc",
  "nazar-shell",
  "serde",
  "serde_json",

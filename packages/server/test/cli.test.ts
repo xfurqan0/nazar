@@ -107,6 +107,23 @@ test('--help describes the flags without starting anything', async () => {
   assert.equal(err.text, '');
 });
 
+test('--exit-with-parent is a flag the serve path knows, and --help says what it is for', async () => {
+  const out = new Capture();
+  const err = new Capture();
+
+  // The unknown-flag gate runs before --help, so reaching the help text at all
+  // is the assertion: a flag the desktop shell passes and this parser does not
+  // know would exit 2 and start nothing.
+  assert.equal(await main(['--exit-with-parent', '--help'], out, err), 0);
+  assert.match(out.text, /--exit-with-parent/);
+  assert.equal(err.text, '');
+
+  // And it is still a closed list; a near miss is still an error.
+  const near = new Capture();
+  assert.equal(await main(['--exit-with-parents'], new Capture(), near), 2);
+  assert.match(near.text, /--exit-with-parents/);
+});
+
 test('main reports a bad port on stderr with exit code 2', async () => {
   const out = new Capture();
   const err = new Capture();
