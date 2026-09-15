@@ -30,7 +30,15 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// would replace a truthful "looking for Node…" with a guess about why.
 #[must_use]
 pub fn command(program: &str) -> Command {
+    // The `mut` belongs to the Windows branch and to nothing else, so it is declared
+    // there. Written as one `let mut` for both, every non-Windows build warned about a
+    // mutation that only ever happens on Windows — and nobody saw it, because clippy ran
+    // on `windows-latest` alone until now.
+    #[cfg(windows)]
     let mut command = Command::new(program);
+    #[cfg(not(windows))]
+    let command = Command::new(program);
+
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;

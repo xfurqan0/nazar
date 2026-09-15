@@ -170,6 +170,72 @@ jobs:
         env:
           NAZAR_TEST_NO_LIVE: "1"
 
+  # N-WP-L3. The same lints, on Linux, on every push.
+  #
+  # **Why this is a second job and not a matrix entry on `desktop`.** That job runs
+  # `cargo test --workspace`, and the tests it is there for read a Windows desktop —
+  # UI Automation, the window list, the jump. A matrix would have to switch half its own
+  # steps off, and the Windows gate is the one thing in this file that must not become
+  # harder to read.
+  #
+  # **Why it was worth adding.** `node.rs` carried a `let mut` that only Windows mutates,
+  # so every Linux and macOS build warned about it — and nobody ever saw the warning,
+  # because clippy ran on `windows-latest` alone. A lint that only one platform is held to
+  # is a lint the other two are not held to, and this repository compiles on three.
+  #
+  # The GTK and WebKit stack is installed because clippy *compiles* the desktop crate:
+  # `generate_context!` expands against a staged bundle, and `tauri-build` checks the
+  # resource path exists while the crate builds.
+  desktop-linux:
+    name: desktop shell — lint (linux)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-linux
+
+      # The same list the `bundle` job installs, minus `patchelf`, which only the AppImage
+      # bundler needs and nothing here bundles.
+      - name: Install the GTK and WebKit stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build and stage the package
+        run: node scripts/build-desktop.mjs --stage
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
   # A separate job, and it may fail without hiding a real regression. It uploads the
   # installer; it does not decide whether the change was right.
   installer:
