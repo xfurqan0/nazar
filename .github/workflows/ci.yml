@@ -170,7 +170,7 @@ jobs:
         env:
           NAZAR_TEST_NO_LIVE: "1"
 
-  # N-WP-L3. The same lints, on Linux, on every push.
+  # N-WP-L3 and N-WP-L4. The same lints and a real link, on Linux, on every push.
   #
   # **Why this is a second job and not a matrix entry on `desktop`.** That job runs
   # `cargo test --workspace`, and the tests it is there for read a Windows desktop —
@@ -187,7 +187,7 @@ jobs:
   # `generate_context!` expands against a staged bundle, and `tauri-build` checks the
   # resource path exists while the crate builds.
   desktop-linux:
-    name: desktop shell — lint (linux)
+    name: desktop shell — lint, build (linux)
     runs-on: ubuntu-latest
 
     steps:
@@ -235,6 +235,18 @@ jobs:
 
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # N-WP-L4. Clippy is a check, not a link: it never asks the linker whether the GTK,
+      # WebKit and AppIndicator symbols it needs are actually there. Until now the only
+      # thing that did on Linux was the `bundle` job, which runs on a tag — so a Linux
+      # link regression had until a release to be noticed, and would then be noticed
+      # during one. The debug profile because the point is the answer and not the binary;
+      # a release build would cost the job ten minutes for nothing anybody downloads.
+      #
+      # It costs almost nothing after the first run: this is the same job, so the cache
+      # above already holds the dependency graph clippy compiled a step earlier.
+      - name: Build the shell
+        run: cargo build -p nazar-desktop
 
   # A separate job, and it may fail without hiding a real regression. It uploads the
   # installer; it does not decide whether the change was right.

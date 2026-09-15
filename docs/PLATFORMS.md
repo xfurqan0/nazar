@@ -20,13 +20,18 @@ to find out by installing.
 | **Start at login** | yes, *start with Windows* | yes, *start with macOS* (a LaunchAgent) | yes, *start at login* (a `.desktop` entry in `~/.config/autostart`) |
 | **Jump to the terminal** | yes, including the right tab in Windows Terminal | **not yet** | **not yet** |
 | **Signed** | no | ad-hoc only, **not** notarised | not applicable |
-| **Built on** | every push | on a tag or by hand | on a tag or by hand |
+| **Built on** | every push | on a tag or by hand | compiled and linked on every push; the `.AppImage` and `.deb` on a tag or by hand |
 
-The desktop bundles for macOS and Linux come out of the `desktop bundle` job in
+The desktop *bundles* for macOS and Linux come out of the `desktop bundle` job in
 `.github/workflows/ci.yml`, which runs on a `v*` tag or on `workflow_dispatch` and not on
 an ordinary push. A macOS runner costs ten times a Linux one per minute and none of these
 three artifacts decides whether a change is correct — the jobs that do (`build`, `pack
-smoke`, `shell logic`) run everywhere, on everything.
+smoke`, `shell logic`, `desktop shell — lint, build (linux)`) run on every push.
+
+The Linux shell itself is not in that arrangement any more. It is linted and **linked** on
+every push, because clippy is a check and not a link: it never asks whether the GTK,
+WebKit and AppIndicator symbols are there. Until that job existed, the first thing to find
+a Linux link regression was the tag build — which is to say, a release.
 
 ## macOS
 
