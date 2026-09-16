@@ -109,16 +109,35 @@ function run(command, args, options = {}) {
  * `--remap-path-prefix` does the same job on stable, and the prefixes have to be computed
  * here rather than written in a file because they are different on every machine.
  *
- * **Release only.** Setting `RUSTFLAGS` gives Cargo a different fingerprint and therefore
- * a separate build cache, so applying this to debug builds too would mean `cargo test`,
- * `cargo clippy` and `build-desktop.mjs --debug` each recompiling ~550 crates for each
- * other. The debug installer is a fourteen-day CI artifact; the release binary is the one
- * that reaches people.
+ * **Both profiles, since N-WP-L8.** This used to be release-only, on the grounds that
+ * `RUSTFLAGS` gives Cargo a different fingerprint and a debug build sharing `target/debug`
+ * with `cargo test` and `cargo clippy` would have the three recompiling ~550 crates for
+ * each other. The measurement that changed it: the debug binary carried **3007 copies of
+ * the building account's home directory**, and a debug binary is not a private thing —
+ * `ci.yml` uploads a debug installer as a downloadable artifact, and anybody handing a
+ * build to a tester hands over the same file. What this script produces is an artifact
+ * that leaves the machine, whichever profile it was asked for. The alternation costs one
+ * rebuild each way and is paid by the rare command — bundling an installer — rather than
+ * by the common ones; CI pays nothing, because the `installer` job has a cache of its own
+ * and never runs anything but this script.
+ *
+ * **`CFLAGS` beside `RUSTFLAGS`.** `--remap-path-prefix` is a rustc flag and reaches
+ * nothing a `cc` build script compiles: a crate with C in it obeys `-ffile-prefix-map`
+ * instead, which is how a sibling project's installer went on leaking an account name
+ * after the Rust half of it was clean. Nothing in this dependency graph compiles C today
+ * — `cargo tree -i cc` prints nothing — so these two variables are unexercised, and that
+ * is the point of adding them now rather than after the dependency that needs them.
  */
 function remappedEnvironment() {
-  const cargoHome =
-    process.env.CARGO_HOME ??
-    path.join(process.env.HOME ?? process.env.USERPROFILE ?? '', '.cargo');
+  const home = process.env.HOME ?? process.env.USERPROFILE ?? '';
+  const cargoHome = process.env.CARGO_HOME ?? path.join(home, '.cargo');
+
+  // MSVC does not know `-ffile-prefix-map`; `/d1trimfile:` is the flag that does the same
+  // thing there, and the `cc` crate hands both variables to whichever compiler it found.
+  const cFlags =
+    process.platform === 'win32'
+      ? `/d1trimfile:${home}\\`
+      : `-ffile-prefix-map=${home}=.`;
 
   const flagList = [
     // Dependency sources, which is where all 238 of them came from.
@@ -132,7 +151,12 @@ function remappedEnvironment() {
   // `CARGO_ENCODED_RUSTFLAGS` and not `RUSTFLAGS`: the unencoded variable is split on
   // whitespace, and a Windows home directory with a space in it would break every flag
   // above in a way that looks like a compiler bug.
-  return { ...process.env, CARGO_ENCODED_RUSTFLAGS: flagList.join('\u001f') };
+  return {
+    ...process.env,
+    CARGO_ENCODED_RUSTFLAGS: flagList.join('\u001f'),
+    CFLAGS: [cFlags, process.env.CFLAGS].filter(Boolean).join(' '),
+    CXXFLAGS: [cFlags, process.env.CXXFLAGS].filter(Boolean).join(' '),
+  };
 }
 
 async function exists(target) {
@@ -325,7 +349,7 @@ async function main() {
   // Last, and deliberately: `--bundles` takes every following word that is not an option,
   // so anything placed after it would be eaten as a bundle kind.
   if (bundles.length > 0) args.push('--bundles', ...bundles);
-  run('cargo', args, debug ? {} : { env: remappedEnvironment() });
+  run('cargo', args, { env: remappedEnvironment() });
 
   await reportBundles(debug ? 'debug' : 'release');
 }

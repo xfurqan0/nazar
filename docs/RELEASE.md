@@ -312,16 +312,25 @@ node --import tsx --test packages/core/test/pinned-paths.test.ts
 **And inside the binary, which none of the greps above can see.** Panic locations
 are compiled in as string literals, so `strip` does not remove them and a
 release build carries the path every crate was compiled from. The build script
-passes `--remap-path-prefix` for exactly this reason; here is the check that it
-worked:
+passes `--remap-path-prefix` and `-ffile-prefix-map` for exactly this reason;
+`scripts/check-binary-paths.mjs` (N-WP-L8) is the check that they worked, and it
+is the same check CI runs on every bundle:
 
-```powershell
-$text = [System.Text.Encoding]::ASCII.GetString(
-  [System.IO.File]::ReadAllBytes("target/release/nazar-desktop.exe"))
-foreach ($needle in 'yldz', 'C:\Users', 'Documents and Settings') {
-  "{0}: {1}" -f $needle, $text.Contains($needle)      # all three must be False
-}
+```sh
+# With no arguments: this tree's release binary and everything under
+# target/release/bundle. Name paths instead to scan an artifact anywhere.
+node scripts/check-binary-paths.mjs
+node scripts/check-binary-paths.mjs target/release/bundle/nsis/*.exe target/release/nazar-desktop.exe
 ```
+
+It reads the bytes in both encodings a compiler can leave a path in, unpacks a
+`.deb` and an `.rpm` to read the binary inside them, and exits non-zero on the
+first Windows profile, Linux home or macOS home directory it finds — including
+this machine's own account name, matched on a word boundary so that a project
+folder whose name merely contains it is not a false alarm. **An NSIS installer
+compresses its payload and the scan says so rather than passing it silently**:
+run the scan over `target/release/nazar-desktop.exe` as well, which is the file
+the installer carries.
 
 All of them must come back empty or green. The only expected hits are the
 maintainer's own name in `LICENSE`, and the forbidden patterns written into the

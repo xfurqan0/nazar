@@ -46,6 +46,7 @@ export const ROOT = path.join(here, '..');
 export const ROOT_TESTS = [
   'test/fixtures.test.ts',
   'test/licenses.test.ts',
+  'test/binary-paths.test.ts',
   'test/no-writes.test.ts',
   'test/hermes-columns.test.ts',
   'test/packaging.test.ts',

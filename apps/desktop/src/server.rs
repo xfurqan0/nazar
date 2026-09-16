@@ -181,9 +181,8 @@ impl Drop for ServerHandle {
 /// 1. [`ENTRY_VAR`], which is how a development run points at a rebuilt package.
 /// 2. The installed layout: `resources/server/bin/nazar.mjs` beside the executable, which
 ///    is what the NSIS installer lays down and what `scripts/build-desktop.mjs` stages.
-/// 3. A debug build's repository, two directories above the crate. Compiled out of
-///    release builds entirely, so no shipped binary carries a path from the machine it
-///    was built on.
+/// 3. A debug build's repository, found by walking up from the executable
+///    ([`repository_entry`]). Compiled out of release builds entirely.
 #[must_use]
 pub fn resolve_entry(resource_dir: Option<&Path>) -> Option<PathBuf> {
     if let Some(override_path) = std::env::var_os(ENTRY_VAR).filter(|value| !value.is_empty()) {
@@ -206,16 +205,54 @@ pub fn resolve_entry(resource_dir: Option<&Path>) -> Option<PathBuf> {
 
     #[cfg(debug_assertions)]
     {
-        let repo = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("..")
-            .join("..")
-            .join("bin")
-            .join("nazar.mjs");
-        if repo.is_file() {
+        if let Some(repo) = repository_entry() {
             return Some(repo);
         }
     }
 
+    None
+}
+
+/// The repository a debug build is sitting in, found by walking up from the executable.
+///
+/// **This used to be `env!("CARGO_MANIFEST_DIR")`, and that was the last build-machine
+/// path in a debug binary** (N-WP-L8). The macro expands to the crate directory as an
+/// absolute string, and a string a macro produced is not a source path, so
+/// `--remap-path-prefix` never touches it: after the remapping took 3007 copies of this
+/// laptop's home directory out of the debug binary, exactly one was left —
+/// `/home/<account>/nazar/apps/desktop`, sitting next to the resource names it belongs
+/// to. Release builds never carried it, because this whole block is compiled out of them,
+/// and that was the wrong bar: `ci.yml` uploads a debug installer on every push and it is
+/// the build a tester gets handed.
+///
+/// Walking up asks the same question without writing an answer down. `target/debug/` is
+/// two directories below the repository and `target/<triple>/debug/` is three, so the
+/// climb is bounded rather than counted — a fixed number of `..` would be right for one
+/// layout and wrong for the other.
+#[cfg(debug_assertions)]
+#[must_use]
+fn repository_entry() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    climb_to_entry(exe.parent()?, &|path: &Path| path.is_file())
+}
+
+/// The climb itself, with the file test handed in so it can be driven with no disk.
+///
+/// Five levels: three is what the deepest real layout needs, and the two spare are for a
+/// binary somebody copied one directory further down. Beyond that it is not this
+/// repository any more, and answering with a `bin/nazar.mjs` from somewhere unrelated
+/// would be worse than answering with nothing.
+#[cfg(debug_assertions)]
+fn climb_to_entry(from: &Path, is_file: &dyn Fn(&Path) -> bool) -> Option<PathBuf> {
+    let mut at = Some(from);
+    for _ in 0..5 {
+        let here = at?;
+        let candidate = here.join("bin").join("nazar.mjs");
+        if is_file(&candidate) {
+            return Some(candidate);
+        }
+        at = here.parent();
+    }
     None
 }
 
@@ -1272,6 +1309,62 @@ mod tests {
         assert!(
             probe(server.port, "/api/state").is_ok(),
             "stopping an adopted handle must leave its server running"
+        );
+    }
+
+    #[test]
+    fn the_repository_is_climbed_to_rather_than_written_down() {
+        // N-WP-L8. Both real layouts and the two that must not answer, with no disk
+        // underneath: `target/debug` is two directories below the repository and
+        // `target/<triple>/debug` is three, which is why the climb is bounded and not
+        // counted.
+        let repo = Path::new("/w/nazar");
+        let entry = repo.join("bin").join("nazar.mjs");
+        let there = |path: &Path| path == entry;
+
+        assert_eq!(
+            climb_to_entry(&repo.join("target").join("debug"), &there),
+            Some(entry.clone())
+        );
+        assert_eq!(
+            climb_to_entry(
+                &repo
+                    .join("target")
+                    .join("x86_64-unknown-linux-gnu")
+                    .join("debug"),
+                &there
+            ),
+            Some(entry.clone())
+        );
+        // Too far down to be this repository, and a tree with no entry in it at all.
+        assert_eq!(
+            climb_to_entry(
+                &repo.join("a").join("b").join("c").join("d").join("e"),
+                &there
+            ),
+            None
+        );
+        assert_eq!(climb_to_entry(Path::new("/w/other"), &there), None);
+    }
+
+    #[test]
+    fn the_shipped_source_bakes_no_absolute_path_of_its_own() {
+        // The one macro that produces an absolute string out of the build machine, and the
+        // one `--remap-path-prefix` cannot reach. It may appear below, in test code that
+        // never leaves this repository; above, it is a path in every binary.
+        let source = include_str!("server.rs");
+        let shipped = source.split("#[cfg(test)]").next().unwrap_or(source);
+        // Comments are stripped first: the paragraph above this function names the macro
+        // on purpose, and a gate that could not tell prose from code would have to be
+        // written around rather than obeyed.
+        let code = shipped
+            .lines()
+            .filter(|line| !line.trim_start().starts_with("//"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert!(
+            !code.contains("CARGO_MANIFEST_DIR"),
+            "a macro-baked absolute path is back in the shipped half of server.rs"
         );
     }
 

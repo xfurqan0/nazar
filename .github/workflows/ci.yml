@@ -297,6 +297,14 @@ jobs:
       - name: Build the installer
         run: node scripts/build-desktop.mjs --debug
 
+      # N-WP-L8. The debug binary is remapped like the release one now — this artifact is
+      # downloadable by anyone reading the repository, and it used to carry one path per
+      # panic site. The executable is what is scanned: an NSIS installer compresses its
+      # payload with LZMA and nothing here unpacks that, so the file inside it is checked
+      # as itself rather than through a container the check cannot read.
+      - name: Check the executable for build-machine paths
+        run: node scripts/check-binary-paths.mjs target/debug/nazar-desktop.exe
+
       - uses: actions/upload-artifact@v4
         with:
           name: nazar-desktop-debug-windows
@@ -352,7 +360,15 @@ jobs:
             bundles: app dmg
             artifacts: |
               target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-          - os: ubuntu-latest
+          # `ubuntu-22.04` and not `ubuntu-latest`, and the reason is the one number a
+          # Linux binary cannot argue with. A release built on 24.04 records
+          # `GLIBC_2.39` against symbols glibc only grew in 2.39, and a machine with an
+          # older libc then refuses to start it: *version `GLIBC_2.39' not found*,
+          # measured by installing a locally built `.deb` into a Debian 12 container
+          # (N-WP-L8). Debian 12 carries 2.36 and Ubuntu 22.04 carries 2.35, so building
+          # on the oldest supported runner is what makes the bundle run on the widest
+          # range of machines — glibc is backwards compatible, never forwards.
+          - os: ubuntu-22.04
             label: linux
             arch: x64
             target: x86_64-unknown-linux-gnu
@@ -418,6 +434,15 @@ jobs:
       # script writes the file names and their sizes to the job summary.
       - name: Bundle
         run: node scripts/build-desktop.mjs --skip-npm-build --target ${{ matrix.target }} --bundles ${{ matrix.bundles }}
+
+      # N-WP-L8. The one check in this file that reads the artifact instead of the tree.
+      # `docs/RELEASE.md` greps the working directory for an account name and can never
+      # see the ones that matter: every panic site carries the source path it was compiled
+      # from as a string literal, `strip` does not touch those, and a sibling project
+      # shipped 182 copies of a developer's home directory in one installer before anybody
+      # looked inside one. `build-desktop.mjs` remaps them away; this is what says so.
+      - name: Check the bundles for build-machine paths
+        run: node scripts/check-binary-paths.mjs target/${{ matrix.target }}/release/nazar-desktop target/${{ matrix.target }}/release/bundle
 
       - uses: actions/upload-artifact@v4
         with:

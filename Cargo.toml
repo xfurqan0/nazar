@@ -19,12 +19,17 @@
 members = ["apps/desktop", "crates/nazar-shell"]
 resolver = "2"
 
+# `authors` is not decoration here: `tauri-bundler` writes it into the `.deb` control
+# file's `Maintainer:` field and into the `.rpm` header, and Debian policy wants a name
+# and an address there. It used to read `nazar contributors`, which produced a control
+# file with no way to reach anybody in it (N-WP-L8). It is the same name `package.json`
+# and `tauri.conf.json`'s `publisher` carry, because they are all the same claim.
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
-authors = ["nazar contributors"]
+authors = ["Furkan Yıldız <xfurqan0@users.noreply.github.com>"]
 repository = "https://github.com/xfurqan0/nazar"
 homepage = "https://github.com/xfurqan0/nazar"
 

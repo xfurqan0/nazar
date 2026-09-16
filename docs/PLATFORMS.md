@@ -14,7 +14,7 @@ to find out by installing.
 | | Windows | macOS | Linux |
 |---|---|---|---|
 | **Browser mode** (`npx @xfurqan0/nazar`) | yes | yes | yes |
-| **Desktop bundle** | `.exe` (NSIS, per-user install) | `.dmg` — one for Apple silicon, one for Intel | `.AppImage` and `.deb` (x86-64) |
+| **Desktop bundle** | `.exe` (NSIS, per-user install) | `.dmg` — one for Apple silicon, one for Intel | `.AppImage` and `.deb` (x86-64); an `.rpm` builds but is not shipped |
 | **Tray icon** | yes; left click shows the window, right click opens the menu | yes, in the menu bar, drawn as a template icon so it follows light and dark | yes, as an AppIndicator **menu only** — see below |
 | **Close minimises to the tray** | yes | yes | yes |
 | **No server left behind** | yes, a job object | yes, the child watches its parent | yes, `PR_SET_PDEATHSIG` and the same watch |
@@ -78,8 +78,29 @@ for everybody, and the CI matrix produces both from the same runner either way.
   `libwebkit2gtk-4.1-0`, `libgtk-3-0`, `libayatana-appindicator3-1` — so `apt` will tell
   you what is missing instead of the application failing to start. WebKitGTK **4.1** is
   what Tauri v2 links against; a distribution old enough to ship only 4.0 will not
-  satisfy it. There is no `.rpm`: on Fedora the `.AppImage` is the download, and building
-  from source is the other option — see below.
+  satisfy it.
+
+  ```sh
+  sudo apt install ./nazar-desktop_0.1.0_amd64.deb
+  ```
+
+- **There is no `.rpm` in a release**, and the bundler will build one: `--bundles rpm`
+  produces a package whose requirements are library sonames
+  (`libappindicator3.so.1`, `libwebkit2gtk-4.1.so.0`, `libgtk-3.so.0`) rather than
+  Debian package names, which is what Fedora wants. It is not shipped because nobody has
+  accepted one on a Fedora machine yet — installing and running it is the step between
+  here and a release that carries it. On Fedora today the `.AppImage` is the download,
+  and building from source is the other option; see below.
+
+**The glibc floor is 2.35, and it is a property of the runner rather than of the code.**
+A Linux binary records the glibc version of every symbol it uses, and glibc is compatible
+backwards but never forwards: a build on Ubuntu 24.04 needs 2.39 and a build on Fedora 44
+more still. Measured by installing a locally built `.deb` into a Debian 12 container —
+`apt` resolved every dependency and installed it cleanly, and the binary then refused to
+start with *`/lib/x86_64-linux-gnu/libc.so.6: version 'GLIBC_2.39' not found'*. So the
+release bundle is built on `ubuntu-22.04` (glibc 2.35), which runs on Debian 12 (2.36),
+Ubuntu 22.04 and everything newer. **A package built on your own machine is for testing
+on your own machine**; the one people download comes out of CI.
 
 **The tray is a menu, not a panel.** The status-notifier protocol every modern Linux
 desktop uses has no concept of a left click reaching the application — the desktop
@@ -133,15 +154,36 @@ sudo dnf install gcc gcc-c++ make file \
 `libxdo-dev` has no counterpart in that list, and it is not needed: it is on the Debian
 list for the jump, which does not exist on Linux yet.
 
-Bundling is a separate question and needs more. `cargo tauri` is not a Fedora package —
-`cargo install tauri-cli --locked` — and the AppImage bundler wants `patchelf` while the
-`.deb` bundler wants `dpkg` and `dpkg-dev`. None of that is needed to build or run the
-shell; it is needed to package it.
+Bundling needs one more thing and fewer than it looks. `cargo tauri` is not a Fedora
+package — `cargo install tauri-cli --locked` — and with it, **`.deb` and `.rpm` both
+build with nothing else installed**: the Tauri bundlers write both formats themselves, so
+neither `dpkg` nor `rpmbuild` has to be on the machine. Measured on Fedora 44:
+
+```sh
+node scripts/build-desktop.mjs --bundles deb rpm     # 2.5 MB each
+node scripts/check-binary-paths.mjs                  # and then read what came out
+```
+
+Only the **AppImage** needs a tool that is not there — `patchelf`, which the bundler uses
+to rewrite the interpreter path of the binary it packs — so `--bundles appimage` is the
+one form a plain Fedora install cannot produce.
 
 **Built and smoke-tested on Fedora 44**, GNOME Shell 50.4 on Wayland, with Node 22 and
 rustc 1.98: the crate compiles, the binary starts, the webview renders, the node server
-comes up as a child and the canvas is served. That is a smoke test on one machine and one
-distribution, not a claim that Nazar is tested on Linux.
+comes up as a child and the canvas is served, and the `.deb` and `.rpm` bundles build.
+The `.deb` installs in a Debian 12 container and the binary in it does not run there,
+which is the glibc floor above and not a packaging fault. That is a smoke test on one
+machine and one distribution, not a claim that Nazar is tested on Linux.
+
+**What is in the `.deb`**, because a package nobody has opened is a claim rather than a
+fact: `/usr/bin/nazar-desktop`, the staged Node server under
+`/usr/lib/nazar-desktop/resources/server/`, `/usr/share/applications/nazar-desktop.desktop`
+— which `desktop-file-validate` passes without a word — and three icon sizes under
+`/usr/share/icons/hicolor/`. The control file names a maintainer with an address in it
+(`Cargo.toml`'s `authors`, which is where `tauri-bundler` reads it from) and lists
+`libappindicator3-1` in *addition* to the Ayatana package when the build machine linked
+the older library, as Fedora's does — one more reason the shipped package is built on
+Ubuntu.
 
 ## Closing the shell, and what it takes with it
 
