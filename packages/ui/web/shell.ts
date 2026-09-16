@@ -25,6 +25,15 @@ export interface ShellInfo {
   readonly version: string;
   readonly platform: string;
   readonly jumpSupported: boolean;
+  /**
+   * N-WP-L7: why it cannot, in one word — `wayland`, `x11`, or absent.
+   *
+   * Absent on Windows, where it can; absent on macOS and on a Linux session that will
+   * not say what it is running on, where *not yet* is the whole answer. One word rather
+   * than a sentence, because the sentence belongs in the catalogues with every other
+   * sentence — see {@link jumpBlockedKey}.
+   */
+  readonly jumpBlocker?: string | null;
 }
 
 /** What rung (b) found. Mirrors `TabOutcome` in `apps/desktop/src/jump.rs`. */
@@ -171,6 +180,26 @@ export class Shell {
 /** What a browser is told when it double-clicks a card. */
 export function jumpNeedsShell(): string {
   return t('hint.jumpNeedsShell');
+}
+
+/**
+ * N-WP-L7: which sentence a shell that cannot jump has to say for itself.
+ *
+ * The message key rather than the message, for one reason worth stating: the canvas
+ * paints this line by pointing its `data-nz-rich` attribute at a key, so a language
+ * switch redraws it out of the new catalogue like every other sentence on the page. A
+ * string captured here would be frozen in whatever language the shell answered in.
+ *
+ * `undefined` for every shell that has nothing to add — Windows, macOS, a Linux session
+ * that would not say what it is running on, and an older shell whose `shell_info` has no
+ * such field at all. The canvas falls back to what it did before N-WP-L7 in each case:
+ * the sentence about double-clicking when the jump works, and no sentence when it does
+ * not.
+ */
+export function jumpBlockedKey(blocker: string | null | undefined): string | undefined {
+  if (blocker === 'wayland') return 'about.jump.wayland';
+  if (blocker === 'x11') return 'about.jump.x11';
+  return undefined;
 }
 
 /**

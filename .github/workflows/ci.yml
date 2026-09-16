@@ -187,7 +187,7 @@ jobs:
   # `generate_context!` expands against a staged bundle, and `tauri-build` checks the
   # resource path exists while the crate builds.
   desktop-linux:
-    name: desktop shell — lint, build (linux)
+    name: desktop shell — lint, build, test (linux)
     runs-on: ubuntu-latest
 
     steps:
@@ -247,6 +247,19 @@ jobs:
       # above already holds the dependency graph clippy compiled a step earlier.
       - name: Build the shell
         run: cargo build -p nazar-desktop
+
+      # N-WP-L7. The shell's Linux-only behaviour had no test job anywhere: the suite runs
+      # on `windows-latest`, where the process group, `PR_SET_PDEATHSIG` and the display
+      # server the canvas is told about are all compiled out. Tests written on a Fedora
+      # laptop for N-WP-L2 and N-WP-L7 were therefore run by nobody but their author,
+      # which is the same hole this job was made to close one lint earlier.
+      #
+      # `-p nazar-desktop` rather than `--workspace`: `nazar-shell` already has a job on
+      # all three systems, and running it twice here would only make this one slower.
+      # Nothing in it reads a desktop — the live jump tests are Windows-only — so there is
+      # no gate to switch off on a runner with no session bus.
+      - name: Test the shell
+        run: cargo test -p nazar-desktop
 
   # A separate job, and it may fail without hiding a real regression. It uploads the
   # installer; it does not decide whether the change was right.

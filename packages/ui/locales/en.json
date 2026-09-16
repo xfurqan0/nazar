@@ -1,6 +1,8 @@
 {
   "about.doctor": "Nazar {version} — empty canvas? Run {command} in a terminal.",
   "about.jump": "Double-click a card or press {enter} to bring its terminal to the front.",
+  "about.jump.wayland": "Jump to terminal is off on Wayland: the compositor does not let an application raise another one's window. Use the terminal's own window switcher.",
+  "about.jump.x11": "Jump to terminal is not wired up for X11 yet.",
   "agent.done": "done · {duration}",
   "agent.label": "subagent {type}, {activity}, state {state}, depth {depth}",
   "agent.labelRanFor": ", ran for {duration}",

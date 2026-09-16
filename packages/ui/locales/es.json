@@ -1,6 +1,8 @@
 {
   "about.doctor": "Nazar {version} — ¿lienzo vacío? Ejecuta {command} en una terminal.",
   "about.jump": "Haz doble clic en una tarjeta o pulsa {enter} para traer su terminal al frente.",
+  "about.jump.wayland": "En Wayland no se puede saltar a la terminal: el compositor no permite que una aplicación traiga al frente la ventana de otra. Usa el propio conmutador de ventanas de la terminal.",
+  "about.jump.x11": "El salto a la terminal en X11 todavía no está hecho.",
   "agent.done": "hecho · {duration}",
   "agent.label": "subagente {type}, {activity}, proceso {state}, profundidad {depth}",
   "agent.labelRanFor": ", duró {duration}",

@@ -162,11 +162,11 @@ import { HistoryPanel, httpTransport, type HistoryTransport } from './history.ts
 import { NeedsYouStrip } from './needs-you.ts';
 import { NotesLayer } from './notes.ts';
 import { ProjectsPanel, SessionList, type ProjectView, type SessionRow } from './projects.ts';
-import { applyStatic, fillLanguagePicker } from './lang.ts';
+import { applyStatic, fillLanguagePicker, setRichKey } from './lang.ts';
 import { catalogs } from './locales.ts';
 import { UsagePanel } from './quota.ts';
 import { fillSegment, paintSwitch, SettingsPanel } from './settings.ts';
-import { jumpHint, jumpNeedsShell, Shell } from './shell.ts';
+import { jumpBlockedKey, jumpHint, jumpNeedsShell, Shell } from './shell.ts';
 import { Sidebar } from './sidebar.ts';
 import { armSoundUnlock, createSoundPlayer } from './sound.ts';
 import { CanvasMenu, CardMenu, LinkMenu, TabBar } from './tabbar.ts';
@@ -796,6 +796,17 @@ function start(): void {
    */
   let jumpSupported = shell !== undefined;
 
+  /**
+   * N-WP-L7: the key of the sentence that says *why not*, when the shell named a reason.
+   *
+   * Only Linux names one, and it names one of two: under Wayland the compositor will not
+   * let one application raise another's window, which is the protocol working as designed
+   * and never going to change, and under X11 the port is simply unwritten. `undefined`
+   * everywhere else, which is the pre-N-WP-L7 behaviour — the gesture stays silent
+   * because there is nothing to say that is not already obvious.
+   */
+  let jumpBlocked: string | undefined;
+
   /** One line at the foot of the canvas, gone again a few seconds later. */
   let hintTimer = 0;
   const showHint = (text: string): void => {
@@ -843,11 +854,23 @@ function start(): void {
       showHint(`${jumpNeedsShell()} — ${t('hint.inABrowser')}`);
       return;
     }
-    // N-WP21. A shell that cannot jump does nothing, silently: the menu entry
-    // is not drawn either, and a double-click is the same gesture as a click as
-    // far as this machine is concerned. A hint would fire on every double-click
-    // of a card to repeat a fact about the platform that does not change.
-    if (!jumpSupported) return;
+    /*
+     * N-WP21. A shell that cannot jump does nothing, silently: the menu entry
+     * is not drawn either, and a double-click is the same gesture as a click as
+     * far as this machine is concerned. A hint would fire on every double-click
+     * of a card to repeat a fact about the platform that does not change.
+     *
+     * N-WP-L7 kept the silence and gave it one exception: a shell that named its
+     * blocker has something to say that is *not* obvious from the machine being a
+     * Mac or a PC — that this desktop's compositor is the thing refusing, and that
+     * the terminal's own switcher is where to go instead. The user asked for a
+     * terminal by double-clicking a card; answering that with nothing at all is
+     * the one case where silence reads as a broken feature.
+     */
+    if (!jumpSupported) {
+      if (jumpBlocked !== undefined) showHint(t(jumpBlocked));
+      return;
+    }
     void shell.jump(session.pid).then((outcome) => showHint(jumpHint(outcome)));
   };
 
@@ -1174,7 +1197,19 @@ function start(): void {
         // says it cannot jump loses the menu entry, the strip's jump and the
         // sentence in About; the gesture itself becomes an ordinary click.
         jumpSupported = info.jumpSupported;
-        shellAbout.hidden = !jumpSupported;
+        /*
+         * N-WP-L7: and when it says *why* it cannot, the About line carries the
+         * reason instead of disappearing. The key moves onto the element rather
+         * than the text into it, so the replacement follows a language change
+         * like every other sentence on the page (`web/lang.ts`).
+         *
+         * A blocker with the jump working is not a state the shell produces;
+         * the check is here so a future one could not paint a refusal over a
+         * working feature.
+         */
+        jumpBlocked = jumpSupported ? undefined : jumpBlockedKey(info.jumpBlocker);
+        if (jumpBlocked !== undefined) setRichKey(shellAbout, jumpBlocked);
+        shellAbout.hidden = !jumpSupported && jumpBlocked === undefined;
       }
       return shell.autostart();
     }).then((enabled) => {

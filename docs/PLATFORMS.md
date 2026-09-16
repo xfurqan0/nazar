@@ -19,7 +19,7 @@ to find out by installing.
 | **Close minimises to the tray** | yes | yes | yes |
 | **No server left behind** | yes, a job object | yes, the child watches its parent | yes, `PR_SET_PDEATHSIG` and the same watch |
 | **Start at login** | yes, *start with Windows* | yes, *start with macOS* (a LaunchAgent) | yes, *start at login* (a `.desktop` entry in `~/.config/autostart`) |
-| **Jump to the terminal** | yes, including the right tab in Windows Terminal | **not yet** | **not yet** |
+| **Jump to the terminal** | yes, including the right tab in Windows Terminal | **not yet** | **no on Wayland** — the compositor forbids it; **not yet** on X11 |
 | **Signed** | no | ad-hoc only, **not** notarised | not applicable |
 | **Built on** | every push | on a tag or by hand | compiled and linked on every push; the `.AppImage` and `.deb` on a tag or by hand |
 
@@ -27,7 +27,7 @@ The desktop *bundles* for macOS and Linux come out of the `desktop bundle` job i
 `.github/workflows/ci.yml`, which runs on a `v*` tag or on `workflow_dispatch` and not on
 an ordinary push. A macOS runner costs ten times a Linux one per minute and none of these
 three artifacts decides whether a change is correct — the jobs that do (`build`, `pack
-smoke`, `shell logic`, `desktop shell — lint, build (linux)`) run on every push.
+smoke`, `shell logic`, `desktop shell — lint, build, test (linux)`) run on every push.
 
 The Linux shell itself is not in that arrangement any more. It is linted and **linked** on
 every push, because clippy is a check and not a link: it never asks whether the GTK,
@@ -169,11 +169,20 @@ that, `pkill -f nazar.mjs` is the one-line answer.
 
 Double-clicking a session card and having the terminal running that session come to the
 front is the one thing the desktop shell does that a browser tab cannot. It is
-**Windows-only today**, and on macOS and Linux it says so: the gesture and the card's menu
-entry are both still there, and both answer *jumping to a terminal is not available on
-this platform yet*. A sentence, not a red box and not a silent no-op — the shell reports
-what it did in every other case too, and "nothing, and here is why" is a result like any
-other.
+**Windows-only today**, and everywhere else the canvas says so rather than offering a
+control that cannot answer: the card menu has no **Jump to terminal** entry and the
+double-click is an ordinary click.
+
+**On Linux it says which no.** The shell reads `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY`
+at start-up and tells the canvas one word — `wayland`, `x11`, or nothing — and the canvas
+turns that word into a sentence out of its own catalogues, in About and on the
+double-click:
+
+- **Wayland**: *the compositor does not let an application raise another one's window.
+  Use the terminal's own window switcher.* Not *yet*: see below, this one is never coming.
+- **X11**: *not wired up yet*, which is a promise, because there it is only work.
+- **A session that says neither** — a `tty`, a machine with neither variable set — gets
+  the sentence every unported platform gets.
 
 The parts of it that are arithmetic — the parent-chain walk, the window ranking, the
 title matching — live in `crates/nazar-shell`, have no platform API in them, and are
@@ -185,10 +194,13 @@ that actually raises a window:
   because the jump is a user gesture. Getting from a session's pid to the terminal
   application is the same parent-chain walk that already exists.
 - **Linux, X11**: `wmctrl` or `xdotool` can raise a window by pid when either is
-  installed.
+  installed. Windows only, never tabs: no X11 tool can see a terminal's tabs, so the best
+  a port could do is the right window.
 - **Linux, Wayland**: a client cannot raise its own window, let alone somebody else's.
   This is a design decision of the protocol and not a gap to be worked around, so the
-  honest answer there will stay *not supported*.
+  honest answer there will stay *not supported*. The one door — an `xdg-activation` token
+  — is handed to an application by the user's own gesture on *that* application, which a
+  double-click on Nazar's canvas is not.
 
 ## Building it yourself
 

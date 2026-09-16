@@ -1,6 +1,8 @@
 {
   "about.doctor": "Nazar {version} — tuval boş mu? Bir terminalde {command} çalıştır.",
   "about.jump": "Bir karta çift tıkla ya da {enter} tuşuna bas; terminali öne gelir.",
+  "about.jump.wayland": "Wayland'de terminale atlama kapalı: pencere birleştirici, bir uygulamanın başka bir uygulamanın penceresini öne getirmesine izin vermiyor. Terminalin kendi pencere değiştiricisini kullan.",
+  "about.jump.x11": "X11 için terminale atlama henüz yazılmadı.",
   "agent.done": "bitti · {duration}",
   "agent.label": "alt ajan {type}, {activity}, süreç {state}, derinlik {depth}",
   "agent.labelRanFor": ", {duration} sürdü",

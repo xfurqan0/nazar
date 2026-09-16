@@ -121,6 +121,11 @@ struct ShellInfo {
     platform: String,
     /// Whether [`jump`] can do anything on this platform.
     jump_supported: bool,
+    /// N-WP-L7: the one word that says *why* it cannot, when there is one — `wayland`,
+    /// `x11`, or absent. One field rather than a sentence, because the sentence the user
+    /// reads has to come out of the canvas's catalogues like every other sentence; see
+    /// [`jump::blocker`].
+    jump_blocker: Option<&'static str>,
 }
 
 fn main() {
@@ -560,6 +565,7 @@ fn shell_info() -> ShellInfo {
         version: VERSION.to_owned(),
         platform: std::env::consts::OS.to_owned(),
         jump_supported: jump::supported(),
+        jump_blocker: jump::blocker(),
     }
 }
 

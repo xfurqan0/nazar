@@ -1,6 +1,8 @@
 {
   "about.doctor": "Nazar {version} — 画布是空的？在终端里运行 {command}。",
   "about.jump": "双击卡片或按 {enter}，把它的终端调到最前。",
+  "about.jump.wayland": "Wayland 下无法跳转到终端：合成器不允许一个应用把另一个应用的窗口调到最前。请用终端自己的窗口切换器。",
+  "about.jump.x11": "X11 下的终端跳转还没有做。",
   "agent.done": "完成 · {duration}",
   "agent.label": "子代理 {type}，{activity}，进程 {state}，深度 {depth}",
   "agent.labelRanFor": "，运行了 {duration}",

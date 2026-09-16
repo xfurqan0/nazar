@@ -1,6 +1,8 @@
 {
   "about.doctor": "Nazar {version} — 캔버스가 비어 있나요? 터미널에서 {command} 를 실행하세요.",
   "about.jump": "카드를 두 번 클릭하거나 {enter} 를 누르면 해당 터미널이 앞으로 나옵니다.",
+  "about.jump.wayland": "Wayland에서는 터미널로 이동할 수 없습니다: 컴포지터가 한 앱이 다른 앱의 창을 앞으로 가져오도록 허용하지 않습니다. 터미널 자체의 창 전환기를 사용하세요.",
+  "about.jump.x11": "X11용 터미널 이동은 아직 만들어지지 않았습니다.",
   "agent.done": "완료 · {duration}",
   "agent.label": "서브에이전트 {type}, {activity}, 프로세스 {state}, 깊이 {depth}",
   "agent.labelRanFor": ", {duration} 동안 실행됨",

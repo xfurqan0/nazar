@@ -32,6 +32,7 @@ const app = readFileSync(path.join(webDir, 'app.ts'), 'utf8');
 const settings = readFileSync(path.join(webDir, 'settings.ts'), 'utf8');
 const shell = readFileSync(path.join(webDir, 'shell.ts'), 'utf8');
 const tabbar = readFileSync(path.join(webDir, 'tabbar.ts'), 'utf8');
+const lang = readFileSync(path.join(webDir, 'lang.ts'), 'utf8');
 const mainRs = readFileSync(path.join(desktopDir, 'src', 'main.rs'), 'utf8');
 const buildRs = readFileSync(path.join(desktopDir, 'build.rs'), 'utf8');
 const capability = readFileSync(path.join(desktopDir, 'capabilities', 'canvas.json'), 'utf8');
@@ -298,7 +299,8 @@ test('N-WP21: the canvas reads jumpSupported, and offers the jump only where it 
   assert.match(app, /jumpSupported = info\.jumpSupported;/);
   // 2. The gesture itself refuses, after the browser has had its hint: a shell
   //    that cannot jump is silent rather than apologising on every double-click.
-  assert.match(app, /if \(!jumpSupported\) return;/);
+  //    N-WP-L7 gave that silence one exception and left the refusal itself here.
+  assert.match(app, /if \(!jumpSupported\) \{[\s\S]{0,200}\n\s{6}return;\n\s{4}\}/);
   // 3. Both menus ask before they draw the entry.
   assert.equal(
     (app.match(/canJump: \(\) => jumpSupported,/g) ?? []).length,
@@ -307,6 +309,38 @@ test('N-WP21: the canvas reads jumpSupported, and offers the jump only where it 
   );
   assert.match(tabbar, /this\.options\.onJump !== undefined && this\.options\.canJump\?\.\(\) !== false/);
   // And the sentence in About goes with it — a shell that cannot jump has no
-  // more use for "double-click a card" than a browser has.
-  assert.match(app, /shellAbout\.hidden = !jumpSupported;/);
+  // more use for "double-click a card" than a browser has. N-WP-L7 gave that
+  // line a second job, which is the test below.
+  assert.match(app, /shellAbout\.hidden = !jumpSupported && jumpBlocked === undefined;/);
+});
+
+test('N-WP-L7: a Linux shell says which no, and the sentence stays translatable', () => {
+  /*
+   * The behaviour — one word in, one sentence out — is driven in
+   * `test/dom/jump-blocked.test.ts`, and the sentences themselves are in the catalogues.
+   * What cannot be driven is what the test above could not drive either: the wiring
+   * inside `app.ts`'s one closure, plus the fact that four files have to agree on the
+   * name of a field that crosses a language boundary.
+   */
+  const jumpRs = readFileSync(path.join(desktopDir, 'src', 'jump.rs'), 'utf8');
+  assert.match(jumpRs, /pub fn blocker\(\) -> Option<&'static str>/);
+  assert.match(jumpRs, /pub fn display_server\(/);
+  assert.match(mainRs, /jump_blocker: jump::blocker\(\)/);
+  assert.match(shell, /readonly jumpBlocker\?: string \| null;/);
+  assert.match(shell, /export function jumpBlockedKey\(/);
+
+  // 1. Held beside `jumpSupported`, and read only when the jump is off: a blocker must
+  //    never paint a refusal over a feature that works.
+  assert.match(
+    app,
+    /jumpBlocked = jumpSupported \? undefined : jumpBlockedKey\(info\.jumpBlocker\);/,
+  );
+  // 2. The key moves onto the element rather than the text into it, so a language change
+  //    redraws the replacement out of the new catalogue like the sentence it replaced.
+  assert.match(app, /setRichKey\(shellAbout, jumpBlocked\)/);
+  assert.match(lang, /export function setRichKey\(element: Element, key: string\): void \{/);
+  assert.match(lang, /element\.setAttribute\(RICH, key\);/);
+  // 3. The gesture answers where there is something to say, and keeps N-WP21's silence
+  //    everywhere else.
+  assert.match(app, /if \(jumpBlocked !== undefined\) showHint\(t\(jumpBlocked\)\);/);
 });

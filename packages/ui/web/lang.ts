@@ -83,6 +83,21 @@ function fillRich(element: Element, template: string): void {
 }
 
 /**
+ * N-WP-L7: point one rich line at a different template, and paint it now.
+ *
+ * The About line about double-clicking a card is the one sentence on this page whose
+ * *key* depends on something only the shell knows: on Wayland it has to say why the jump
+ * is off instead. Moving the attribute rather than writing the text is what keeps that
+ * line translatable — {@link applyStatic} reads the attribute on every language change,
+ * so the replacement is redrawn out of the new catalogue exactly like the sentence it
+ * replaced.
+ */
+export function setRichKey(element: Element, key: string): void {
+  element.setAttribute(RICH, key);
+  fillRich(element, t(key));
+}
+
+/**
  * Write every static string in a tree, in the language now in force.
  *
  * Called once before the first frame and again on every language change. It is

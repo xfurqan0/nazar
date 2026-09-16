@@ -132,6 +132,15 @@
 //! `nazar-shell` and already build and test on both, which is what makes a later port a
 //! step rather than a rewrite.
 //!
+//! **On Linux it says *which* no** (N-WP-L7). Wayland and X11 are not the same refusal:
+//! under X11 a window can be raised by pid and the port is work nobody has done, while
+//! under Wayland the protocol does not let one client raise another's window at all — a
+//! design decision, not an omission, and *not available yet* quietly promised a version
+//! where it would be. [`blocker`] reads which of the two this session is running on out of
+//! `XDG_SESSION_TYPE` and `WAYLAND_DISPLAY`, [`display_server`] holds the rules, and the
+//! word travels to the canvas as one field of `ShellInfo` so the sentence a user reads
+//! comes out of the locale catalogues rather than out of here.
+//!
 //! # The Windows foreground rules
 //!
 //! `SetForegroundWindow` fails silently for a process that has not earned the right, and
@@ -275,6 +284,68 @@ impl JumpOutcome {
 #[must_use]
 pub const fn supported() -> bool {
     cfg!(windows)
+}
+
+/// The Wayland session, as `XDG_SESSION_TYPE` spells it and as the canvas names it.
+pub const WAYLAND: &str = "wayland";
+/// The X11 session, likewise.
+pub const X11: &str = "x11";
+
+/// Which display server a Linux login session is talking to, from the two variables that
+/// say so — or `None` when neither answers and guessing would be inventing an answer.
+///
+/// Pure, and deliberately not reading the environment itself, for two reasons. It is the
+/// one piece of N-WP-L7 with rules in it, so it is the piece that is worth testing; and a
+/// test that set `XDG_SESSION_TYPE` would be mutating process-wide state under a test
+/// runner that uses threads, which in Rust 2024 is `unsafe` and says so.
+///
+/// The order is the interesting part:
+///
+/// 1. **`XDG_SESSION_TYPE` first, when it says one of the two names.** It is what logind
+///    recorded about the seat, and it is the only one of the two that can say *X11*.
+/// 2. **`WAYLAND_DISPLAY` second.** A session started outside logind — a nested compositor,
+///    a machine where the variable was never set — leaves the first one empty or saying
+///    `tty` while the socket is right there. A process that has a Wayland socket is on
+///    Wayland whatever the seat says.
+/// 3. **Otherwise `None`**, which the canvas reads as *say nothing in particular*. `tty`,
+///    `unspecified`, an empty string and a variable nobody set all land here, and the
+///    sentence the user gets is the one every unported platform gets.
+#[must_use]
+pub fn display_server(
+    session_type: Option<&str>,
+    wayland_display: Option<&str>,
+) -> Option<&'static str> {
+    let named = session_type.unwrap_or_default().trim();
+    if named.eq_ignore_ascii_case(WAYLAND) {
+        return Some(WAYLAND);
+    }
+    if named.eq_ignore_ascii_case(X11) {
+        return Some(X11);
+    }
+    if wayland_display.is_some_and(|socket| !socket.trim().is_empty()) {
+        return Some(WAYLAND);
+    }
+    None
+}
+
+/// What stands between this machine and a jump, in one word the canvas can translate.
+///
+/// `None` everywhere the answer would add nothing: Windows, where the jump works; macOS,
+/// where *not yet* is the whole of it; and a Linux session that will not say what it is
+/// running on. `Some("wayland")` is not the same refusal as `Some("x11")` — one is a
+/// protocol saying no and the other is a port nobody has written yet — and a user who
+/// double-clicks a card deserves to be told which of the two they are holding.
+///
+/// Read fresh rather than cached: it costs two environment lookups, and the canvas asks
+/// once per page.
+#[must_use]
+pub fn blocker() -> Option<&'static str> {
+    if supported() || !cfg!(target_os = "linux") {
+        return None;
+    }
+    let session_type = std::env::var("XDG_SESSION_TYPE").ok();
+    let wayland_display = std::env::var("WAYLAND_DISPLAY").ok();
+    display_server(session_type.as_deref(), wayland_display.as_deref())
 }
 
 /* ------------------------------------------------------------------ *
@@ -1421,7 +1492,7 @@ mod platform {
 
 #[cfg(not(windows))]
 mod platform {
-    use super::JumpOutcome;
+    use super::{JumpOutcome, WAYLAND, X11, blocker};
 
     /// The stub. It is a successful call that did nothing, not an error: the canvas asks
     /// [`super::supported`] before offering the entry, and a user who reaches this anyway
@@ -1432,13 +1503,133 @@ mod platform {
     /// the *application* to somebody holding one of the other two; what is Windows-only is
     /// this one feature, and the honest form of that is the one below.
     pub fn jump(_pid: u32) -> Result<JumpOutcome, String> {
-        Ok(JumpOutcome::nothing(
-            "jumping to a terminal is not available on this platform yet",
-        ))
+        Ok(JumpOutcome::nothing(sentence(blocker())))
+    }
+
+    /// One sentence per refusal (N-WP-L7).
+    ///
+    /// *Not available yet* was one sentence for three different situations, and on Wayland
+    /// it was the wrong one: *yet* promises a version where this works, and there will not
+    /// be one. The protocol does not let a client raise another client's window — that is
+    /// the design and not an omission — so the sentence says what the user can do instead.
+    /// X11 keeps the promise, because there the port is real work nobody has done.
+    ///
+    /// English, like every other [`JumpOutcome::message`]: the canvas translates the
+    /// refusal it paints from its own catalogues (`about.jump.wayland`,
+    /// `about.jump.x11`), and this string is what an `IPC` caller sees.
+    fn sentence(blocker: Option<&str>) -> &'static str {
+        match blocker {
+            Some(WAYLAND) => {
+                "on Wayland the compositor does not let an application raise another one's \
+                 window; use the terminal's own window switcher"
+            }
+            Some(X11) => "jumping to a terminal is not wired up for X11 yet",
+            _ => "jumping to a terminal is not available on this platform yet",
+        }
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::{WAYLAND, X11, jump, sentence};
+
+        #[test]
+        fn each_session_type_is_refused_in_its_own_words() {
+            let wayland = sentence(Some(WAYLAND));
+            let x11 = sentence(Some(X11));
+            let neither = sentence(None);
+
+            assert!(wayland.contains("compositor"), "{wayland}");
+            assert!(
+                !wayland.contains("yet"),
+                "Wayland is not a port that is coming: {wayland}"
+            );
+            assert!(x11.contains("X11") && x11.contains("yet"), "{x11}");
+            assert_ne!(wayland, x11);
+            assert_ne!(x11, neither);
+            assert_ne!(wayland, neither);
+        }
+
+        #[test]
+        fn an_unknown_session_gets_the_sentence_every_unported_platform_gets() {
+            assert_eq!(
+                sentence(None),
+                "jumping to a terminal is not available on this platform yet"
+            );
+            assert_eq!(sentence(Some("mir")), sentence(None));
+        }
+
+        #[test]
+        fn the_stub_answers_rather_than_fails() {
+            // A call that reaches here is a successful call that did nothing: `raised` is
+            // false, the rung is `none`, and the message is one of the three above.
+            let outcome = jump(std::process::id()).expect("the stub never errors");
+            assert!(!outcome.raised);
+            assert_eq!(outcome.rung, "none");
+            assert!(
+                [sentence(Some(WAYLAND)), sentence(Some(X11)), sentence(None)]
+                    .contains(&outcome.message.as_str()),
+                "{}",
+                outcome.message
+            );
+        }
     }
 }
 
 /// Bring the terminal hosting the Claude Code process `pid` to the front.
 pub fn jump(pid: u32) -> Result<JumpOutcome, String> {
     platform::jump(pid)
+}
+
+/* ------------------------------------------------------------------ *
+ * Which desktop is saying no
+ * ------------------------------------------------------------------ */
+
+#[cfg(test)]
+mod session_tests {
+    use super::{WAYLAND, X11, blocker, display_server, supported};
+
+    #[test]
+    fn logind_is_asked_first_and_can_name_either_one() {
+        assert_eq!(display_server(Some("wayland"), None), Some(WAYLAND));
+        assert_eq!(display_server(Some("x11"), None), Some(X11));
+        // The variable is written by whoever starts the session, so it is matched the way
+        // a name is matched and not the way a token is.
+        assert_eq!(display_server(Some("Wayland"), None), Some(WAYLAND));
+        assert_eq!(display_server(Some(" x11 "), None), Some(X11));
+    }
+
+    #[test]
+    fn a_wayland_socket_answers_when_the_seat_does_not() {
+        assert_eq!(display_server(None, Some("wayland-0")), Some(WAYLAND));
+        assert_eq!(
+            display_server(Some("tty"), Some("wayland-0")),
+            Some(WAYLAND)
+        );
+        assert_eq!(display_server(Some(""), Some("wayland-0")), Some(WAYLAND));
+    }
+
+    #[test]
+    fn x11_under_an_explicit_seat_is_not_overruled_by_a_socket() {
+        // XWayland leaves both set. The seat is the one that knows which it is, and a
+        // terminal drawn by XWayland is still a window a Wayland compositor owns.
+        assert_eq!(display_server(Some("x11"), Some("wayland-0")), Some(X11));
+    }
+
+    #[test]
+    fn a_session_that_says_nothing_is_not_guessed_at() {
+        assert_eq!(display_server(None, None), None);
+        assert_eq!(display_server(Some("tty"), None), None);
+        assert_eq!(display_server(Some("unspecified"), Some("")), None);
+        assert_eq!(display_server(Some(""), Some("   ")), None);
+    }
+
+    #[test]
+    fn a_platform_that_can_jump_has_nothing_to_explain() {
+        // On Windows the pair is (true, None); everywhere else the jump is off and only
+        // Linux has a word for why.
+        assert_eq!(supported(), cfg!(windows));
+        if supported() || !cfg!(target_os = "linux") {
+            assert_eq!(blocker(), None);
+        }
+    }
 }
