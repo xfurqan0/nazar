@@ -22,6 +22,7 @@ to find out by installing.
 | **Jump to the terminal** | yes, including the right tab in Windows Terminal | **not yet** | **no on Wayland** — the compositor forbids it; **not yet** on X11 |
 | **Signed** | no | ad-hoc only, **not** notarised | not applicable |
 | **Built on** | every push | on a tag or by hand | compiled and linked on every push; the `.AppImage` and `.deb` on a tag or by hand |
+| **Usage limits outside the canvas** | nazar-tray's tray icon | nazar-tray's menu-bar icon | nazar-tray's tray icon where the desktop draws one; on a stock GNOME, the [nazar-gnome](https://github.com/xfurqan0/nazar-gnome) Shell extension instead |
 
 The desktop *bundles* for macOS and Linux come out of the `desktop bundle` job in
 `.github/workflows/ci.yml`, which runs on a `v*` tag or on `workflow_dispatch` and not on
@@ -127,6 +128,15 @@ and the extension left disabled: `gnome-extensions info` reports *Enabled: no*,
 `busctl --user list` shows no `StatusNotifierWatcher`, and the shell's own icon is
 registered against nothing. Nothing in the application is wrong in that state and nothing
 in it can be fixed — the desktop simply has nobody to draw the icon.
+
+**The bead in the GNOME panel is a different program, and it is not this one's tray icon.**
+[nazar-gnome](https://github.com/xfurqan0/nazar-gnome) is a Shell extension that reads the
+same `~/.nazar/limits.json` Nazar's quota strip reads and draws the binding window in the
+top bar, with nazar-tray running as the engine (`nazar-tray --headless`) underneath it. It
+needs no AppIndicator bridge, because it is not an indicator: it is an extension drawing in
+the panel itself. What it does not do is give **Nazar** a tray icon — the paragraph above is
+still the whole story for this application's icon, and the two can be installed together or
+apart without either knowing about the other.
 
 **No ARM build yet.** The matrix builds x86-64 only.
 
