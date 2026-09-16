@@ -469,6 +469,8 @@ jobs:
             arch: arm64
             target: aarch64-unknown-linux-gnu
             bundles: appimage deb
+            # The one runner that builds its own `cargo-tauri`; see the step below.
+            cli-from-source: true
             artifacts: |
               target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
               target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
@@ -526,14 +528,28 @@ jobs:
       - name: Build
         run: npm run build
 
-      # `cargo-tauri`. Upstream publishes a prebuilt binary for five targets and
-      # `aarch64-unknown-linux-gnu` is not one of them, so on that runner the action falls
-      # through to cargo-binstall and cargo-binstall falls through to compiling the CLI —
-      # minutes this job pays on a tag and nothing pays on a push. Pinning a different
-      # installer per architecture would hide that behind two ways of doing one thing.
+      # `cargo-tauri`, and where it comes from is part of what a release is.
+      #
+      # `install-action` carries no manifest for `tauri-cli`, so it falls through to
+      # cargo-binstall, which finds upstream's own GitHub release — published by the Tauri
+      # project — for every target that release covers: both macOS ones, Windows, and
+      # x86-64 Linux. `aarch64-unknown-linux-gnu` is not among them, and binstall's next
+      # strategy is a community build service: *The package tauri-cli v2.11.4
+      # (aarch64-unknown-linux-gnu) has been downloaded from third-party source
+      # QuickInstall*, measured on the first arm64 bundle run.
+      #
+      # So that one runner compiles the CLI from the crates.io source instead. A file
+      # people download should be produced by a tool its own authors published, and this
+      # is the only entry in the matrix that installs anything differently — said out
+      # loud here and in the matrix rather than left to a warning in a log.
       - uses: taiki-e/install-action@v2
+        if: ${{ !matrix.cli-from-source }}
         with:
           tool: tauri-cli
+
+      - name: Build the Tauri CLI from source
+        if: ${{ matrix.cli-from-source }}
+        run: cargo install tauri-cli --locked
 
       # The bundle kinds are passed on the command line rather than left to the config so
       # that this matrix is the single place that says what each runner produces. The
