@@ -52,11 +52,11 @@ There is a second way to run the same thing: a desktop bundle, published beside 
 | | Windows | macOS | Linux |
 |---|---|---|---|
 | Browser mode (`npx @xfurqan0/nazar`) | yes | yes | yes |
-| Desktop bundle | `.exe` (NSIS, per-user) | `.dmg` (Apple silicon and Intel) | `.AppImage` and `.deb` |
+| Desktop bundle | `.exe` (NSIS, per-user) | `.dmg` (Apple silicon and Intel) | `.AppImage` and `.deb` (x86-64 and arm64) |
 | Tray icon | yes, with a menu | yes, in the menu bar | yes, menu only |
 | Jump to the terminal | **yes**, including the Windows Terminal tab | not yet | not yet |
 | Signed | no — SmartScreen warns once | ad-hoc only, not notarised — Gatekeeper warns | not applicable |
-| Tested in CI | every push | on a tag or by hand | on a tag or by hand |
+| Tested in CI | every push | on a tag or by hand | every push, on both architectures; the bundles on a tag or by hand |
 
 Windows is where the desktop app is developed and used daily; the other two are built and smoke-tested, not lived in yet.
 

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Linux desktop bundles for arm64.** A release now carries an `.AppImage` and
+  a `.deb` for `aarch64` beside the x86-64 pair — a Raspberry Pi 5 on 64-bit
+  Debian, an Ampere or Graviton machine, an arm64 virtual machine on an Apple
+  laptop — built natively on a GitHub-hosted arm64 runner rather than through a
+  cross-compiler, because a build for another architecture needs that
+  architecture's GTK, WebKit and AppIndicator to link against and a hand-made
+  sysroot is a thing to keep working for as long as the project lives. It is
+  built on the same `ubuntu-22.04` image as the x86-64 bundle and carries the
+  same glibc floor, 2.35. The shell is also compiled, linked and tested on
+  arm64 on every push, and `nazar-shell` gained an arm64 entry in its own
+  matrix: the architecture is checked rather than assumed.
+
 ### Changed
 
 - **One tour instead of twenty-three screenshots.** The README opened with a

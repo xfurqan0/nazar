@@ -7,7 +7,7 @@ visibility are one-way doors, and they belong to a person.
 Read it top to bottom the first time. Steps 1 to 5 are reversible; step 6
 onwards is not.
 
-**A release has six artifacts, and every one of them is cut from the same
+**A release has eight artifacts, and every one of them is cut from the same
 commit:**
 
 | Artifact | Platforms | Built by | Goes to |
@@ -17,16 +17,17 @@ commit:**
 | `nazar-desktop-macos-arm64` — one `.dmg` | macOS, Apple silicon | the `desktop bundle` job in CI, on the `v*` tag (step 6) | the GitHub Release only |
 | `nazar-desktop-macos-x64` — one `.dmg` | macOS, Intel | the same job, cross-compiled on the same runner | the GitHub Release only |
 | `nazar-desktop-linux-x64` — an `.AppImage` and a `.deb` | Linux, x86-64 | the same job | the GitHub Release only |
+| `nazar-desktop-linux-arm64` — an `.AppImage` and a `.deb` | Linux, arm64 | the same job, on an arm64 runner rather than a cross-compiler | the GitHub Release only |
 
 **One tarball for all three platforms, and a desktop bundle per platform.** The
 tarball is pure JavaScript and is the same file everywhere — one `npm publish`
 covers all three, and `npx @xfurqan0/nazar` opens the same canvas on each. The
 desktop shell is a native application, so it is one bundle per platform and per
 architecture, and only one of them is built where you are standing: the Windows
-installer in step 4b, on your own machine. The other four come out of the
+installer in step 4b, on your own machine. The other six come out of the
 `desktop bundle` job in `.github/workflows/ci.yml`, which runs on a `v*` tag and
 on `workflow_dispatch` and on nothing else — a macOS runner bills at ten times a
-Linux one and none of those four files decides whether a change is correct, so
+Linux one and none of those six files decides whether a change is correct, so
 they are built at the moment a release actually needs them. You download them
 from the tag's own run with `gh run download` (step 6) and attach them in step 9.
 `docs/PLATFORMS.md` is the page that says what each platform gets, and it is the
@@ -370,10 +371,10 @@ git push origin v0.1.0
 
 **The tag is also what builds the macOS and Linux bundles.** Pushing it starts a
 full CI run, and in that run — and in no run an ordinary push ever starts — the
-`desktop bundle` job produces the two `.dmg` files, the `.AppImage` and the
-`.deb`. It is a release build on three runners, so it is tens of minutes; it is
-started here rather than in step 9 for that reason, and npm can be published
-while it runs.
+`desktop bundle` job produces the two `.dmg` files and an `.AppImage` and a
+`.deb` for each of the two Linux architectures. It is a release build on four
+runners, so it is tens of minutes; it is started here rather than in step 9 for
+that reason, and npm can be published while it runs.
 
 ```bash
 gh run list --workflow ci.yml --branch v0.1.0 --limit 1   # the tag's own run
@@ -381,11 +382,12 @@ gh run watch <run-id> --exit-status                       # every job green
 gh run download <run-id> --dir bundles                    # one directory per artifact
 ls bundles/nazar-desktop-macos-arm64 \
    bundles/nazar-desktop-macos-x64 \
-   bundles/nazar-desktop-linux-x64
+   bundles/nazar-desktop-linux-x64 \
+   bundles/nazar-desktop-linux-arm64
 ```
 
 `gh run download` writes each artifact into a directory named after it, so the
-four files land under those three. GitHub delivers an artifact as a zip and a
+six files land under those four. GitHub delivers an artifact as a zip and a
 zip does not carry the executable bit, so the `.AppImage` arrives
 non-executable — a fact about the download rather than about the build, and the
 release notes tell the reader the `chmod +x` that answers it.
@@ -440,8 +442,8 @@ gh api -X PUT repos/xfurqan0/nazar/vulnerability-alerts
 
 ## 9. GitHub Release
 
-All six artifacts go on the one release: the tarball, the Windows installer you
-built in step 4b, and the four bundles you downloaded in step 6.
+All eight artifacts go on the one release: the tarball, the Windows installer
+you built in step 4b, and the six bundles you downloaded in step 6.
 
 ```bash
 gh release create v0.1.0 --title "Nazar 0.1.0" --notes-file docs/release-notes-0.1.0.md \
@@ -450,13 +452,16 @@ gh release create v0.1.0 --title "Nazar 0.1.0" --notes-file docs/release-notes-0
   bundles/nazar-desktop-macos-arm64/*.dmg \
   bundles/nazar-desktop-macos-x64/*.dmg \
   bundles/nazar-desktop-linux-x64/*.AppImage \
-  bundles/nazar-desktop-linux-x64/*.deb
+  bundles/nazar-desktop-linux-x64/*.deb \
+  bundles/nazar-desktop-linux-arm64/*.AppImage \
+  bundles/nazar-desktop-linux-arm64/*.deb
 ```
 
-`gh release upload v0.1.0 <file>` adds one that was missed. Six downloads means
-six things a reader has to tell apart, so the notes name each one by the machine
-it is for: the two `.dmg` files differ by architecture and by nothing else, and
-the `.AppImage` and the `.deb` answer different questions on the same
+`gh release upload v0.1.0 <file>` adds one that was missed. Eight downloads
+means eight things a reader has to tell apart, so the notes name each one by the
+machine it is for: the `.dmg` files differ by architecture and by nothing else,
+the Linux pairs differ by architecture — `uname -m` says which — and the
+`.AppImage` and the `.deb` answer different questions on the same
 distribution.
 
 Three of them warn on first run, and none of the three warnings means anything
@@ -497,7 +502,8 @@ runtime is bundled.
   Open**, then Open again in the dialog, and macOS remembers the decision for
   that copy.
 - **Linux** — an `.AppImage` that runs anywhere with a recent enough glibc, and
-  a `.deb` for Debian and Ubuntu that declares its dependencies. A download
+  a `.deb` for Debian and Ubuntu that declares its dependencies, in an x86-64
+  and an arm64 flavour each; `uname -m` says which pair is yours. A download
   arrives as a zip and a zip carries no executable bit, so the AppImage needs
   it back: `chmod +x nazar-desktop_*.AppImage`.
 

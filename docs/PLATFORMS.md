@@ -14,14 +14,15 @@ to find out by installing.
 | | Windows | macOS | Linux |
 |---|---|---|---|
 | **Browser mode** (`npx @xfurqan0/nazar`) | yes | yes | yes |
-| **Desktop bundle** | `.exe` (NSIS, per-user install) | `.dmg` — one for Apple silicon, one for Intel | `.AppImage` and `.deb` (x86-64); an `.rpm` builds but is not shipped |
+| **Desktop bundle** | `.exe` (NSIS, per-user install) | `.dmg` — one for Apple silicon, one for Intel | `.AppImage` and `.deb`, one pair per architecture; an `.rpm` builds but is not shipped |
+| **Architectures** | x86-64 | arm64 (Apple silicon) and x86-64 (Intel) | x86-64 and arm64 |
 | **Tray icon** | yes; left click shows the window, right click opens the menu | yes, in the menu bar, drawn as a template icon so it follows light and dark | yes, as an AppIndicator **menu only** — see below |
 | **Close minimises to the tray** | yes | yes | yes |
 | **No server left behind** | yes, a job object | yes, the child watches its parent | yes, `PR_SET_PDEATHSIG` and the same watch |
 | **Start at login** | yes, *start with Windows* | yes, *start with macOS* (a LaunchAgent) | yes, *start at login* (a `.desktop` entry in `~/.config/autostart`) |
 | **Jump to the terminal** | yes, including the right tab in Windows Terminal | **not yet** | **no on Wayland** — the compositor forbids it; **not yet** on X11 |
 | **Signed** | no | ad-hoc only, **not** notarised | not applicable |
-| **Built on** | every push | on a tag or by hand | compiled and linked on every push; the `.AppImage` and `.deb` on a tag or by hand |
+| **Built on** | every push | on a tag or by hand | compiled, linked and tested on every push, on both architectures; the `.AppImage` and `.deb` on a tag or by hand |
 | **Usage limits outside the canvas** | nazar-tray's tray icon | nazar-tray's menu-bar icon | nazar-tray's tray icon where the desktop draws one; on a stock GNOME, the [nazar-gnome](https://github.com/xfurqan0/nazar-gnome) Shell extension instead |
 
 The desktop *bundles* for macOS and Linux come out of the `desktop bundle` job in
@@ -138,7 +139,22 @@ the panel itself. What it does not do is give **Nazar** a tray icon — the para
 still the whole story for this application's icon, and the two can be installed together or
 apart without either knowing about the other.
 
-**No ARM build yet.** The matrix builds x86-64 only.
+**There is an arm64 build, and it is built on an arm64 machine.** The release carries an
+`.AppImage` and a `.deb` for `aarch64` beside the x86-64 pair — a Raspberry Pi 5 running a
+64-bit Debian, an Ampere or Graviton desktop, an arm64 virtual machine on an Apple laptop —
+and the download to take is the one matching `uname -m` (`aarch64`, or `x86_64`). Both come
+off GitHub's own arm64 and x86-64 runners rather than out of a cross-compiler: a build for
+another architecture needs that architecture's GTK, WebKit and AppIndicator to link
+against, and a sysroot assembled to hold them is a thing to keep working for as long as the
+project lives, where a runner already has one. The arm64 bundle is built on the same
+`22.04` image as the x86-64 one and carries the same glibc floor, 2.35.
+
+The shell is also **compiled, linked and tested on arm64 on every push** — `desktop shell
+— build, test (linux arm64)` in `.github/workflows/ci.yml`, alongside the pure crate's own
+arm64 entry — which is what makes the sentence above a measurement rather than a hope. The
+lints are not repeated there: nothing in this repository is conditional on the
+architecture, so what a second runner is for is the link and the `libc` calls, not
+`clippy`.
 
 ### Fedora, and the AppIndicator it does not have
 

@@ -91,13 +91,18 @@ jobs:
   # and tests on all three systems from the first commit. That is what makes the macOS and
   # Linux ports of the jump ladder a step rather than a rewrite, and it is checked now
   # rather than on the day somebody attempts one.
+  #
+  # N-WP-L9 added a fourth entry, and the cheapest possible place to ask the question:
+  # `ubuntu-24.04-arm` is a GitHub-hosted arm64 runner, free on public repositories, and
+  # this job needs a toolchain and nothing else. An architecture nobody compiles for is an
+  # architecture nobody knows about.
   shell-core:
     name: shell logic / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        os: [windows-latest, ubuntu-latest, macos-latest, ubuntu-24.04-arm]
 
     steps:
       - name: Checkout
@@ -261,6 +266,68 @@ jobs:
       - name: Test the shell
         run: cargo test -p nazar-desktop
 
+  # N-WP-L9. The same shell, linked and tested one architecture over.
+  #
+  # **Why a second job and not a matrix entry on `desktop-linux`.** That job is the Linux
+  # *gate*, and half of what it runs — `cargo fmt`, `cargo clippy --workspace` — has no
+  # architecture in it: there is not a single `cfg(target_arch)` in this tree, so a second
+  # clippy would buy nothing and cost every push the minutes it takes. What an arm64
+  # runner buys is the two things a check cannot fake: a link against another ABI's GTK,
+  # WebKit and AppIndicator, and the `libc` calls in `server.rs` — process groups,
+  # `PR_SET_PDEATHSIG`, the signal numbers — running on the architecture whose constants
+  # they were compiled against.
+  #
+  # **Why `ubuntu-24.04-arm` and not `-22.04-arm`**, when the bundle below insists on the
+  # older image: this job answers whether the code is right and ships nothing, and only a
+  # file somebody downloads has a glibc floor to keep.
+  desktop-linux-arm:
+    name: desktop shell — build, test (linux arm64)
+    runs-on: ubuntu-24.04-arm
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: desktop-linux-arm
+
+      # The same list as the x86-64 job above; Ubuntu carries every one of these for
+      # arm64, which is the short answer to whether this port is a port at all.
+      - name: Install the GTK and WebKit stack
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            curl \
+            file \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libssl-dev \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            wget
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Build and stage the package
+        run: node scripts/build-desktop.mjs --stage
+
+      - name: Build the shell
+        run: cargo build -p nazar-desktop
+
+      - name: Test the shell
+        run: cargo test -p nazar-desktop
+
   # A separate job, and it may fail without hiding a real regression. It uploads the
   # installer; it does not decide whether the change was right.
   installer:
@@ -376,6 +443,21 @@ jobs:
             artifacts: |
               target/x86_64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
               target/x86_64-unknown-linux-gnu/release/bundle/deb/*.deb
+          # N-WP-L9. The same image one architecture over, on a GitHub-hosted arm64
+          # runner — free on public repositories — and natively, which is why there is no
+          # cross-compilation apparatus anywhere in this file: a GTK and WebKit sysroot
+          # for a second architecture is a larger thing to keep working than a runner
+          # that already has one. `ubuntu-22.04-arm` and not the newer image for the
+          # glibc reason directly above; an arm64 machine running Debian 12 is as common
+          # as an x86-64 one, and the floor is a property of the runner either way.
+          - os: ubuntu-22.04-arm
+            label: linux
+            arch: arm64
+            target: aarch64-unknown-linux-gnu
+            bundles: appimage deb
+            artifacts: |
+              target/aarch64-unknown-linux-gnu/release/bundle/appimage/*.AppImage
+              target/aarch64-unknown-linux-gnu/release/bundle/deb/*.deb
 
     steps:
       - name: Checkout
@@ -425,6 +507,11 @@ jobs:
       - name: Build
         run: npm run build
 
+      # `cargo-tauri`. Upstream publishes a prebuilt binary for five targets and
+      # `aarch64-unknown-linux-gnu` is not one of them, so on that runner the action falls
+      # through to cargo-binstall and cargo-binstall falls through to compiling the CLI —
+      # minutes this job pays on a tag and nothing pays on a push. Pinning a different
+      # installer per architecture would hide that behind two ways of doing one thing.
       - uses: taiki-e/install-action@v2
         with:
           tool: tauri-cli
