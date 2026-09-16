@@ -547,9 +547,14 @@ jobs:
         with:
           tool: tauri-cli
 
+      # `--force`, and it is not belt and braces: the cache above restores `~/.cargo/bin`,
+      # and the first run of this job put a binstalled CLI in there. Without it `cargo
+      # install` answers *package `tauri-cli v2.11.4` is already installed* in half a
+      # second and the bundle is built by whatever the cache happened to hold — measured,
+      # exactly once. The compile is the point, so it is asked for unconditionally.
       - name: Build the Tauri CLI from source
         if: ${{ matrix.cli-from-source }}
-        run: cargo install tauri-cli --locked
+        run: cargo install tauri-cli --locked --force
 
       # The bundle kinds are passed on the command line rather than left to the config so
       # that this matrix is the single place that says what each runner produces. The
