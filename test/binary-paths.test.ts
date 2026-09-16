@@ -27,6 +27,7 @@ import { gzipSync } from 'node:zlib';
 import {
   RULES,
   arMembers,
+  borrowed,
   decompress,
   findLeaks,
   rpmPayload,
@@ -77,6 +78,13 @@ test('the account name needs a boundary, and the home directory does not', () =>
   assert.equal(account('~/2-notes-adaOS'), 0);
   assert.equal(account('adaptive-layout'), 0);
   assert.equal(account('nomada'), 0);
+  // An underscore is part of a word too, which a CI runner proved: its account is
+  // `runner`, and GStreamer's `runner_run` and `runner->async_tasks` are symbols rather
+  // than anybody's home directory.
+  assert.equal(account('ada_run'), 0);
+  assert.equal(account('gst_ada_thread'), 0);
+  // But an arrow is not part of one.
+  assert.equal(account('ada->tasks'), 1);
 
   const home = findLeaks(`${HOME}/nazar/target`, rules).filter((one) => one.rule === 'this-home');
   assert.equal(home.length, 1);
@@ -145,6 +153,20 @@ test('nothing a scanner cannot open is reported as empty', () => {
   assert.equal(decompress(Buffer.from('\u00fd7zXZ\u0000', 'latin1')), undefined);
   assert.equal(rpmPayload(Buffer.alloc(4096, 0x41)), undefined);
   assert.deepEqual(arMembers(Buffer.from('not an archive')), []);
+});
+
+test('a library the bundler copied in is not this build\'s to be clean', () => {
+  // `libgtk-3.so.0` has carried `/home/<name>/Projects/gtk/…` — upstream GTK's own artist
+  // — in every copy for years, and an AppImage is those libraries in one file. Reported,
+  // never failed: no flag in this repository can change a binary it did not compile.
+  assert.equal(borrowed('target/release/bundle/appimage/nazar-desktop.AppDir/usr/lib/libgtk-3.so.0'), true);
+  assert.equal(borrowed('/x/libgstvideo-1.0.so'), true);
+  assert.equal(borrowed('/x/libsomething.dylib'), true);
+  assert.equal(borrowed('/x/nazar-desktop_0.1.0_amd64.AppImage'), true);
+  // Ours, wherever it is standing — including inside the AppDir the bundler built.
+  assert.equal(borrowed('target/release/nazar-desktop'), false);
+  assert.equal(borrowed('target/release/bundle/deb/nazar-desktop_0.1.0_amd64.deb'), false);
+  assert.equal(borrowed('target/debug/nazar-desktop.exe'), false);
 });
 
 /** One `ar` member: sixty bytes of header, then the data, padded to an even length. */

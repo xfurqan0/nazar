@@ -19,6 +19,14 @@
 // scanned as well. A container this script cannot open is a **failure**, never a pass: a
 // check that cannot see inside must not report that what it could not see is clean.
 //
+// **What it does not hold to zero.** The AppImage bundler copies the shared libraries the
+// binary links — GTK, WebKit, GStreamer — out of the distribution and packs them beside it,
+// and those carry their own builders' paths: `libgtk-3.so.0` has held
+// `/home/<name>/Projects/gtk/…` for years, and it is upstream GTK's artist rather than
+// anybody here. Those files are marked `note` and reported without failing the run, because
+// no flag in this repository can change a binary it did not compile. Everything this build
+// produced is held to zero.
+//
 // **What it cannot read**, and says so rather than implying otherwise. An `.AppImage` is a
 // squashfs image and an NSIS installer compresses its payload with LZMA; neither opens
 // without a tool this repository does not depend on. Both are reported as *read as bytes
@@ -89,12 +97,14 @@ export const RULES = [
  * The lesson `packages/core/test/history-leak.test.ts` learned the hard way: an account
  * name checked with `includes` fires on every longer name that contains it, and a project
  * directory called `adaOS` is not the account `ada`. A match is only a match when neither
- * side of it is a letter or a digit.
+ * side of it is a letter, a digit **or an underscore** — the last one measured on a CI
+ * runner, whose account is `runner` and whose GStreamer carries the symbols `runner_run`
+ * and `runner->async_tasks`. An identifier is one word however it is spelled.
  */
 function standsAlone(text, at, length) {
   const before = at === 0 ? '' : text[at - 1];
   const after = text[at + length] ?? '';
-  return !/[A-Za-z0-9]/.test(before) && !/[A-Za-z0-9]/.test(after);
+  return !/[A-Za-z0-9_]/.test(before) && !/[A-Za-z0-9_]/.test(after);
 }
 
 /** Escape a string so it can be dropped into a regular expression as a literal. */
@@ -283,6 +293,29 @@ export function open(file) {
   return { parts };
 }
 
+/**
+ * Was this file built here, or copied in from the machine underneath?
+ *
+ * The AppImage bundler collects the shared libraries the binary links — GTK, WebKit,
+ * GStreamer — out of the distribution and packs them beside it, and those carry *their*
+ * builders' paths. Measured on an Ubuntu runner: `libgtk-3.so.0` holds
+ * `/home/<name>/Projects/gtk/gtk/theme/Adwaita/…`, which is upstream GTK's own artist and
+ * has been in every copy of GTK for years.
+ *
+ * Nothing in this repository can change that, and no flag will. So a borrowed file is
+ * *reported* and does not fail the check, while everything this build compiled is held to
+ * zero. The `.AppImage` itself is in the same class, because what it is is those
+ * libraries in one file.
+ */
+export function borrowed(file) {
+  const name = basename(file).toLowerCase();
+  if (/\.so(\.\d+)*$/.test(name) || name.endsWith('.dylib') || name.endsWith('.appimage')) {
+    return true;
+  }
+  // The AppDir's own tree: `usr/lib` is what the bundler filled, `usr/bin` is ours.
+  return /\.appdir\//i.test(file.replaceAll('\\', '/'));
+}
+
 /** Every file under a path, or the path itself when it is one. */
 export function walk(target) {
   const info = statSync(target);
@@ -349,15 +382,25 @@ function main() {
   const report = [];
   let findings = 0;
   let problems = 0;
+  let noted = 0;
 
   for (const file of files) {
     const { parts, problem, skipped } = open(file);
     const found = parts.flatMap((part) =>
       scanBuffer(part.buffer, rules).map((one) => ({ ...one, part: part.label })),
     );
-    findings += found.length;
-    if (problem !== undefined) problems += 1;
-    report.push({ file: relative(REPO, file), bytes: statSync(file).size, problem, skipped, found });
+    const fromElsewhere = borrowed(file);
+    if (fromElsewhere) noted += found.length;
+    else findings += found.length;
+    if (problem !== undefined && !fromElsewhere) problems += 1;
+    report.push({
+      file: relative(REPO, file),
+      bytes: statSync(file).size,
+      problem,
+      skipped,
+      found,
+      borrowed: fromElsewhere,
+    });
   }
 
   if (asJson) {
@@ -366,7 +409,11 @@ function main() {
     for (const entry of report) {
       const size = `${(entry.bytes / (1024 * 1024)).toFixed(1)} MB`;
       const verdict = entry.found.length === 0 ? 'clean' : `${entry.found.length} found`;
-      process.stdout.write(`${entry.found.length === 0 ? '  ok  ' : 'LEAK  '}${entry.file}  (${size}, ${verdict})\n`);
+      const mark = entry.found.length === 0 ? '  ok  ' : entry.borrowed ? 'note  ' : 'LEAK  ';
+      process.stdout.write(`${mark}${entry.file}  (${size}, ${verdict})\n`);
+      if (entry.found.length > 0 && entry.borrowed) {
+        process.stdout.write('      not built here: the paths below belong to whoever built it\n');
+      }
       if (entry.problem !== undefined) {
         process.stdout.write(`      unreadable: ${entry.problem}\n`);
       }
@@ -401,8 +448,9 @@ function main() {
   }
 
   if (!asJson) {
+    const aside = noted > 0 ? `, and ${noted} in files this build did not compile` : '';
     process.stdout.write(
-      `\nno build-machine paths in ${files.length} artifact${files.length === 1 ? '' : 's'}\n`,
+      `\nno build-machine paths in ${files.length} artifact${files.length === 1 ? '' : 's'}${aside}\n`,
     );
   }
 }

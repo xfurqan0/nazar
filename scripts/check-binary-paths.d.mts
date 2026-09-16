@@ -46,6 +46,9 @@ export function decompress(data: Buffer): Buffer | undefined;
 /** The decompressed payload of an `.rpm`, found by its magic bytes. */
 export function rpmPayload(buffer: Buffer): Buffer | undefined;
 
+/** Whether a file was copied in from the machine rather than compiled here. */
+export function borrowed(file: string): boolean;
+
 /** Every file under a path, or the path itself when it is one. */
 export function walk(target: string): string[];
 

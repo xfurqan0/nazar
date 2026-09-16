@@ -327,7 +327,9 @@ It reads the bytes in both encodings a compiler can leave a path in, unpacks a
 `.deb` and an `.rpm` to read the binary inside them, and exits non-zero on the
 first Windows profile, Linux home or macOS home directory it finds — including
 this machine's own account name, matched on a word boundary so that a project
-folder whose name merely contains it is not a false alarm. **An NSIS installer
+folder whose name merely contains it is not a false alarm. A library the AppImage
+bundler copied out of the distribution is marked `note` rather than failed: those
+carry their own builders' paths and nothing here can change them. **An NSIS installer
 compresses its payload and the scan says so rather than passing it silently**:
 run the scan over `target/release/nazar-desktop.exe` as well, which is the file
 the installer carries.
