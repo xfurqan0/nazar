@@ -28,6 +28,12 @@
 //! `hosts_tabs` are the shipped ones, so a probe that disagrees with a jump is a bug in
 //! the copy above and nowhere else.
 
+// `dead_code` is allowed for this module and this module only. `src/jump.rs` is compiled
+// a second time here, without the `main.rs` that calls the rest of it: N-WP-L7's
+// `blocker` is read by `shell_info`, which is not part of an example, and a diagnostic
+// that had to be consulted every time the shipped file grew a function would be a
+// diagnostic nobody keeps. The lint still fails the build for the shell itself.
+#[allow(dead_code)]
 #[cfg(windows)]
 #[path = "../src/jump.rs"]
 mod jump;
