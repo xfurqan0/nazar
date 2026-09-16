@@ -288,13 +288,26 @@ pub fn simplify(path: &Path) -> PathBuf {
     }
 }
 
-/// Ask the operating system for a port nobody is using, then let it go.
-fn free_port() -> Result<u16, String> {
+/// Ask the operating system for a port nobody is using, and hold it until the caller
+/// drops the listener.
+///
+/// Split out of [`free_port`] so that the two halves of that promise can be checked one
+/// at a time: while this listener is alive the port is provably taken, and `free_port`
+/// is this plus the drop. Nothing in the shell keeps a reservation — the child is the
+/// one that binds — which is why the window the module note describes exists at all, and
+/// why [`ATTEMPTS`] is more than one.
+fn reserve_port() -> Result<(TcpListener, u16), String> {
     let listener = TcpListener::bind(("127.0.0.1", 0)).map_err(|error| error.to_string())?;
     let port = listener
         .local_addr()
         .map_err(|error| error.to_string())?
         .port();
+    Ok((listener, port))
+}
+
+/// Ask the operating system for a port nobody is using, then let it go.
+fn free_port() -> Result<u16, String> {
+    let (listener, port) = reserve_port()?;
     drop(listener);
     Ok(port)
 }
@@ -930,6 +943,62 @@ fn signal_group(pid: u32, signal: libc::c_int) {
 mod tests {
     use super::*;
 
+    /// Serialises every test below that asks the operating system for an ephemeral port.
+    ///
+    /// **The flake this exists for.** [`free_port`] binds a port, reads the number and
+    /// lets it go; that is the whole job, and the module note above says plainly that
+    /// something else can take the number before the child binds it — [`ATTEMPTS`] is
+    /// what pays for that window. So a test that asserts the number comes straight back
+    /// is asserting something the shell does not claim, and in a binary running ninety
+    /// tests on as many threads the something else is usually *another test*: measured
+    /// on this laptop, one rebind in twenty thousand is refused while eight threads take
+    /// ephemeral ports beside it. CI found it once, on a commit that changed one
+    /// Markdown file — *the probe held on to 42691* — and the re-run was green, which is
+    /// the signature of a race rather than a regression.
+    ///
+    /// Every acquisition below takes it, including the ones whose own test would be
+    /// correct without it: a lock one side skips is not a lock. It covers *acquisition*
+    /// only, though — a port another test is already holding can never be handed to this
+    /// one, so there is nothing to serialise once a listener is alive, and that is also
+    /// why no guarded section here calls another one.
+    fn ports_to_ourselves() -> std::sync::MutexGuard<'static, ()> {
+        static ONE_AT_A_TIME: Mutex<()> = Mutex::new(());
+        ONE_AT_A_TIME
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    /// A claim about a port [`free_port`] has just let go of, attempted until its premise
+    /// holds.
+    ///
+    /// Two stealers, two answers. The guard above settles the one this binary causes
+    /// itself, and settles it completely — measured on this laptop with eight threads
+    /// taking ephemeral ports beside it, one rebind in twenty thousand was refused
+    /// without the guard and none in two hundred thousand with it. A port is a
+    /// machine-wide resource all the same, and nothing a test does can stop another
+    /// program on the runner taking one in the microsecond it is going spare. So a check
+    /// whose *premise* is "the number is still free" says so by being attempted again,
+    /// with the patience and for exactly the window [`ATTEMPTS`] gives the shell.
+    ///
+    /// A probe that really did keep its listener looks nothing like a stranger: it holds
+    /// every port it hands out, every attempt is refused, and the assertion fires.
+    fn on_a_port_nobody_holds(claim: &str, check: impl Fn(u16) -> bool) {
+        for attempt in 1..=ATTEMPTS {
+            let taken = {
+                let _ours = ports_to_ourselves();
+                let port = free_port().expect("the machine has a spare port");
+                if check(port) {
+                    return;
+                }
+                port
+            };
+            assert!(
+                attempt < ATTEMPTS,
+                "{claim} — and {taken} was gone again on the last of {ATTEMPTS} attempts"
+            );
+        }
+    }
+
     /* ---- N-WP-L2: the child does not outlive the shell --------------- */
 
     /// The property [`ServerHandle::stop`] relies on, checked against a real child
@@ -1074,17 +1143,34 @@ mod tests {
         assert!(still_the_parent(0, 1));
     }
 
+    /// What [`free_port`] promises, in its two halves — and neither half is "the number
+    /// can be bound again a moment later". This test used to assert that, and the shell
+    /// itself does not believe it: see [`ATTEMPTS`], and [`on_a_port_nobody_holds`].
     #[test]
     fn a_free_port_is_actually_free() {
-        let port = free_port().expect("the machine has a spare port");
-        assert!(port > 0);
-        // Binding it again immediately is the whole contract: the probe released it.
-        let bound = TcpListener::bind(("127.0.0.1", port));
-        assert!(bound.is_ok(), "the probe held on to {port}");
+        // Held: the number names a listener of ours rather than a guess. Nothing on this
+        // machine can make this half flicker — the reservation is alive while it is
+        // asked, so the answer is the kernel's own bookkeeping.
+        let (reservation, reserved) = reserve_port().expect("the machine has a spare port");
+        assert!(reserved > 0);
+        assert!(
+            !port_is_free(reserved),
+            "the reservation does not hold the {reserved} it reports"
+        );
+        drop(reservation);
+
+        // Released: `free_port` is that reservation plus the drop, and the drop is the
+        // half the shell leans on — a child cannot bind a port its own parent is still
+        // sitting on.
+        on_a_port_nobody_holds("the probe held on to the port it returned", |port| {
+            port > 0 && port_is_free(port)
+        });
     }
 
     #[test]
     fn probing_a_port_with_nothing_on_it_is_an_error_rather_than_a_wait() {
+        // The probe must find nothing there, so nothing may arrive in the meantime.
+        let _ours = ports_to_ourselves();
         let port = free_port().expect("a spare port");
         let started = Instant::now();
         assert!(probe(port, "/api/state").is_err());
@@ -1144,7 +1230,10 @@ mod tests {
 
     impl Canned {
         fn answering(response: &'static str) -> Self {
-            let listener = TcpListener::bind(("127.0.0.1", 0)).expect("a spare port");
+            let listener = {
+                let _ours = ports_to_ourselves();
+                TcpListener::bind(("127.0.0.1", 0)).expect("a spare port")
+            };
             let port = listener.local_addr().expect("an address").port();
             listener
                 .set_nonblocking(true)
@@ -1205,8 +1294,12 @@ mod tests {
 
     #[test]
     fn a_stored_port_nobody_holds_is_bound_again_which_is_what_keeps_the_workspace() {
-        let port = free_port().expect("a spare port");
-        assert_eq!(plan_port(Some(port), VERSION), Some(Plan::Bind(port)));
+        // The name of the test is its own premise: somebody taking the number in between
+        // makes this the right plan for a different question, not a wrong plan for this
+        // one. Same shape as the flake above, and the same answer.
+        on_a_port_nobody_holds("a stored port nobody holds was not planned for", |port| {
+            plan_port(Some(port), VERSION) == Some(Plan::Bind(port))
+        });
     }
 
     #[test]
@@ -1234,7 +1327,10 @@ mod tests {
     fn a_stored_port_held_by_something_that_is_not_nazar_is_given_up_on() {
         // Two shapes of "not us": a socket that answers nothing at all, and one that
         // answers HTTP without the header. Neither may be adopted.
-        let silent = TcpListener::bind(("127.0.0.1", 0)).expect("a spare port");
+        let silent = {
+            let _ours = ports_to_ourselves();
+            TcpListener::bind(("127.0.0.1", 0)).expect("a spare port")
+        };
         let port = silent.local_addr().expect("an address").port();
         assert_eq!(
             plan_port(Some(port), VERSION),
