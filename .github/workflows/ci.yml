@@ -211,7 +211,16 @@ jobs:
       # bundler needs and nothing here bundles.
       - name: Install the GTK and WebKit stack
         run: |
-          sudo apt-get update
+          # `apt-get update` exits 100 when a mirror is part-way through a sync, and it
+          # is not a broken build: *File has unexpected size … Mirror sync in progress?*,
+          # measured on `ports.ubuntu.com` the first time the arm64 job below ran. The
+          # weather is waited out rather than failed on; a package that is genuinely
+          # missing still stops the install underneath.
+          for attempt in 1 2 3; do
+            sudo apt-get update && break
+            echo "apt-get update failed (attempt $attempt of 3); giving the mirror a moment" >&2
+            sleep 20
+          done
           sudo apt-get install -y \
             build-essential \
             curl \
@@ -298,7 +307,12 @@ jobs:
       # arm64, which is the short answer to whether this port is a port at all.
       - name: Install the GTK and WebKit stack
         run: |
-          sudo apt-get update
+          # The same three attempts as the job above, and for the same mirror.
+          for attempt in 1 2 3; do
+            sudo apt-get update && break
+            echo "apt-get update failed (attempt $attempt of 3); giving the mirror a moment" >&2
+            sleep 20
+          done
           sudo apt-get install -y \
             build-essential \
             curl \
@@ -479,7 +493,12 @@ jobs:
       - name: Install the GTK and WebKit stack
         if: runner.os == 'Linux'
         run: |
-          sudo apt-get update
+          # The same three attempts as the job above, and for the same mirror.
+          for attempt in 1 2 3; do
+            sudo apt-get update && break
+            echo "apt-get update failed (attempt $attempt of 3); giving the mirror a moment" >&2
+            sleep 20
+          done
           sudo apt-get install -y \
             build-essential \
             curl \

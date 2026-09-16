@@ -28,8 +28,9 @@ to find out by installing.
 The desktop *bundles* for macOS and Linux come out of the `desktop bundle` job in
 `.github/workflows/ci.yml`, which runs on a `v*` tag or on `workflow_dispatch` and not on
 an ordinary push. A macOS runner costs ten times a Linux one per minute and none of these
-three artifacts decides whether a change is correct — the jobs that do (`build`, `pack
-smoke`, `shell logic`, `desktop shell — lint, build, test (linux)`) run on every push.
+four artifacts decides whether a change is correct — the jobs that do (`build`, `pack
+smoke`, `shell logic`, `desktop shell — lint, build, test (linux)` and its arm64 sibling)
+run on every push.
 
 The Linux shell itself is not in that arrangement any more. It is linted and **linked** on
 every push, because clippy is a check and not a link: it never asks whether the GTK,
@@ -83,7 +84,7 @@ for everybody, and the CI matrix produces both from the same runner either way.
   satisfy it.
 
   ```sh
-  sudo apt install ./nazar-desktop_0.1.0_amd64.deb
+  sudo apt install ./nazar-desktop_0.1.0_amd64.deb     # or _arm64.deb
   ```
 
 - **There is no `.rpm` in a release**, and the bundler will build one: `--bundles rpm`
