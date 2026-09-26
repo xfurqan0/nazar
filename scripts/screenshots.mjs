@@ -1265,12 +1265,20 @@ export function freePort() {
  * machine: every scenario is a demo canvas whose task lines come from
  * `DEMO_TASKS` in the browser, so the flag costs the pictures nothing and
  * removes the one path by which a real sentence could reach one.
+ *
+ * `env` is laid over the inherited environment. `test/canvas-boot.test.ts`
+ * uses it to give the server an empty home, so a test run draws nothing that
+ * is on the machine running it.
  */
-export async function startServer(port) {
+export async function startServer(port, env = {}) {
   const child = spawn(
     process.execPath,
     [path.join(REPO, 'bin', 'nazar.mjs'), '--port', String(port), '--no-open', '--no-task-text'],
-    { cwd: REPO, stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, NAZAR_UI_DIR: UI_DIR } },
+    {
+      cwd: REPO,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, NAZAR_UI_DIR: UI_DIR, ...env },
+    },
   );
   let output = '';
   const origin = await new Promise((resolve, reject) => {
@@ -1297,7 +1305,7 @@ export async function startServer(port) {
 }
 
 /** Launch a headless browser and hand back its DevTools endpoint. */
-async function startBrowser(executable, profile) {
+export async function startBrowser(executable, profile) {
   const child = spawn(
     executable,
     [

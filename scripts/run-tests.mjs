@@ -51,6 +51,7 @@ export const ROOT_TESTS = [
   'test/hermes-columns.test.ts',
   'test/packaging.test.ts',
   'test/test-runner.test.ts',
+  'test/canvas-boot.test.ts',
 ];
 
 /**

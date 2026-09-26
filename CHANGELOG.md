@@ -44,6 +44,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search of the rendered page for a home directory or a user name before every
   beat, which fails the run rather than publishing one.
 
+### Fixed
+
+- **A drawer left open no longer stops the canvas connecting.** Opening the
+  menu drawer and coming back to the page later — a reload, a new launch of the
+  desktop app — left the canvas on *connecting…* for good, and a reload did not
+  help. Restoring the remembered drawer asked for a frame from a function the
+  page had not defined yet; the page threw before it opened its stream, and the
+  drawer was still remembered as open on the next load. It was in every build
+  since the first, 0.1.0 included, in the browser and in the desktop app alike,
+  and it looked like a network fault because the server was answering the whole
+  time. On a build that still has it, closing the drawer with the menu button
+  and reloading gets the canvas back.
+
+  The page now puts the drawer back without reporting a change, which is what a
+  restore is. And `npm test` gained its first browser test, which loads the real
+  bundle from the real server in a headless Chrome or Edge, opens the drawer,
+  reloads, and fails if anything threw or the stream did not come up — `start()`,
+  the function that builds the whole page, had never run in a test before.
+
 ## [0.1.0] — 2026-09-13
 
 First release. A local canvas that draws every running Claude Code session on

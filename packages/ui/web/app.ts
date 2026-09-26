@@ -1074,7 +1074,9 @@ function start(): void {
       if (open) schedule();
     },
   });
-  sidebar.set(layout.sidebar, false);
+  // A restore and not a `set`: `onChange` above reaches `schedule`, which is
+  // not declared yet, and a remembered drawer is not a change to report.
+  sidebar.restore(layout.sidebar);
 
   /*
    * N-WP15a: the everyday switch. N-WP15b: and it is a whole frame.

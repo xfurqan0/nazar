@@ -307,6 +307,12 @@ export function install(): void {
        * argument in front of it.
        */
       createElementNS: (_ns: string, tag: string): FakeElement => new FakeElement(tag),
+      /*
+       * The drawer marks the page with `has-sidebar` so the canvas can make
+       * room for it, and that class goes on `document.body`. One element and
+       * no more: nothing is appended to it, and nothing reads it but a test.
+       */
+      body: new FakeElement('body'),
     };
   }
   if (globals.window === undefined) globals.window = { innerWidth: 1280, innerHeight: 800 };

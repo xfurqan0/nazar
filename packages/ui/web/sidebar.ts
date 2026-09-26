@@ -56,15 +56,35 @@ export class Sidebar {
       if (open && focus) this.focusFirst();
       return;
     }
-    this.open = open;
-    this.root.hidden = !open;
-    this.toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
-    setClass(document.body, 'has-sidebar', open);
+    this.apply(open);
     if (focus) {
       if (open) this.focusFirst();
       else this.toggle.focus();
     }
     this.onChange(open);
+  }
+
+  /**
+   * Put the drawer back the way it was remembered, on load.
+   *
+   * Not `set`, because a restore is not a change: nothing new to store, and
+   * nothing for `onChange` to do. It used to go through `set`, and `app.ts`'s
+   * `onChange` asks for a frame — through a `schedule` that `start()` declares
+   * a thousand lines further down. A drawer left open therefore threw in the
+   * temporal dead zone on every load, `start()` stopped before it opened the
+   * stream, and the canvas said *connecting…* on every reload after. Closing
+   * the drawer still worked — this class had wired its button before the throw
+   * — but nothing on the screen said that was the way out.
+   */
+  restore(open: boolean): void {
+    if (open !== this.open) this.apply(open);
+  }
+
+  private apply(open: boolean): void {
+    this.open = open;
+    this.root.hidden = !open;
+    this.toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    setClass(document.body, 'has-sidebar', open);
   }
 
   private focusFirst(): void {

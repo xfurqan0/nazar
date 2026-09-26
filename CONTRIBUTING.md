@@ -22,6 +22,11 @@ reports. A failing workspace does not stop the workspaces after it or the
 repository-wide gates; the summary at the end names each suite and the exit code
 counts all of them.
 
+One gate, `test/canvas-boot.test.ts`, loads the built canvas in a headless
+Chrome or Edge — whichever is installed; nothing is downloaded — because the
+function that builds the whole page runs nowhere else. Without either browser it
+is skipped and says so. In CI it is never skipped.
+
 The desktop shell is the one part that needs more than Node. It is a Cargo
 workspace beside the npm one (`apps/desktop`, the Tauri crate; `crates/nazar-shell`,
 the pure half), and `rust-toolchain.toml` pins the toolchain:
