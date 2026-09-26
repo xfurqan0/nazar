@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-26
+
 ### Added
 
 - **Linux desktop bundles for arm64.** A release now carries an `.AppImage` and
@@ -1202,5 +1204,6 @@ transcript starts; transcript writes are asynchronous, so totals lag by seconds
 and the age of the last write is shown; history reaches back only as far as
 Claude Code's own retention. See the README for the full list.
 
-[Unreleased]: https://github.com/xfurqan0/nazar/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/xfurqan0/nazar/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/xfurqan0/nazar/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/xfurqan0/nazar/releases/tag/v0.1.0

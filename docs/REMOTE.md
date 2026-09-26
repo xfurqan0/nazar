@@ -62,9 +62,9 @@ it there without the registry, from a tarball you built or from a clone.
 On your own machine:
 
 ```
-npm pack                                  # → xfurqan0-nazar-0.1.0.tgz
-scp xfurqan0-nazar-0.1.0.tgz build-box:
-ssh build-box 'npm i -g ./xfurqan0-nazar-0.1.0.tgz && nazar --version'
+npm pack                                  # → xfurqan0-nazar-0.2.0.tgz
+scp xfurqan0-nazar-0.2.0.tgz build-box:
+ssh build-box 'npm i -g ./xfurqan0-nazar-0.2.0.tgz && nazar --version'
 ```
 
 ### From a clone

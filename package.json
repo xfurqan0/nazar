@@ -1,6 +1,6 @@
 {
   "name": "@xfurqan0/nazar",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Nazar keeps a watchful eye on your agents: a local monitoring canvas for AI coding agents.",
   "keywords": [
     "claude",

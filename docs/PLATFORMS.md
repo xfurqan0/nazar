@@ -84,7 +84,7 @@ for everybody, and the CI matrix produces both from the same runner either way.
   satisfy it.
 
   ```sh
-  sudo apt install ./nazar-desktop_0.1.0_amd64.deb     # or _arm64.deb
+  sudo apt install ./nazar-desktop_0.2.0_amd64.deb     # or _arm64.deb
   ```
 
 - **There is no `.rpm` in a release**, and the bundler will build one: `--bundles rpm`

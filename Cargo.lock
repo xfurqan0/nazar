@@ -2112,7 +2112,7 @@ dependencies = [
 
 [[package]]
 name = "nazar-desktop"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "libc",
  "nazar-shell",
@@ -2127,7 +2127,7 @@ dependencies = [
 
 [[package]]
 name = "nazar-shell"
-version = "0.1.0"
+version = "0.2.0"
 
 [[package]]
 name = "ndk"
