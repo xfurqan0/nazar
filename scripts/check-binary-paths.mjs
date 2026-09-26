@@ -177,11 +177,24 @@ export function findLeaks(text, rules, encoding = 'utf8') {
  */
 export function scanBuffer(buffer, rules) {
   const found = findLeaks(buffer.toString('latin1'), rules, 'utf8');
-  found.push(...findLeaks(buffer.toString('utf16le'), rules, 'utf16le'));
+  found.push(...findLeaks(wide(buffer), rules, 'utf16le'));
   if (buffer.length > 1) {
-    found.push(...findLeaks(buffer.subarray(1).toString('utf16le'), rules, 'utf16le+1'));
+    found.push(...findLeaks(wide(buffer.subarray(1)), rules, 'utf16le+1'));
   }
   return found;
+}
+
+/**
+ * `bytes` as UTF-16LE, read from an even number of them.
+ *
+ * The decoder drops a trailing odd byte anyway, so this reads exactly the characters it
+ * always did. It exists because of how it used to drop it: on Windows with Node 24.19, a
+ * view one byte into a buffer *and* an odd number of bytes long corrupted the heap, and
+ * the scan died with 0xC0000374 before it printed a line — on a 7578-byte PNG in the
+ * installer's own resources. `test/binary-paths.test.ts` keeps that size.
+ */
+function wide(bytes) {
+  return bytes.subarray(0, bytes.length - (bytes.length % 2)).toString('utf16le');
 }
 
 /**

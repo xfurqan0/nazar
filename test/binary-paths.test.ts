@@ -118,6 +118,27 @@ test('a wide string is read as well as a narrow one', () => {
   assert.ok(scanBuffer(shifted, RULES).length > 0, 'an odd-aligned wide string was missed');
 });
 
+test('an odd number of bytes at an odd offset is read, not crashed on', () => {
+  /*
+   * Measured on Windows with Node 24.19: decoding UTF-16LE from a view that starts one byte
+   * in *and* holds an odd number of bytes corrupted the heap, and the process died with
+   * 0xC0000374 before it printed a line. It took a file of 7578 bytes — Codex's icon in
+   * the installer's own resources — and any content at that size; an aligned copy, or the
+   * same view one byte shorter, was fine. The scanner failed closed, so nothing passed that
+   * should not have, but a gate that cannot finish on the maintainer's machine is a gate
+   * that does not get run. The last odd byte never held a character anyway.
+   */
+  const wide = Buffer.from(String.raw`C:\Users\ada\.cargo\registry`, 'utf16le');
+  const buffer = Buffer.alloc(7578, 0x41);
+  wide.copy(buffer, 4001);
+
+  const found = scanBuffer(buffer, RULES);
+  assert.ok(
+    found.some((one) => one.encoding === 'utf16le+1'),
+    'the odd-aligned wide string in an odd-length tail was missed',
+  );
+});
+
 test('a .deb is an ar archive, and its payload is what has to be read', () => {
   const payload = gzipSync(Buffer.from('ustar /home/ada/.cargo/registry/src/x.rs'));
   const archive = Buffer.concat([
