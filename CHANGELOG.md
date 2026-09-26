@@ -44,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search of the rendered page for a home directory or a user name before every
   beat, which fails the run rather than publishing one.
 
+- **On Linux, the jump says which no.** Double-clicking a card on a desktop
+  without a jump used to answer *not available on this platform yet* everywhere,
+  and on Wayland that sentence was wrong twice: there will be no *yet*, because
+  the protocol does not let one program raise another's window, and it offered
+  nothing to do instead. The shell now reads `XDG_SESSION_TYPE` and
+  `WAYLAND_DISPLAY` and tells the canvas one word — `wayland`, `x11`, or nothing
+  — and the canvas answers from its six catalogues: on Wayland, that the
+  compositor does not allow it and the terminal's own window switcher is the way
+  there; on X11, that the port has not been written yet. Windows and macOS are
+  unchanged.
+
 ### Fixed
 
 - **A drawer left open no longer stops the canvas connecting.** Opening the
@@ -62,6 +73,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bundle from the real server in a headless Chrome or Edge, opens the drawer,
   reloads, and fails if anything threw or the stream did not come up — `start()`,
   the function that builds the whole page, had never run in a test before.
+
+- **The server no longer outlives the desktop app on macOS or Linux.** Killing
+  the app left its `node` server running and holding its port, so the next
+  launch found the port taken; the job object that prevents this on Windows had
+  no counterpart anywhere else. Now every unix starts the server in a process
+  group of its own, so stopping it takes any `ssh` it started for `--remote`
+  with it; Linux adds `PR_SET_PDEATHSIG`, so the server is signalled the moment
+  the app dies, however it died; and the app passes the new
+  `nazar --exit-with-parent`, with which the server watches its own parent and
+  exits when it goes — what macOS gets in place of a death signal, and a second
+  line of defence on Linux.
+- **A Codex store that Codex compressed is named, not reported as empty.** Codex
+  0.154.0 carries a flag, off by default for now, that rewrites every rollout
+  older than seven days as `.jsonl.zst` and deletes the plain file. On a machine
+  with it switched on, the reader would have listed five hundred threads as none,
+  and `nazar doctor` would have said the store held no rollout. Compressed
+  rollouts are now recognised by name, counted, and never opened: the doctor row
+  says *compressed, not readable yet* with the count. Reading them would need a
+  zstd decoder, which is a runtime dependency, and this package has none. A
+  compressed rollout is never a live thread — the compressor leaves anything
+  younger than seven days alone — so none of them puts a card on the canvas.
 
 ## [0.1.0] — 2026-09-13
 
