@@ -94,6 +94,9 @@ Options:
                    parent that starts Nazar as a child and wants no listener
                    left behind if it dies ungracefully; the desktop shell passes
                    it. Off by default, because a terminal is a parent too.
+  --shell-ipc      Let the canvas page reach the desktop shell's IPC through its
+                   content security policy. The desktop shell passes it; a
+                   browser has no use for it and never gets it.
   -h, --help       Show this help
   -V, --version    Print the version
 
@@ -147,6 +150,7 @@ const SERVE_FLAGS = [
   '--remote',
   '--remote-cmd',
   '--exit-with-parent',
+  '--shell-ipc',
 ];
 
 /**
@@ -384,6 +388,8 @@ export interface ServeOptions {
   readonly remotes?: readonly string[];
   /** What to run on each far end. Defaults to `nazar --agent --hermes`. */
   readonly remoteCommand?: string;
+  /** `--shell-ipc`: the page's policy lets the desktop shell's IPC through. */
+  readonly shellIpc?: boolean;
   readonly out: OutputStream;
   readonly err: OutputStream;
 }
@@ -467,6 +473,7 @@ export async function serve(options: ServeOptions): Promise<ServeHandle> {
     history,
     port: options.port,
     taskText,
+    shellIpc: options.shellIpc === true,
   });
 
   // The URL goes out before anything is spawned. Every opener below can fail
@@ -653,6 +660,7 @@ export async function main(
       codex: parseCodex(argv),
       remotes,
       ...(remoteCommand === undefined ? {} : { remoteCommand }),
+      shellIpc: argv.includes('--shell-ipc'),
       out,
       err,
     });

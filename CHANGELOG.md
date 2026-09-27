@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The desktop app's commands no longer trip the canvas's security policy.**
+  Every call the canvas made to the desktop shell — whether the jump is
+  offered, the start-with-the-system switch, recording mode, the remote hosts —
+  was refused by the page's `connect-src 'self'` and logged as a violation
+  before Tauri retried it another way. The calls worked; the console was full of
+  red, and red in a console is where the next real fault hides. The shell now
+  starts its server with `--shell-ipc`, which adds Tauri's two IPC addresses,
+  `ipc:` and `http://ipc.localhost`, to that one directive and nothing else. A
+  browser — `npx @xfurqan0/nazar` — never gets the flag and gets exactly the
+  policy it had.
+
 ## [0.2.0] — 2026-09-26
 
 ### Added

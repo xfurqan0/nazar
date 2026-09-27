@@ -438,6 +438,48 @@ fn adopt(port: u16) -> Result<ServerHandle, String> {
     })
 }
 
+/// Everything the child is told after the entry script, in the order it is told it.
+///
+/// A function of its own so the list can be tested without starting a process: every
+/// flag here is a promise about how the server behaves, and a flag that silently stopped
+/// being passed would break that promise with nothing on screen to say so.
+fn child_arguments(port: u16, task_text: bool, remotes: &[String]) -> Vec<String> {
+    let mut arguments = vec![
+        "--no-open".to_owned(),
+        "--port".to_owned(),
+        port.to_string(),
+        // The page this window shows calls the shell's commands over Tauri's IPC, which
+        // is a `fetch` to `ipc://localhost` or `http://ipc.localhost`. The server's
+        // content security policy lets those two through only when asked, and only the
+        // shell asks; without it every call is refused and retried over postMessage.
+        "--shell-ipc".to_owned(),
+    ];
+    // N-WP-L2. The portable half of not leaving a listener behind: the child watches its
+    // own parent id and exits when it changes. Not passed on Windows, where the job
+    // object is both instant and exact and a parent id never changes anyway.
+    if cfg!(not(windows)) {
+        arguments.push("--exit-with-parent".to_owned());
+    }
+    // N-WP15a. Recording mode is passed to the child as the CLI flag rather
+    // than as a setting the server would have to read for itself: the flag is
+    // already the documented way to say this, `desktop.json` is the shell's
+    // file and not the server's, and a flag on the command line is something a
+    // user can see in Task Manager. Turning the mode on is therefore a server
+    // restart, which is exactly what makes the guarantee real — the readers
+    // come back up unable to take text out of a transcript at all.
+    if !task_text {
+        arguments.push("--no-task-text".to_owned());
+    }
+    // N-WP17a. The same shape and for the same reason: the remote hosts are a flag on
+    // the child's command line rather than a file the server reads for itself, so what
+    // the canvas is reading is visible in Task Manager and changing it is a restart.
+    if !remotes.is_empty() {
+        arguments.push("--remote".to_owned());
+        arguments.push(remotes.join(","));
+    }
+    arguments
+}
+
 fn attempt_start(
     entry: &Path,
     port: u16,
@@ -447,30 +489,7 @@ fn attempt_start(
     let mut command = node::command("node");
     command
         .arg(entry)
-        .arg("--no-open")
-        .arg("--port")
-        .arg(port.to_string());
-    // N-WP-L2. The portable half of not leaving a listener behind: the child watches its
-    // own parent id and exits when it changes. Not passed on Windows, where the job
-    // object is both instant and exact and a parent id never changes anyway.
-    #[cfg(not(windows))]
-    command.arg("--exit-with-parent");
-    // N-WP15a. Recording mode is passed to the child as the CLI flag rather
-    // than as a setting the server would have to read for itself: the flag is
-    // already the documented way to say this, `desktop.json` is the shell's
-    // file and not the server's, and a flag on the command line is something a
-    // user can see in Task Manager. Turning the mode on is therefore a server
-    // restart, which is exactly what makes the guarantee real — the readers
-    // come back up unable to take text out of a transcript at all.
-    if !task_text {
-        command.arg("--no-task-text");
-    }
-    // N-WP17a. The same shape and for the same reason: the remote hosts are a flag on
-    // the child's command line rather than a file the server reads for itself, so what
-    // the canvas is reading is visible in Task Manager and changing it is a restart.
-    if !remotes.is_empty() {
-        command.arg("--remote").arg(remotes.join(","));
-    }
+        .args(child_arguments(port, task_text, remotes));
     command
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -942,6 +961,38 @@ fn signal_group(pid: u32, signal: libc::c_int) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_child_is_told_it_serves_the_shell_on_every_platform() {
+        let plain = child_arguments(4676, true, &[]);
+        assert_eq!(&plain[..3], ["--no-open", "--port", "4676"]);
+        assert!(
+            plain.iter().any(|argument| argument == "--shell-ipc"),
+            "without --shell-ipc the page's policy refuses every invoke: {plain:?}"
+        );
+        assert_eq!(
+            plain
+                .iter()
+                .any(|argument| argument == "--exit-with-parent"),
+            cfg!(not(windows)),
+            "--exit-with-parent is the unix half; Windows has the job object"
+        );
+        assert!(!plain.iter().any(|argument| argument == "--no-task-text"));
+        assert!(!plain.iter().any(|argument| argument == "--remote"));
+
+        let recording = child_arguments(4676, false, &["build-box".to_owned(), "pi".to_owned()]);
+        assert!(recording.iter().any(|argument| argument == "--shell-ipc"));
+        assert!(
+            recording
+                .iter()
+                .any(|argument| argument == "--no-task-text")
+        );
+        let at = recording
+            .iter()
+            .position(|argument| argument == "--remote")
+            .expect("the hosts are passed");
+        assert_eq!(recording[at + 1], "build-box,pi");
+    }
 
     /// Serialises every test below that asks the operating system for an ephemeral port.
     ///

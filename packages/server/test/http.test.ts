@@ -78,6 +78,7 @@ async function withServer(
     uiDir: string;
     outside: string;
   }) => Promise<void>,
+  extra: { readonly shellIpc?: boolean } = {},
 ): Promise<void> {
   const root = await mkdtemp(path.join(tmpdir(), 'nazar-http-'));
   const uiDir = path.join(root, 'web');
@@ -94,7 +95,7 @@ async function withServer(
     warnings: 0,
   });
 
-  const server = await startNazarServer({ state, uiDir, port: 0, heartbeatMs: 50 });
+  const server = await startNazarServer({ state, uiDir, port: 0, heartbeatMs: 50, ...extra });
   try {
     await run({ url: server.url, state, uiDir, outside });
   } finally {
@@ -216,6 +217,38 @@ test('GET / serves the canvas with a policy that forbids fetching from a CDN', a
     assert.ok(!csp.includes('unsafe-inline'));
     assert.equal(response.headers.get('x-content-type-options'), 'nosniff');
   });
+});
+
+/** One directive of a policy, exactly as the header spells it. */
+function directive(csp: string, name: string): string | undefined {
+  return csp
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part === name || part.startsWith(`${name} `));
+}
+
+test('the desktop shell\'s IPC is let through only for a server the shell started', async () => {
+  // A browser — `npx @xfurqan0/nazar` — gets `'self'` and nothing else: the
+  // page has no business talking to anything but the server that served it.
+  await withServer(async ({ url }) => {
+    const csp = (await fetch(url)).headers.get('content-security-policy') ?? '';
+    assert.equal(directive(csp, 'connect-src'), "connect-src 'self'");
+  });
+
+  // The shell starts its server with `--shell-ipc`. Tauri's `invoke` from a page
+  // on this origin is a `fetch` to `ipc://localhost` (macOS, Linux) or
+  // `http://ipc.localhost` (Windows); under `'self'` alone every one of them
+  // was refused, logged as a violation, and retried over postMessage. Those two
+  // sources are added and nothing else is.
+  await withServer(
+    async ({ url }) => {
+      const csp = (await fetch(url)).headers.get('content-security-policy') ?? '';
+      assert.equal(directive(csp, 'connect-src'), "connect-src 'self' ipc: http://ipc.localhost");
+      assert.equal(directive(csp, 'default-src'), "default-src 'none'");
+      assert.equal(directive(csp, 'script-src'), "script-src 'self'");
+    },
+    { shellIpc: true },
+  );
 });
 
 test('a static file next to the index is served with its own type', async () => {

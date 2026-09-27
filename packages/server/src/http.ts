@@ -135,6 +135,11 @@ export interface NazarServerOptions {
    * keep.
    */
   readonly taskText?: boolean;
+  /**
+   * Whether the page may reach the desktop shell's IPC. `--shell-ipc`, which the
+   * shell passes and nothing else does; see {@link contentSecurityPolicy}.
+   */
+  readonly shellIpc?: boolean;
 }
 
 export interface NazarServer {
@@ -161,18 +166,28 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 /**
  * Everything the page is allowed to do. `'self'` only: no CDN, no web font, no
  * inline script. `connect-src` covers `fetch` and `EventSource`.
+ *
+ * `shellIpc` adds the two addresses Tauri's IPC lives at — `ipc://localhost` on
+ * macOS and Linux, `http://ipc.localhost` on Windows — and nothing else. Only
+ * the desktop shell asks for it (`--shell-ipc`): its window shows this page, and
+ * every `invoke` the canvas makes is a `fetch` to one of them. Under `'self'`
+ * alone each call was refused, logged as a violation, and retried over
+ * postMessage, so the commands worked and the console was full of red. A
+ * browser gets the policy it always had.
  */
-const CSP = [
-  "default-src 'none'",
-  "script-src 'self'",
-  "style-src 'self'",
-  "img-src 'self' data:",
-  "font-src 'self'",
-  "connect-src 'self'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join('; ');
+function contentSecurityPolicy(shellIpc: boolean): string {
+  return [
+    "default-src 'none'",
+    "script-src 'self'",
+    "style-src 'self'",
+    "img-src 'self' data:",
+    "font-src 'self'",
+    shellIpc ? "connect-src 'self' ipc: http://ipc.localhost" : "connect-src 'self'",
+    "base-uri 'none'",
+    "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
 
 /**
  * A `Host` header that can only mean "this machine". Anything else is a
@@ -273,6 +288,7 @@ export function createRequestListener(
   const redactOptions = options.redact;
   /** N-WP15a: the hard switch. `false` here outranks every caller. */
   const taskAllowed = options.taskText !== false;
+  const csp = contentSecurityPolicy(options.shellIpc === true);
 
   /**
    * The wire options for one request.
@@ -309,7 +325,7 @@ export function createRequestListener(
           'Content-Type': contentTypeFor(file),
           'Content-Length': String(info.size),
         };
-        if (file.endsWith('.html')) headers['Content-Security-Policy'] = CSP;
+        if (file.endsWith('.html')) headers['Content-Security-Policy'] = csp;
         res.writeHead(200, headers);
         if (req.method === 'HEAD') {
           res.end();

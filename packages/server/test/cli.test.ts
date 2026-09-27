@@ -124,6 +124,23 @@ test('--exit-with-parent is a flag the serve path knows, and --help says what it
   assert.match(near.text, /--exit-with-parents/);
 });
 
+test('--shell-ipc is a flag the serve path knows, and --help says who passes it', async () => {
+  const out = new Capture();
+  const err = new Capture();
+
+  // The same gate as above: the desktop shell passes this on every platform, so
+  // a parser that did not know it would leave the window on its boot page.
+  assert.equal(await main(['--shell-ipc', '--help'], out, err), 0);
+  assert.match(out.text, /--shell-ipc/);
+  assert.match(out.text, /desktop shell/);
+  assert.equal(err.text, '');
+
+  // It belongs to the serve path and to nothing else: an agent serves no page.
+  const agent = new Capture();
+  assert.equal(await main(['--agent', '--shell-ipc'], new Capture(), agent), 2);
+  assert.match(agent.text, /--shell-ipc/);
+});
+
 test('main reports a bad port on stderr with exit code 2', async () => {
   const out = new Capture();
   const err = new Capture();
